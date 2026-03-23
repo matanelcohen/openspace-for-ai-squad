@@ -1,3 +1,5 @@
+import { KanbanBoard } from '@/components/tasks/kanban-board';
+
 export default function TasksPage() {
   return (
     <div className="space-y-6">
@@ -5,11 +7,7 @@ export default function TasksPage() {
         <h1 className="text-3xl font-bold tracking-tight">Tasks</h1>
         <p className="text-muted-foreground">Manage and prioritize squad work.</p>
       </div>
-      <div className="rounded-lg border border-dashed p-12 text-center">
-        <p className="text-muted-foreground">
-          Task board coming soon — waiting for P1 backend APIs.
-        </p>
-      </div>
+      <KanbanBoard />
     </div>
   );
 }

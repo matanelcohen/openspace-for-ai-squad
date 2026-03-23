@@ -3,6 +3,7 @@
 .squad/log/
 .squad/decisions/inbox/
 .squad/sessions/
+.squad/.cache/
 # Squad: SubSquad activation file (local to this machine)
 .squad-workstream
 

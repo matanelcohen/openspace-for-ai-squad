@@ -1,4 +1,5 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AgentGrid } from '@/components/dashboard/agent-grid';
+import { SummaryStats } from '@/components/dashboard/summary-stats';
 
 export default function DashboardPage() {
   return (
@@ -7,43 +8,10 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-muted-foreground">Your squad at a glance.</p>
       </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>Active Agents</CardDescription>
-            <CardTitle>&mdash;</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Awaiting backend connection</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Open Tasks</CardDescription>
-            <CardTitle>&mdash;</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Awaiting backend connection</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Decisions</CardDescription>
-            <CardTitle>&mdash;</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Awaiting backend connection</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Squad Health</CardDescription>
-            <CardTitle>&mdash;</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-xs text-muted-foreground">Awaiting backend connection</p>
-          </CardContent>
-        </Card>
+      <SummaryStats />
+      <div>
+        <h2 className="mb-4 text-xl font-semibold">Squad Members</h2>
+        <AgentGrid />
       </div>
     </div>
   );

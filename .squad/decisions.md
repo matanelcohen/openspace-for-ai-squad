@@ -64,6 +64,48 @@
 **Why:** Local development is the current priority and deployment is not needed yet.
 **Impact:** Delivery effort should stay focused on local product functionality instead of packaging/deployment concerns.
 
+### 2026-03-23T21:09:00Z: SQLite adopted as a cache-only index layer
+**By:** Bender (Backend Dev)
+**What:** Adopted `better-sqlite3` at `.squad/.cache/openspace.db` as a rebuildable cache for tasks, decisions, chat messages, and activity, with FTS5-enabled search and incremental sync support.
+**Why:** Querying and searching directly from markdown files would be too slow for filtering, aggregation, and full-text search.
+**Impact:** `.squad/` files remain the source of truth, P1-8 is complete, watcher events can drive cache refreshes, and search endpoints can rely on fast local indexing.
+
+### 2026-03-23T21:09:30Z: D4 resolved in favor of YAML frontmatter task files
+**By:** Leela (Lead)
+**What:** Resolved task storage to one markdown file per task in `.squad/tasks/`, using YAML frontmatter for metadata and a markdown body for the description, with `{id}.md` filenames.
+**Why:** This format is easy to edit by hand, avoids merge-heavy monolithic files, and maps cleanly to the shared `Task` contract.
+**Impact:** Task parsing and writing now have a stable on-disk contract, P1-5 is unblocked, and SQLite remains a cache rather than the primary task store.
+
+### 2026-03-23T21:10:00Z: Phase 1 integration testing strategy established
+**By:** Zoidberg (Tester)
+**What:** Standardized API integration coverage around realistic `.squad/` fixtures for read tests, temporary copied workspaces for write tests, and shared helpers for app setup and JSON assertions.
+**Why:** Phase 1 needed contract-level coverage across agents, tasks, decisions, and squad endpoints to prevent regressions as the data layer grew.
+**Impact:** The Phase 1 API surface shipped with 83 integration tests and a reported total of 296 passing tests at milestone completion.
+
+### 2026-03-23T21:45:00Z: WebSocket event protocol standardized
+**By:** Bender (Backend Dev)
+**What:** Defined a uniform real-time envelope of `{ type, payload, timestamp }`, six supported event types, subscription messages for selective delivery, JSON pong heartbeats, a bounded in-memory activity buffer, and synchronous dual-write chat persistence.
+**Why:** The real-time layer needed a stable protocol that is easy for the frontend to consume and resilient under rapid file-change bursts.
+**Impact:** Phase 3 backend real-time work is complete, later frontend real-time work is unblocked, and Phase 4 voice can build on the same event model.
+
+### 2026-03-23T21:45:30Z: Webpack extension alias added for shared package resolution
+**By:** Fry (Frontend Dev)
+**What:** Added `resolve.extensionAlias` in `next.config.mjs` so Next.js can resolve `.js` import specifiers in `@openspace/shared` to the underlying TypeScript source files.
+**Why:** The shared package uses ESM-style `.js` extensions in TypeScript imports, and the frontend build could not resolve them without explicit webpack aliasing.
+**Impact:** Frontend code can import from `@openspace/shared` without build failures, and the alias remains safe even if the shared package later ships compiled JavaScript.
+
+### 2026-03-23T21:46:33Z: Development workflow must include UI screenshots
+**By:** Matanel Cohen (via Copilot)
+**What:** During development, the team should periodically run the app, open the UI, and capture screenshots at visible milestones so progress can be reviewed visually.
+**Why:** The user requested “show, don't tell” progress updates for UI work.
+**Impact:** UI implementation should include screenshot checkpoints alongside feature progress.
+
+### 2026-03-23T21:48:57Z: Browser automation should serve both screenshots and E2E tests
+**By:** Matanel Cohen (via Copilot)
+**What:** Use Playwright or Puppeteer as the shared browser automation tool for milestone screenshots now and `P5-8` E2E coverage later.
+**Why:** The same automation stack can support visual progress reporting today and end-to-end testing infrastructure later.
+**Impact:** Screenshot tooling and future E2E automation should converge on one browser automation implementation.
+
 ## Governance
 
 - All meaningful changes require team consensus

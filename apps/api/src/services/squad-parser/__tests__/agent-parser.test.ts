@@ -1,4 +1,6 @@
 import { join } from 'node:path';
+
+import type { Agent } from '@openspace/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -7,10 +9,8 @@ import {
   parseCharterContent,
   parseHistoryContent,
 } from '../agent-parser.js';
-import type { Agent } from '@openspace/shared';
 
 const FIXTURES_DIR = join(import.meta.dirname, 'fixtures', '.squad');
-const MALFORMED_DIR = join(import.meta.dirname, 'fixtures', 'malformed', '.squad');
 const EMPTY_DIR = join(import.meta.dirname, 'fixtures', 'empty');
 
 const makeAgent = (id: string, name: string): Agent => ({

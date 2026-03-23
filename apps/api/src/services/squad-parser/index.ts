@@ -9,7 +9,7 @@
  *   getConfig()       → squad configuration
  */
 
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type {
   Agent,
@@ -17,11 +17,14 @@ import type {
   Decision,
   SquadConfig,
   SquadOverview,
+  Task,
+  TaskStatus,
 } from '@openspace/shared';
 
 import { parseAgentCharter } from './agent-parser.js';
 import { parseConfigFile, type RawSquadConfig } from './config-parser.js';
 import { parseDecisionsFile } from './decision-parser.js';
+import { parseAllTasks } from './task-parser.js';
 import { parseTeamFile } from './team-parser.js';
 
 /** Default squad directory — resolved from CWD unless overridden by env. */
@@ -60,6 +63,17 @@ export class SquadParser {
     return parseDecisionsFile(this.squadDir);
   }
 
+  /** Get the tasks directory path. */
+  getTasksDir(): string {
+    return join(this.squadDir, 'tasks');
+  }
+
+  /** Parse all tasks from .squad/tasks/. */
+  async getTasks(): Promise<Task[]> {
+    const { tasks } = await parseAllTasks(this.getTasksDir());
+    return tasks.map(t => t.task);
+  }
+
   /** Parse config.json and compose into SquadConfig. */
   async getConfig(): Promise<SquadConfig> {
     const [rawConfig, agents] = await Promise.all([
@@ -72,25 +86,31 @@ export class SquadParser {
 
   /** Build a composite squad overview for the dashboard. */
   async getSquadOverview(): Promise<SquadOverview> {
-    const [config, agents, decisions] = await Promise.all([
+    const [config, agents, decisions, tasks] = await Promise.all([
       this.getConfig(),
       this.getAgents(),
       this.getDecisions(),
+      this.getTasks(),
     ]);
+
+    const byStatus: Record<TaskStatus, number> = {
+      'backlog': 0,
+      'in-progress': 0,
+      'in-review': 0,
+      'done': 0,
+      'blocked': 0,
+    };
+    for (const task of tasks) {
+      byStatus[task.status]++;
+    }
 
     return {
       config,
       agents,
-      recentTasks: [], // Tasks are not yet implemented (P1-3)
+      recentTasks: tasks.slice(0, 10),
       taskCounts: {
-        byStatus: {
-          'backlog': 0,
-          'in-progress': 0,
-          'in-review': 0,
-          'done': 0,
-          'blocked': 0,
-        },
-        total: 0,
+        byStatus,
+        total: tasks.length,
       },
       recentDecisions: decisions.slice(0, 10),
     };
@@ -115,5 +135,6 @@ function composeSquadConfig(
 // Re-export individual parsers for direct use
 export { parseAgentCharter, parseAgentHistory, parseCharterContent, parseHistoryContent } from './agent-parser.js';
 export { parseConfigContent, parseConfigFile, type RawSquadConfig } from './config-parser.js';
-export { parseDecisionsContent,parseDecisionsFile } from './decision-parser.js';
-export { parseTeamContent,parseTeamFile } from './team-parser.js';
+export { parseDecisionsContent, parseDecisionsFile } from './decision-parser.js';
+export { parseAllTasks, parseTaskFile } from './task-parser.js';
+export { parseTeamContent, parseTeamFile } from './team-parser.js';
