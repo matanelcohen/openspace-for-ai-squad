@@ -1,12 +1,12 @@
 /**
- * Voice Action Execution (P4-6)  Parse voice intents and execute squad operations.
+ * Voice Action Execution (P4-6) — Parse voice intents and execute squad operations.
  *
  * Parses voice intents like "create task X", "assign Y to Z", "what's the status",
  * and maps them to existing REST API operations.
  * Returns confirmation text for TTS to speak back.
  */
 
-//  Types ─
+// ── Types ─────────────────────────────────────────────────────────
 
 export type ActionType =
   | 'create_task'
@@ -41,11 +41,17 @@ export interface ActionResult {
 
 /** Abstraction for executing squad API operations. Facilitates testing. */
 export interface ActionExecutor {
-  createTask(title: string, assignee?: string, priority?: string): Promise<{ id: string; title: string }>;
+  createTask(
+    title: string,
+    assignee?: string,
+    priority?: string,
+  ): Promise<{ id: string; title: string }>;
   assignTask(taskId: string, assignee: string): Promise<{ id: string; assignee: string }>;
   updateTaskStatus(taskId: string, status: string): Promise<{ id: string; status: string }>;
   prioritizeTask(taskId: string, priority: string): Promise<{ id: string; priority: string }>;
-  queryStatus(agentId?: string): Promise<Array<{ id: string; title: string; status: string; assignee: string }>>;
+  queryStatus(
+    agentId?: string,
+  ): Promise<Array<{ id: string; title: string; status: string; assignee: string }>>;
   queryDecisions(query?: string): Promise<Array<{ title: string; by: string; summary: string }>>;
 }
 
@@ -54,7 +60,7 @@ export interface LLMIntentParser {
   parse(transcript: string, context: string[]): Promise<ParsedIntent>;
 }
 
-//  Intent patterns 
+// ── Intent patterns ───────────────────────────────────────────────
 
 interface IntentPattern {
   action: ActionType;
@@ -70,15 +76,17 @@ const INTENT_PATTERNS: IntentPattern[] = [
       /(?:add|make|new)\s+(?:a\s+)?task\s*:?\s*(?:["']?)(.+?)(?:["']?)$/i,
       /(\w+),?\s+create\s+(?:a(?:n)?\s+)?(.+?)(?:\s+endpoint|\s+page|\s+component|\s+feature|\s+task)?$/i,
     ],
-    extractParams: (match, transcript) => {
+    extractParams: (match) => {
       const params: Record<string, string> = {};
+      const group1 = match[1] ?? '';
+      const group2 = match[2] ?? '';
       // Check if the first capture is an agent name
-      if (match[2] && /^(leela|bender|fry|zoidberg)$/i.test(match[1])) {
-        params.assignee = match[1].toLowerCase();
-        params.title = match[2].trim();
+      if (group2 && /^(leela|bender|fry|zoidberg)$/i.test(group1)) {
+        params.assignee = group1.toLowerCase();
+        params.title = group2.trim();
       } else {
-        params.title = (match[1] ?? '').trim();
-        if (match[2]) params.assignee = match[2].toLowerCase();
+        params.title = group1.trim();
+        if (group2) params.assignee = group2.toLowerCase();
       }
       return params;
     },
@@ -125,7 +133,9 @@ const INTENT_PATTERNS: IntentPattern[] = [
     ],
     extractParams: (_, transcript) => {
       const agentMatch = transcript.match(/\b(leela|bender|fry|zoidberg)\b/i);
-      return agentMatch ? { agentId: agentMatch[1].toLowerCase() } : {};
+      const params: Record<string, string> = {};
+      if (agentMatch && agentMatch[1]) params.agentId = agentMatch[1].toLowerCase();
+      return params;
     },
   },
   {
@@ -137,12 +147,14 @@ const INTENT_PATTERNS: IntentPattern[] = [
     ],
     extractParams: (_, transcript) => {
       const queryMatch = transcript.match(/(?:about|regarding|on)\s+(.+)/i);
-      return queryMatch ? { query: queryMatch[1].trim() } : {};
+      const params: Record<string, string> = {};
+      if (queryMatch && queryMatch[1]) params.query = queryMatch[1].trim();
+      return params;
     },
   },
 ];
 
-//  Voice Action Service ─
+// ── Voice Action Service ──────────────────────────────────────────
 
 export class VoiceActionService {
   private readonly executor: ActionExecutor;
@@ -220,7 +232,7 @@ export class VoiceActionService {
       const errMsg = error instanceof Error ? error.message : String(error);
       return {
         success: false,
-        message: +""+Sorry, I ran into an error: +""+,
+        message: `Sorry, I ran into an error: ${errMsg}`,
         intent,
       };
     }
@@ -229,10 +241,7 @@ export class VoiceActionService {
   /**
    * Parse and execute in one step. Convenience method.
    */
-  async processVoiceCommand(
-    transcript: string,
-    context: string[] = [],
-  ): Promise<ActionResult> {
+  async processVoiceCommand(transcript: string, context: string[] = []): Promise<ActionResult> {
     const intent = await this.parseIntent(transcript, context);
 
     if (intent.action === 'unknown') {
@@ -246,7 +255,7 @@ export class VoiceActionService {
     return this.executeAction(intent);
   }
 
-  //  Action handlers ─
+  // ── Action handlers ────────────────────────────────────────────
 
   private async handleCreateTask(intent: ParsedIntent): Promise<ActionResult> {
     const title = intent.params.title;
@@ -265,12 +274,12 @@ export class VoiceActionService {
     );
 
     const assigneeMsg = intent.params.assignee
-      ? +""+ and assigned it to +""+
+      ? ` and assigned it to ${intent.params.assignee}`
       : '';
 
     return {
       success: true,
-      message: +""+Done  I've created the task "".+""+,
+      message: `Done — I've created the task "${result.title}"${assigneeMsg}.`,
       intent,
       data: result as unknown as Record<string, unknown>,
     };
@@ -281,7 +290,7 @@ export class VoiceActionService {
     if (!title || !assignee) {
       return {
         success: false,
-        message: "I need both a task name and who to assign it to.",
+        message: 'I need both a task name and who to assign it to.',
         intent,
       };
     }
@@ -289,7 +298,7 @@ export class VoiceActionService {
     const result = await this.executor.assignTask(title, assignee);
     return {
       success: true,
-      message: +""+Done  I've assigned "" to .+""+,
+      message: `Done — I've assigned "${title}" to ${assignee}.`,
       intent,
       data: result as unknown as Record<string, unknown>,
     };
@@ -300,7 +309,7 @@ export class VoiceActionService {
     if (!title || !status) {
       return {
         success: false,
-        message: "I need both a task name and the new status.",
+        message: 'I need both a task name and the new status.',
         intent,
       };
     }
@@ -310,7 +319,7 @@ export class VoiceActionService {
     const result = await this.executor.updateTaskStatus(title, normalizedStatus);
     return {
       success: true,
-      message: +""+Done  "" is now marked as .+""+,
+      message: `Done — "${title}" is now marked as ${normalizedStatus}.`,
       intent,
       data: result as unknown as Record<string, unknown>,
     };
@@ -321,7 +330,7 @@ export class VoiceActionService {
     if (!title) {
       return {
         success: false,
-        message: "I need to know which task to prioritize.",
+        message: 'I need to know which task to prioritize.',
         intent,
       };
     }
@@ -329,7 +338,7 @@ export class VoiceActionService {
     const result = await this.executor.prioritizeTask(title, target ?? 'P1');
     return {
       success: true,
-      message: +""+Done  I've updated the priority of "".+""+,
+      message: `Done — I've updated the priority of "${title}".`,
       intent,
       data: result as unknown as Record<string, unknown>,
     };
@@ -348,12 +357,12 @@ export class VoiceActionService {
 
     const summary = tasks
       .slice(0, 5)
-      .map((t) => +""+${t.title} is +""+ + (t.assignee ? +""+, assigned to +""+ : ''))
+      .map((t) => `${t.title} is ${t.status}` + (t.assignee ? `, assigned to ${t.assignee}` : ''))
       .join('. ');
 
     return {
       success: true,
-      message: +""+Here's the current status: .+""+,
+      message: `Here's the current status: ${summary}.`,
       intent,
       data: { tasks } as unknown as Record<string, unknown>,
     };
@@ -372,12 +381,12 @@ export class VoiceActionService {
 
     const summary = decisions
       .slice(0, 3)
-      .map((d) => +""+${d.title}, decided by +""+)
+      .map((d) => `${d.title}, decided by ${d.by}`)
       .join('. ');
 
     return {
       success: true,
-      message: +""+Here are the recent decisions: .+""+,
+      message: `Here are the recent decisions: ${summary}.`,
       intent,
       data: { decisions } as unknown as Record<string, unknown>,
     };

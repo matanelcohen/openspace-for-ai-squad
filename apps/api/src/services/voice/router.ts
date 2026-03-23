@@ -8,7 +8,7 @@
 
 import { EventEmitter } from 'node:events';
 
-//  Types 
+//  Types
 
 export interface AgentRoutingProfile {
   /** Agent ID (e.g., 'leela', 'bender'). */
@@ -48,43 +48,95 @@ export interface LLMRouter {
   ): Promise<{ agentIds: string[]; reason: string }>;
 }
 
-//  Default Agent Profiles 
+//  Default Agent Profiles
 
 export const DEFAULT_AGENT_PROFILES: AgentRoutingProfile[] = [
   {
     id: 'leela',
     name: 'Leela',
     role: 'Lead',
-    keywords: ['status', 'plan', 'priority', 'assign', 'team', 'overview', 'standup', 'lead', 'coordinate', 'schedule'],
+    keywords: [
+      'status',
+      'plan',
+      'priority',
+      'assign',
+      'team',
+      'overview',
+      'standup',
+      'lead',
+      'coordinate',
+      'schedule',
+    ],
   },
   {
     id: 'bender',
     name: 'Bender',
     role: 'Backend',
-    keywords: ['api', 'backend', 'server', 'database', 'endpoint', 'auth', 'migration', 'deploy', 'schema', 'sql'],
+    keywords: [
+      'api',
+      'backend',
+      'server',
+      'database',
+      'endpoint',
+      'auth',
+      'migration',
+      'deploy',
+      'schema',
+      'sql',
+    ],
   },
   {
     id: 'fry',
     name: 'Fry',
     role: 'Frontend',
-    keywords: ['ui', 'frontend', 'component', 'page', 'css', 'style', 'layout', 'button', 'form', 'react', 'design'],
+    keywords: [
+      'ui',
+      'frontend',
+      'component',
+      'page',
+      'css',
+      'style',
+      'layout',
+      'button',
+      'form',
+      'react',
+      'design',
+    ],
   },
   {
     id: 'zoidberg',
     name: 'Zoidberg',
     role: 'QA',
-    keywords: ['test', 'bug', 'quality', 'coverage', 'e2e', 'regression', 'fix', 'broken', 'failing', 'debug'],
+    keywords: [
+      'test',
+      'bug',
+      'quality',
+      'coverage',
+      'e2e',
+      'regression',
+      'fix',
+      'broken',
+      'failing',
+      'debug',
+    ],
   },
 ];
 
 //  Broadcast keywords ─
 
 const BROADCAST_KEYWORDS = [
-  'everyone', 'team', 'squad', 'all', 'morning', 'standup',
-  'hey squad', 'hey team', 'good morning',
+  'everyone',
+  'team',
+  'squad',
+  'all',
+  'morning',
+  'standup',
+  'hey squad',
+  'hey team',
+  'good morning',
 ];
 
-//  Voice Router 
+//  Voice Router
 
 export class VoiceRouter extends EventEmitter {
   private readonly agents: AgentRoutingProfile[];
@@ -215,7 +267,7 @@ export class VoiceRouter extends EventEmitter {
     if (scores.length === 0) return [];
 
     // Return the top-scoring agent(s). If top two have same score, include both.
-    const topScore = scores[0].score;
+    const topScore = scores[0]!.score;
     return scores.filter((s) => s.score === topScore).map((s) => s.id);
   }
 

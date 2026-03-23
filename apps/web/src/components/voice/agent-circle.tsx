@@ -18,20 +18,20 @@ const agentColors = {
 
 export function AgentCircle({ agentId, isSpeaking, className }: AgentCircleProps) {
   const color = agentColors[agentId as keyof typeof agentColors] || 'gray';
-  
+
   return (
     <div
       className={cn(
         'flex flex-col items-center gap-2 p-4 rounded-lg transition-all',
         isSpeaking && 'animate-pulse ring-4 ring-primary/50',
-        className
+        className,
       )}
       data-testid="agent-circle"
       data-agent-id={agentId}
       data-speaking={isSpeaking}
     >
       <div className="relative">
-        <AgentAvatar agentId={agentId} size="lg" />
+        <AgentAvatar agentId={agentId} name={agentId} size="lg" />
         {isSpeaking && (
           <div
             className={cn(
@@ -39,7 +39,7 @@ export function AgentCircle({ agentId, isSpeaking, className }: AgentCircleProps
               color === 'purple' && 'bg-purple-500',
               color === 'orange' && 'bg-orange-500',
               color === 'blue' && 'bg-blue-500',
-              color === 'green' && 'bg-green-500'
+              color === 'green' && 'bg-green-500',
             )}
             data-testid="glow-effect"
           />

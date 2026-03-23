@@ -20,7 +20,7 @@ export function DecisionCard({ decision }: DecisionCardProps) {
       <CardHeader>
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3 flex-1">
-            <AgentAvatar agentId={decision.author} size="sm" />
+            <AgentAvatar agentId={decision.author} name={decision.author} size="sm" />
             <div className="flex-1 min-w-0">
               <CardTitle className="text-lg">{decision.title}</CardTitle>
               <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
@@ -38,11 +38,7 @@ export function DecisionCard({ decision }: DecisionCardProps) {
               onClick={() => setIsExpanded(!isExpanded)}
               data-testid="expand-button"
             >
-              {isExpanded ? (
-                <ChevronUp className="h-4 w-4" />
-              ) : (
-                <ChevronDown className="h-4 w-4" />
-              )}
+              {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
           </div>
         </div>

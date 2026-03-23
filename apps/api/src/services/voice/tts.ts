@@ -10,7 +10,7 @@ import { EventEmitter } from 'node:events';
 
 import { nanoid } from 'nanoid';
 
-//  Types 
+//  Types
 
 /** OpenAI TTS voice IDs. */
 export type OpenAIVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
@@ -56,15 +56,18 @@ export interface AgentVoiceConfig {
 
 /** Abstraction for the TTS API. Facilitates testing. */
 export interface TTSProvider {
-  synthesize(text: string, options: {
-    model: string;
-    voice: OpenAIVoice;
-    format: string;
-    speed: number;
-  }): Promise<Buffer>;
+  synthesize(
+    text: string,
+    options: {
+      model: string;
+      voice: OpenAIVoice;
+      format: string;
+      speed: number;
+    },
+  ): Promise<Buffer>;
 }
 
-//  Default Agent Voice Map 
+//  Default Agent Voice Map
 
 export const DEFAULT_AGENT_VOICES: Record<string, AgentVoiceConfig> = {
   leela: { agentId: 'leela', voice: 'nova', speed: 1.0 },
@@ -73,7 +76,7 @@ export const DEFAULT_AGENT_VOICES: Record<string, AgentVoiceConfig> = {
   zoidberg: { agentId: 'zoidberg', voice: 'shimmer', speed: 1.0 },
 };
 
-//  Default OpenAI TTS Provider 
+//  Default OpenAI TTS Provider
 
 export class OpenAITTSProvider implements TTSProvider {
   private readonly apiKey: string;
@@ -121,7 +124,7 @@ export class OpenAITTSProvider implements TTSProvider {
   }
 }
 
-//  TTS Service 
+//  TTS Service
 
 export class TTSService extends EventEmitter {
   private readonly model: string;
@@ -142,21 +145,14 @@ export class TTSService extends EventEmitter {
     this.agentVoices = agentVoices ?? { ...DEFAULT_AGENT_VOICES };
     this.provider =
       provider ??
-      new OpenAITTSProvider(
-        config.apiKey ?? process.env.OPENAI_API_KEY ?? '',
-        config.timeoutMs,
-      );
+      new OpenAITTSProvider(config.apiKey ?? process.env.OPENAI_API_KEY ?? '', config.timeoutMs);
   }
 
   /**
    * Synthesize speech for an agent's response text.
    * Splits text into sentence-level chunks and streams audio pieces.
    */
-  async synthesize(
-    sessionId: string,
-    agentId: string,
-    text: string,
-  ): Promise<AudioChunk[]> {
+  async synthesize(sessionId: string, agentId: string, text: string): Promise<AudioChunk[]> {
     if (!text.trim()) {
       return [];
     }
@@ -170,7 +166,7 @@ export class TTSService extends EventEmitter {
     const chunks: AudioChunk[] = [];
 
     for (let i = 0; i < sentences.length; i++) {
-      const sentence = sentences[i];
+      const sentence = sentences[i]!;
       if (!sentence.trim()) continue;
 
       try {

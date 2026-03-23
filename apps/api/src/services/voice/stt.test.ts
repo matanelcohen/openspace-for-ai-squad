@@ -54,7 +54,7 @@ describe('STTService', () => {
       service.on('transcript:partial', handler);
       service.pushAudioChunk('session-1', Buffer.from('data'));
       expect(handler).toHaveBeenCalledTimes(1);
-      expect(handler.mock.calls[0][0].isFinal).toBe(false);
+      expect(handler.mock.calls[0]![0].isFinal).toBe(false);
     });
 
     it('tracks separate buffers per session', () => {
@@ -92,7 +92,7 @@ describe('STTService', () => {
 
       expect(mockProvider.transcribe).toHaveBeenCalledTimes(1);
       const calledBuffer = (mockProvider.transcribe as ReturnType<typeof vi.fn>).mock
-        .calls[0][0] as Buffer;
+        .calls[0]![0] as Buffer;
       expect(calledBuffer.toString()).toBe('part1part2');
     });
 
@@ -100,8 +100,7 @@ describe('STTService', () => {
       service.pushAudioChunk('session-1', Buffer.from('audio'));
       await service.finalize('session-1', 'Previous context');
 
-      const calledOptions = (mockProvider.transcribe as ReturnType<typeof vi.fn>).mock
-        .calls[0][1];
+      const calledOptions = (mockProvider.transcribe as ReturnType<typeof vi.fn>).mock.calls[0]![1];
       expect(calledOptions.prompt).toBe('Previous context');
     });
 
@@ -111,7 +110,7 @@ describe('STTService', () => {
       service.pushAudioChunk('session-1', Buffer.from('audio'));
       await service.finalize('session-1');
       expect(handler).toHaveBeenCalledTimes(1);
-      expect(handler.mock.calls[0][0].isFinal).toBe(true);
+      expect(handler.mock.calls[0]![0].isFinal).toBe(true);
     });
 
     it('clears buffer after finalization', async () => {
@@ -145,6 +144,7 @@ describe('STTService', () => {
         transcribe: vi.fn().mockRejectedValue(new Error('API timeout')),
       });
       const errorService = new STTService({ apiKey: 'test' }, errorProvider);
+      errorService.on('error', () => {}); // prevent unhandled error throw
 
       errorService.pushAudioChunk('session-1', Buffer.from('audio'));
       const result = await errorService.finalize('session-1');
@@ -169,7 +169,7 @@ describe('STTService', () => {
       await errorService.finalize('session-1');
 
       expect(handler).toHaveBeenCalledTimes(1);
-      expect(handler.mock.calls[0][0].error).toContain('Network error');
+      expect(handler.mock.calls[0]![0].error).toContain('Network error');
 
       await errorService.shutdown();
     });
@@ -179,6 +179,7 @@ describe('STTService', () => {
         transcribe: vi.fn().mockRejectedValue(new Error('Fail')),
       });
       const errorService = new STTService({ apiKey: 'test' }, errorProvider);
+      errorService.on('error', () => {}); // prevent unhandled error throw
 
       const handler = vi.fn();
       errorService.on('transcript:final', handler);

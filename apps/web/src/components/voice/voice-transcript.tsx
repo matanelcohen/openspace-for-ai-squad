@@ -42,7 +42,7 @@ export function VoiceTranscript({ messages, className }: VoiceTranscriptProps) {
               data-message-id={message.id}
             >
               {message.role === 'agent' && message.agentId ? (
-                <AgentAvatar agentId={message.agentId} size="sm" />
+                <AgentAvatar agentId={message.agentId} name={message.agentId} size="sm" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
                   <span className="text-xs font-medium">You</span>
@@ -54,8 +54,9 @@ export function VoiceTranscript({ messages, className }: VoiceTranscriptProps) {
                     className={cn(
                       'text-sm font-medium',
                       message.role === 'agent' && message.agentId
-                        ? agentColors[message.agentId as keyof typeof agentColors] || 'text-foreground'
-                        : 'text-foreground'
+                        ? agentColors[message.agentId as keyof typeof agentColors] ||
+                            'text-foreground'
+                        : 'text-foreground',
                     )}
                   >
                     {message.role === 'agent' && message.agentId

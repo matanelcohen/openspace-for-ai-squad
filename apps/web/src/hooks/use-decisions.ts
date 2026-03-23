@@ -4,11 +4,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api-client';
 
 export function useDecisions() {
-  return useQuery({
+  return useQuery<Decision[]>({
     queryKey: ['decisions'],
-    queryFn: async () => {
-      const response = await api.get('/api/decisions');
-      return response.data as Decision[];
-    },
+    queryFn: () => api.get<Decision[]>('/api/decisions'),
   });
 }

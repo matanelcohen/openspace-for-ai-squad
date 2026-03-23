@@ -118,7 +118,7 @@ describe('VoiceSessionManager', () => {
       const session = manager.createSession('Test');
       manager.joinSession(session.id, 'user-1', 'Alice', 'user');
       expect(handler).toHaveBeenCalledTimes(1);
-      expect(handler.mock.calls[0][0].sessionId).toBe(session.id);
+      expect(handler.mock.calls[0]![0].sessionId).toBe(session.id);
     });
 
     it('tracks agent IDs when agents join', () => {
@@ -148,9 +148,7 @@ describe('VoiceSessionManager', () => {
     it('throws when joining an ended session', () => {
       const session = manager.createSession('Test');
       manager.endSession(session.id);
-      expect(() => manager.joinSession(session.id, 'u1', 'Alice', 'user')).toThrow(
-        'not active',
-      );
+      expect(() => manager.joinSession(session.id, 'u1', 'Alice', 'user')).toThrow('not active');
     });
 
     it('enforces max participants per session', () => {
@@ -158,9 +156,7 @@ describe('VoiceSessionManager', () => {
       for (let i = 0; i < 5; i++) {
         manager.joinSession(session.id, `user-${i}`, `User ${i}`, 'user');
       }
-      expect(() =>
-        manager.joinSession(session.id, 'user-6', 'User 6', 'user'),
-      ).toThrow('full');
+      expect(() => manager.joinSession(session.id, 'user-6', 'User 6', 'user')).toThrow('full');
     });
 
     it('removes a participant from a session', () => {
@@ -195,7 +191,7 @@ describe('VoiceSessionManager', () => {
       expect(manager.setSpeaking(session.id, 'user-1', true)).toBe(true);
       const speakers = manager.getActiveSpeakers(session.id);
       expect(speakers).toHaveLength(1);
-      expect(speakers[0].id).toBe('user-1');
+      expect(speakers[0]!.id).toBe('user-1');
     });
 
     it('emits speaking/silent events', () => {
@@ -238,7 +234,7 @@ describe('VoiceSessionManager', () => {
       manager.endSession(s2.id);
       const active = manager.getActiveSessions();
       expect(active).toHaveLength(1);
-      expect(active[0].id).toBe(s1.id);
+      expect(active[0]!.id).toBe(s1.id);
     });
 
     it('lists all sessions including ended', () => {

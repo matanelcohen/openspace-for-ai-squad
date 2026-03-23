@@ -69,7 +69,7 @@ export class ConversationContextManager {
     }
   }
 
-  //  Session context lifecycle 
+  //  Session context lifecycle
 
   /** Initialize context for a new session. */
   createContext(sessionId: string): SessionContext {
@@ -198,7 +198,7 @@ export class ConversationContextManager {
     return this.contexts.get(sessionId)?.actionLog ?? [];
   }
 
-  //  Topic tracking 
+  //  Topic tracking
 
   /** Set the current topic manually. */
   setTopic(sessionId: string, topic: string): void {
@@ -214,7 +214,7 @@ export class ConversationContextManager {
     return this.contexts.get(sessionId)?.currentTopic ?? null;
   }
 
-  //  Persistence 
+  //  Persistence
 
   /**
    * Persist the full session transcript to .squad/sessions/.
@@ -251,7 +251,9 @@ export class ConversationContextManager {
       lines.push('## Actions Executed');
       lines.push('');
       for (const action of ctx.actionLog) {
-        lines.push(`- **${action.action}** by ${action.agentId}: ${action.result} (${action.timestamp})`);
+        lines.push(
+          `- **${action.action}** by ${action.agentId}: ${action.result} (${action.timestamp})`,
+        );
       }
       lines.push('');
     }
@@ -264,7 +266,7 @@ export class ConversationContextManager {
     }
   }
 
-  //  Private 
+  //  Private
 
   /** Simple topic extraction from the last few messages. */
   private updateTopic(ctx: SessionContext): void {
@@ -272,7 +274,7 @@ export class ConversationContextManager {
     const userMessages = recent.filter((m) => m.role === 'user');
     if (userMessages.length > 0) {
       // Use the last user message as a rough topic indicator
-      const lastUserMsg = userMessages[userMessages.length - 1].content;
+      const lastUserMsg = userMessages[userMessages.length - 1]!.content;
       if (lastUserMsg.length > 5) {
         ctx.currentTopic = lastUserMsg.slice(0, 100);
       }
