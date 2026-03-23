@@ -1,4 +1,4 @@
-import type { Task, TaskStatus } from '@openspace/shared';
+import type { Task, TaskPriority, TaskStatus } from '@openspace/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';
@@ -8,6 +8,14 @@ export function useTasks() {
     queryKey: ['tasks'],
     queryFn: () => api.get<Task[]>('/api/tasks'),
     refetchInterval: 30_000,
+  });
+}
+
+export function useTask(id: string) {
+  return useQuery<Task>({
+    queryKey: ['tasks', id],
+    queryFn: () => api.get<Task>(`/api/tasks/${id}`),
+    enabled: !!id,
   });
 }
 
@@ -22,6 +30,109 @@ export function useUpdateTaskStatus() {
       const previous = queryClient.getQueryData<Task[]>(['tasks']);
       queryClient.setQueryData<Task[]>(['tasks'], (old) =>
         old?.map((t) => (t.id === taskId ? { ...t, status } : t)),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['tasks'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
+
+export interface CreateTaskInput {
+  title: string;
+  description: string;
+  assignee: string | null;
+  priority: TaskPriority;
+  labels: string[];
+}
+
+export function useCreateTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: CreateTaskInput) => api.post<Task>('/api/tasks', input),
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previous = queryClient.getQueryData<Task[]>(['tasks']);
+      const optimistic: Task = {
+        id: `temp-${Date.now()}`,
+        title: input.title,
+        description: input.description,
+        status: 'backlog',
+        priority: input.priority,
+        assignee: input.assignee,
+        labels: input.labels,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        sortIndex: 0,
+      };
+      queryClient.setQueryData<Task[]>(['tasks'], (old) => [...(old ?? []), optimistic]);
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['tasks'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
+
+export interface UpdateTaskInput {
+  taskId: string;
+  title: string;
+  description: string;
+  assignee: string | null;
+  priority: TaskPriority;
+  labels: string[];
+}
+
+export function useUpdateTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, ...body }: UpdateTaskInput) =>
+      api.put<Task>(`/api/tasks/${taskId}`, body),
+    onMutate: async ({ taskId, ...body }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previous = queryClient.getQueryData<Task[]>(['tasks']);
+      queryClient.setQueryData<Task[]>(['tasks'], (old) =>
+        old?.map((t) =>
+          t.id === taskId ? { ...t, ...body, updatedAt: new Date().toISOString() } : t,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['tasks'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
+
+export function useUpdateTaskPriority() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, sortIndex }: { taskId: string; sortIndex: number }) =>
+      api.patch<Task>(`/api/tasks/${taskId}/priority`, { sortIndex }),
+    onMutate: async ({ taskId, sortIndex }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previous = queryClient.getQueryData<Task[]>(['tasks']);
+      queryClient.setQueryData<Task[]>(['tasks'], (old) =>
+        old?.map((t) => (t.id === taskId ? { ...t, sortIndex } : t)),
       );
       return { previous };
     },
