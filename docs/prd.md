@@ -138,31 +138,38 @@ The key insight: **the squad already exists and works.** openspace.ai doesn't re
 - *As a developer, I want to see a live feed of agent activity, so I catch failures early.*
 - *As a team lead, I want to get notified when an agent is blocked and needs my input.*
 
-### 3.4 Voice Interface
+### 3.4 Voice Interface — Real-time Group Voice Chat
 
-**Purpose:** Talk to agents using real voice. Ask questions, give directives, get status updates — like a standup with your AI team.
+**Purpose:** Have a live voice conversation with your entire AI squad — like being in a room with your team. You talk naturally, agents respond by voice, multiple agents can participate, and voice directives trigger real actions. Think: ChatGPT Advanced Voice mode, but for a *group* of AI agents.
+
+**Core Concept:** This is NOT push-to-talk command-response. It is a **continuous, multi-party, real-time voice conversation**. The user speaks naturally (the system is always listening), the Coordinator determines which agent(s) should respond, and agents can build on each other's responses — just like a real standup.
 
 **Requirements:**
 
-- **Speech-to-Text Input:** User speaks into microphone; speech is transcribed and sent to the agent as a message
-- **Text-to-Speech Output:** Agent responses are read aloud using a synthesized voice
-- **Agent Personality in Voice:** Each agent has a distinct voice profile (pitch, speed, tone) that reflects their personality/role — Leela sounds confident and direct, Fry sounds enthusiastic, Bender sounds blunt
-- **Voice Commands:** Support common directives:
-  - "What's the status?" → Squad or agent status summary
-  - "What are you working on?" → Current task details
-  - "Prioritize [task] above [task]" → Reorder priorities
-  - "Assign [task] to [agent]" → Task assignment
-  - "What decisions were made today?" → Decision log query
-- **Push-to-Talk and Hands-Free Modes:** User can choose push-to-talk (press button to speak) or continuous listening with wake word / voice activity detection
-- **Text Fallback:** Every voice interaction has a text equivalent. Voice is additive, never required.
-- **Conversation Context:** Voice conversations maintain context within a session (multi-turn dialogue)
-- **Visual Feedback:** Show a waveform/indicator when listening, transcription in real-time, and the agent's response as both text and audio
+- **Continuous Listening (Always-On):** The microphone is open by default during a voice session. Voice Activity Detection (VAD) segments user speech automatically — no push-to-talk button needed. The user simply talks, pauses, and continues naturally. A mute toggle is available but the default is *live*.
+- **Multi-Agent Voice Responses:** Multiple agents can respond in the same conversation. The Coordinator routes each user utterance to the most relevant agent(s). Agents take turns speaking (no overlapping audio) with smooth transitions. Example: user asks "What's the status?" → Leela gives the high-level summary → Bender adds a backend-specific update → Fry mentions a frontend blocker.
+- **Agent Personality in Voice:** Each agent has a distinct, recognizable voice. Leela sounds confident and direct, Fry sounds enthusiastic and friendly, Bender sounds blunt and matter-of-fact, Zoidberg sounds methodical and precise. Voice profiles are consistent across sessions.
+- **Shared Conversation Context:** All agents in a voice session share the same conversation state. When the user talks to Bender about the API, Leela hears that context too. Agents can reference what other agents said ("As Bender mentioned, the endpoint is ready — I'll update the task board"). Context persists across the full session.
+- **Voice-Triggered Action Execution:** Voice directives trigger real squad operations, not just information retrieval:
+  - "Bender, create an auth endpoint for JWT tokens" → Creates a task, Bender acknowledges and starts work
+  - "Fry, the login page needs a loading spinner" → Creates a task assigned to Fry
+  - "Prioritize the auth work above the dashboard" → Reorders task priorities
+  - "What decisions were made today?" → Queries and reads back decision log entries
+  - "Leela, assign the database migration to Bender" → Executes task assignment
+  - The intent parser maps natural speech to squad operations (task creation, assignment, priority changes, status queries, decision lookups). Agents confirm actions before or after execution.
+- **Streaming Audio Pipeline (Low Latency):** Audio streams bidirectionally in real time. User speech streams to STT as the user talks (not after they stop). Agent responses stream from TTS as they are generated (first audio bytes play within ~500ms of agent producing text). Target: <2 seconds from end-of-user-speech to start-of-agent-audio.
+- **Conversation View UI:** The voice session is displayed as a live conversation transcript — like a meeting view. Each participant (user + agents) has labeled turns. Real-time transcription shows user words as they speak. Agent responses appear as both text and audio. Users can scroll back, replay any agent response, or copy text.
+- **Text Fallback:** Every voice interaction has a text equivalent. Voice is additive, never required. Users can type into the voice session if they prefer (hybrid mode).
+- **Visual Feedback:** Waveform animation shows who is currently speaking. Agent avatars light up when their turn is active. A "thinking" indicator shows when the Coordinator is routing or an agent is processing. Real-time transcription appears as the user speaks.
+- **Session Management:** Voice sessions are explicit — the user starts and ends them. Multiple sessions are supported (e.g., one for standup, one for code review). Session history is preserved and searchable.
 
 **User Stories:**
 
-- *As a developer at my desk, I want to say "Hey squad, what's the status?" and hear a spoken summary, so I don't have to switch windows.*
-- *As a PM in a meeting, I want to quickly ask the squad a question by voice and get a spoken answer, so I can relay it to stakeholders.*
-- *As a user, I want Leela's voice to sound different from Fry's, so I know who's responding.*
+- *As a developer, I want to open a voice session, say "Morning squad, what's the status?" and hear Leela, Bender, and Fry each give their updates — like a real standup.*
+- *As a PM, I want to say "Bender, create an API endpoint for user profiles" and have it actually become a tracked task that Bender starts working on.*
+- *As a developer, I want to have a back-and-forth conversation with Fry about a UI problem, then have Leela jump in with a prioritization suggestion — all by voice, all in one session.*
+- *As a user, I want to mute my mic, type a question, and still get a spoken response from the right agent.*
+- *As a team lead, I want to say "Leela, what's blocking the launch?" and hear a synthesized summary that references what each agent reported — not just a single agent's view.*
 
 ### 3.5 Decision Log
 
