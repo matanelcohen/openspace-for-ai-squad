@@ -13,7 +13,7 @@ interface AgentCardProps {
 
 export function AgentCard({ agent }: AgentCardProps) {
   return (
-    <Card className="transition-shadow hover:shadow-md" data-testid={`agent-card-${agent.id}`}>
+    <Card className="transition-shadow hover:shadow-md" data-testid={`agent-card-${agent.id}`} data-realtime>
       <CardHeader className="flex flex-row items-center gap-3 space-y-0 pb-3">
         <AgentAvatar agentId={agent.id} name={agent.name} size="lg" />
         <div className="flex-1 space-y-1">

@@ -1,6 +1,7 @@
 'use client';
 
 import type { Task } from '@openspace/shared';
+import Link from 'next/link';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { PriorityBadge } from '@/components/priority-badge';
@@ -19,7 +20,13 @@ export function TaskCard({ task, isDragging }: TaskCardProps) {
       data-testid={`task-card-${task.id}`}
     >
       <CardHeader className="space-y-1 p-3 pb-1">
-        <p className="text-sm font-medium leading-tight">{task.title}</p>
+        <Link
+          href={`/tasks/${task.id}`}
+          className="text-sm font-medium leading-tight hover:underline"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {task.title}
+        </Link>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0">
         <div className="flex items-center justify-between gap-2">

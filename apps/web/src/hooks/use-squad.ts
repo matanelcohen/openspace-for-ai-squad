@@ -7,6 +7,6 @@ export function useSquad() {
   return useQuery<SquadOverview>({
     queryKey: ['squad'],
     queryFn: () => api.get<SquadOverview>('/api/squad'),
-    refetchInterval: 30_000,
+    refetchInterval: 300_000, // 5 min fallback — real-time updates via WebSocket
   });
 }

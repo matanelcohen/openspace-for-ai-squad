@@ -7,10 +7,11 @@ import { KanbanBoard } from '@/components/tasks/kanban-board';
 
 vi.mock('@/hooks/use-tasks');
 
-import { useTasks, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
 
 const mockedUseTasks = vi.mocked(useTasks);
 const mockedUseUpdateTaskStatus = vi.mocked(useUpdateTaskStatus);
+const mockedUseUpdateTaskPriority = vi.mocked(useUpdateTaskPriority);
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -63,6 +64,11 @@ beforeEach(() => {
     mutateAsync: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof useUpdateTaskStatus>);
+  mockedUseUpdateTaskPriority.mockReturnValue({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof useUpdateTaskPriority>);
 });
 
 afterEach(() => {

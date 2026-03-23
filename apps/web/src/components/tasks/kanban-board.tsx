@@ -11,6 +11,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import type { TaskStatus } from '@openspace/shared';
 import { TASK_STATUSES } from '@openspace/shared';
 import { useState } from 'react';
@@ -18,11 +19,12 @@ import { useState } from 'react';
 import { KanbanColumn } from '@/components/tasks/kanban-column';
 import { TaskCard } from '@/components/tasks/task-card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTasks, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
 
 export function KanbanBoard() {
   const { data: tasks, isLoading, error } = useTasks();
   const updateStatus = useUpdateTaskStatus();
+  const updatePriority = useUpdateTaskPriority();
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
 
   const sensors = useSensors(
@@ -56,7 +58,9 @@ export function KanbanBoard() {
 
   const tasksByStatus = TASK_STATUSES.reduce(
     (acc, status) => {
-      acc[status] = (tasks ?? []).filter((t) => t.status === status);
+      acc[status] = (tasks ?? [])
+        .filter((t) => t.status === status)
+        .sort((a, b) => a.sortIndex - b.sortIndex);
       return acc;
     },
     {} as Record<TaskStatus, typeof tasks>,
@@ -79,19 +83,37 @@ export function KanbanBoard() {
     const task = tasks?.find((t) => t.id === taskId);
     if (!task) return;
 
-    // Determine target column — `over.id` is a column status string
+    // Determine target column
     let newStatus: TaskStatus;
     if (TASK_STATUSES.includes(over.id as TaskStatus)) {
       newStatus = over.id as TaskStatus;
     } else {
-      // Dropped over another task — find which column that task is in
       const overTask = tasks?.find((t) => t.id === over.id);
       newStatus = overTask?.status ?? task.status;
     }
 
+    // Cross-column move: change status
     if (newStatus !== task.status) {
       updateStatus.mutate({ taskId, status: newStatus });
+      return;
     }
+
+    // Same column reorder
+    const overId = over.id as string;
+    if (taskId === overId) return;
+
+    const columnTasks = tasksByStatus[task.status] ?? [];
+    const oldIndex = columnTasks.findIndex((t) => t.id === taskId);
+    const newIndex = columnTasks.findIndex((t) => t.id === overId);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(columnTasks, oldIndex, newIndex);
+    // Persist each moved task's new sortIndex
+    reordered.forEach((t, idx) => {
+      if (t.sortIndex !== idx) {
+        updatePriority.mutate({ taskId: t.id, sortIndex: idx });
+      }
+    });
   }
 
   return (

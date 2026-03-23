@@ -7,6 +7,6 @@ export function useAgents() {
   return useQuery<Agent[]>({
     queryKey: ['agents'],
     queryFn: () => api.get<Agent[]>('/api/agents'),
-    refetchInterval: 30_000,
+    refetchInterval: 300_000, // 5 min fallback — real-time updates via WebSocket
   });
 }

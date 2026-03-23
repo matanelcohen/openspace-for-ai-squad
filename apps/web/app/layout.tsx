@@ -6,6 +6,7 @@ import { Inter } from 'next/font/google';
 import { AppLayout } from '@/components/layout/app-layout';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
+import { WebSocketProvider } from '@/components/providers/websocket-provider';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -28,7 +29,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           disableTransitionOnChange
         >
           <QueryProvider>
-            <AppLayout>{children}</AppLayout>
+            <WebSocketProvider>
+              <AppLayout>{children}</AppLayout>
+            </WebSocketProvider>
           </QueryProvider>
         </ThemeProvider>
       </body>

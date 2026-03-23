@@ -70,6 +70,15 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(activityRoute, { prefix: '/api' });
   app.register(chatRoute, { prefix: '/api' });
 
+  app.setErrorHandler((error, _request, reply) => {
+    const statusCode = error.statusCode ?? 500;
+    const code = statusCode >= 500 ? 'INTERNAL_ERROR' : 'VALIDATION_ERROR';
+    reply.status(statusCode).send({
+      error: error.message || 'Internal Server Error',
+      code,
+    });
+  });
+
   return app;
 }
 

@@ -7,7 +7,7 @@ export function useTasks() {
   return useQuery<Task[]>({
     queryKey: ['tasks'],
     queryFn: () => api.get<Task[]>('/api/tasks'),
-    refetchInterval: 30_000,
+    refetchInterval: 300_000, // 5 min fallback — real-time updates via WebSocket
   });
 }
 
