@@ -48,7 +48,9 @@ function parseArgs(argv) {
 }
 
 function printUsage() {
-  console.log('Usage: node .squad/templates/ralph-triage.js --squad-dir .squad --output triage-results.json');
+  console.log(
+    'Usage: node .squad/templates/ralph-triage.js --squad-dir .squad --output triage-results.json',
+  );
 }
 
 function normalizeEol(content) {
@@ -344,7 +346,8 @@ function findBestRuleMatch(issueText, rules) {
     if (matchedKeywords.length === 0) continue;
 
     const score =
-      matchedKeywords.length * 100 + matchedKeywords.reduce((sum, keyword) => sum + keyword.length, 0);
+      matchedKeywords.length * 100 +
+      matchedKeywords.reduce((sum, keyword) => sum + keyword.length, 0);
     if (score > bestScore) {
       best = { rule, matchedKeywords };
       bestScore = score;
@@ -396,9 +399,16 @@ function parseOwnerRepoFromRemote(remoteUrl) {
   const sshMatch = remoteUrl.match(/^git@[^:]+:([^/]+)\/(.+?)(?:\.git)?$/);
   if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
 
-  if (remoteUrl.startsWith('http://') || remoteUrl.startsWith('https://') || remoteUrl.startsWith('ssh://')) {
+  if (
+    remoteUrl.startsWith('http://') ||
+    remoteUrl.startsWith('https://') ||
+    remoteUrl.startsWith('ssh://')
+  ) {
     const parsed = new URL(remoteUrl);
-    const parts = parsed.pathname.replace(/^\/+/, '').replace(/\.git$/, '').split('/');
+    const parts = parsed.pathname
+      .replace(/^\/+/, '')
+      .replace(/\.git$/, '')
+      .split('/');
     if (parts.length >= 2) {
       return { owner: parts[0], repo: parts[1] };
     }
@@ -462,7 +472,10 @@ async function fetchSquadIssues(owner, repo, token) {
       per_page: String(perPage),
       page: String(page),
     });
-    const issues = await githubRequestJson(`/repos/${owner}/${repo}/issues?${query.toString()}`, token);
+    const issues = await githubRequestJson(
+      `/repos/${owner}/${repo}/issues?${query.toString()}`,
+      token,
+    );
     if (!Array.isArray(issues) || issues.length === 0) break;
     all.push(...issues);
     if (issues.length < perPage) break;
