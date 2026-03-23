@@ -167,37 +167,40 @@ Phase 0: Project Setup
 
 ---
 
-## Phase 4 — Voice Interface
+## Phase 4 — Voice Interface (Real-time Group Voice Chat)
 
-> The differentiator. STT → Agent → TTS pipeline. Depends on chat being functional (voice is spoken chat).
+> The differentiator. A live, multi-party voice conversation with the full squad. Depends on chat being functional (voice reuses the chat message routing pipeline and extends it with real-time audio streaming).
 
 ### Open Decisions to Resolve
 
 | Decision | Reference | Recommendation | Must Resolve By |
 |----------|-----------|----------------|-----------------|
-| Voice service provider | D3 | **OpenAI Whisper API (STT) + OpenAI TTS (TTS)** — high quality, simple API, consistent provider. | Before P4-1 |
-| Voice latency handling | D6 | **Stream TTS output** — send audio chunks as they're generated, show text transcript simultaneously. Push-to-talk first, VAD later. | Before P4-3 |
+| Voice service / real-time API | D3 | **OpenAI Realtime API** — WebSocket-based, full-duplex audio streaming with built-in VAD, STT, and TTS. Single provider, sub-second latency. Fallback: custom pipeline with Deepgram streaming STT + OpenAI TTS streaming over a custom WebSocket layer. | Before P4-1 |
+| Real-time voice session architecture | D6 | **Single persistent WebSocket per voice session.** All audio streams bidirectionally over one connection. Server-side VAD handles turn detection. Multi-agent responses are sequenced by the Coordinator and streamed back as consecutive audio segments. | Before P4-2 |
 
 ### Work Items
 
 | ID | Title | Description | Agent | Depends On | Complexity |
 |----|-------|-------------|-------|------------|------------|
-| P4-1 | **STT integration (backend)** | Create `POST /api/voice/transcribe` endpoint. Accept audio blob (WebM/Opus from browser MediaRecorder), forward to OpenAI Whisper API, return transcript text. Handle errors (empty audio, API failures) gracefully. Include language detection. Config for API keys via env vars. | Bender | P0-3, D3 resolved | Medium |
-| P4-2 | **TTS integration (backend)** | Create `POST /api/voice/synthesize` endpoint. Accept text + agent ID, select the appropriate OpenAI TTS voice for that agent (e.g., Leela=`nova`, Fry=`echo`, Bender=`onyx`, Zoidberg=`shimmer`). Return audio stream (MP3/Opus). Support streaming response so audio starts playing before full generation completes. | Bender | P0-3, D3 resolved | Medium |
-| P4-3 | **Voice pipeline orchestration** | Create `POST /api/voice/converse` endpoint that orchestrates the full pipeline: receive audio → transcribe (STT) → route to agent (reuse chat message handling from P3-4) → get response text → synthesize (TTS) → return audio + text. Support streaming: return text immediately, stream audio as it generates. Maintain conversation context per session. | Bender | P4-1, P4-2, P3-4 | Large |
-| P4-4 | **Voice UI — push-to-talk** | Route: `/voice`. Build the voice interaction interface. Push-to-talk button: hold to record (using MediaRecorder API), release to send. Visual feedback: waveform animation while recording, "processing" spinner during transcription, text transcript appearing in real-time, audio playback of agent response. Agent avatar and name shown with response. | Fry | P4-3, P2-1 | Large |
-| P4-5 | **Voice UI — conversation view** | Display the voice conversation as a chat-like transcript: user messages (with "spoken" indicator), agent responses (text + play button to re-hear audio). Maintain session context — follow-up questions work without re-stating context. Agent selector dropdown to direct voice to a specific agent or "team". | Fry | P4-4 | Medium |
-| P4-6 | **Per-agent voice profiles** | Configure distinct voice characteristics per agent. Map agent IDs to OpenAI TTS voice names and parameters (speed, pitch adjustments where supported). Display agent avatar with speaking animation during TTS playback. Test that users can distinguish agents by voice. | Fry + Bender | P4-2 | Small |
-| P4-7 | **Voice command parsing** | Enhance the agent router to recognize common voice directives: "What's the status?" → squad summary, "What are you working on?" → current task, "Prioritize X above Y" → task reorder, "Assign X to Y" → task assignment. Map recognized intents to existing API operations. Respond with confirmation + result. | Bender | P4-3, P1-5 | Medium |
-| P4-8 | **Voice pipeline tests** | Test full STT → Agent → TTS round-trip. Test error cases: empty audio, API timeout, unsupported format. Test latency: measure time from audio submission to first audio byte returned. Test agent voice differentiation. Test voice commands trigger correct API operations. | Zoidberg | P4-1 through P4-7 | Medium |
+| P4-1 | **Real-time voice session manager (backend)** | Implement a WebSocket-based voice session service. Each voice session is a persistent, bidirectional WebSocket connection. The session manager handles: session lifecycle (create/join/leave/end), audio stream ingestion from the client, routing audio to the STT service, and dispatching synthesized audio back to the client. Support multiple concurrent sessions. Integrate with OpenAI Realtime API (or Deepgram + OpenAI TTS as fallback). Config for API keys via env vars. | Bender | P0-3, P3-1, D3 resolved, D6 resolved | Large |
+| P4-2 | **Streaming STT pipeline** | Implement real-time speech-to-text within the voice session. Audio streams continuously from the client WebSocket to the STT service (OpenAI Realtime API or Deepgram). Produce interim (partial) transcriptions for real-time UI display and final transcriptions for agent processing. Handle silence detection / end-of-utterance via server-side VAD (built into OpenAI Realtime API, or @ricky0123/vad-web + server logic for fallback). Emit transcription events over the session WebSocket. | Bender | P4-1 | Medium |
+| P4-3 | **Multi-agent voice routing (Coordinator integration)** | Extend the Coordinator to act as the voice conversation router. When a user utterance is finalized: (1) the Coordinator receives the transcribed text + conversation context, (2) uses LLM-based intent classification to determine which agent(s) should respond, (3) dispatches to the selected agent(s) in sequence, (4) collects responses and queues them for TTS. Support multi-agent responses to a single utterance (e.g., "What's the status?" → Leela summary → Bender backend update → Fry frontend update). Respect agent expertise boundaries from charters. | Bender + Leela | P4-2, P3-4 | Large |
+| P4-4 | **Streaming TTS pipeline with per-agent voices** | Implement real-time text-to-speech within the voice session. Agent response text streams to the TTS service as it is generated. Audio chunks stream back to the client WebSocket immediately (target: first audio byte within ~500ms of text generation start). Map each agent to a distinct voice (e.g., Leela=`nova`, Fry=`echo`, Bender=`onyx`, Zoidberg=`shimmer`). When multiple agents respond, sequence their audio with brief pauses and agent identification. Support playback controls (pause, replay). | Bender | P4-1, P4-3 | Medium |
+| P4-5 | **Conversation context manager** | Build a shared conversation state that all agents in a voice session can read and write. Stores: full transcription history (user + all agent responses), current topic/intent, action log (what operations were triggered), and session metadata. Each agent receives relevant context when asked to respond (not the full raw history — a summarized, relevant window). Context persists for the duration of the session and is archived on session end. Integrate with the chat message store from Phase 3 so voice sessions appear in chat history. | Bender | P4-1, P3-4 | Medium |
+| P4-6 | **Voice action execution layer** | Build the intent-to-action pipeline for voice directives. When the Coordinator or responding agent detects an actionable intent (task creation, assignment, priority change, status query, decision lookup), map it to the corresponding squad operation via LLM function calling. Flow: transcribed text → intent classification → function call → execute squad API operation → confirm result to user by voice. Support common operations: create task, assign task, reorder priorities, query status, query decisions. Return spoken confirmation ("Done — I've created the auth endpoint task and assigned it to Bender."). | Bender + Leela | P4-3, P1-5 | Large |
+| P4-7 | **Voice UI — conversation view** | Route: `/voice`. Build the real-time voice conversation interface. Core elements: (1) conversation transcript showing all participants (user + agents) with labeled, timestamped turns, (2) real-time transcription of user speech as they talk, (3) agent avatars that light up / animate when speaking, (4) waveform visualization for active speaker, (5) mute/unmute toggle (default: unmuted / always listening), (6) session controls (start session, end session, invite specific agents), (7) "thinking" indicator when Coordinator is routing or agent is processing. Display text transcript + audio playback controls for each agent response. | Fry | P4-1, P4-4, P2-1 | Large |
+| P4-8 | **Voice UI — hybrid text input & session history** | Within the voice conversation view, support: (1) text input field so the user can type messages into the voice session (hybrid mode), (2) session history — list of past voice sessions with summaries, (3) click into a past session to see full transcript and replay audio, (4) search across voice session transcripts. Agent selector: user can address a specific agent ("@Bender") or the whole team. Display action confirmations inline (e.g., "✅ Task created: Auth endpoint"). | Fry | P4-7 | Medium |
+| P4-9 | **Voice pipeline integration tests** | Test the full real-time pipeline end-to-end. Test cases: (1) user speaks → STT transcribes → Coordinator routes → agent responds → TTS plays, all within 3 seconds, (2) multi-agent response: single utterance triggers 2+ agent responses in correct sequence, (3) voice action: "Create a task for X" results in actual task creation + spoken confirmation, (4) conversation context: follow-up question references earlier context correctly, (5) error handling: network interruption, API timeout, invalid audio format, (6) concurrent sessions don't leak context, (7) agent voices are distinct and consistent. Performance: measure end-to-end latency (target <2s), time to first audio byte (target <500ms). | Zoidberg | P4-1 through P4-8 | Large |
 
 ### Phase 4 Exit Criteria
 
-- [ ] User can speak and get a spoken response within 5 seconds
-- [ ] Each agent has a distinguishable voice
-- [ ] Voice commands trigger correct actions (status, assign, prioritize)
-- [ ] Conversation context is maintained across turns
-- [ ] Text transcript is always available alongside audio
+- [ ] User can open a voice session and have a continuous, natural conversation (no push-to-talk required)
+- [ ] Multiple agents respond in the same session with distinguishable voices
+- [ ] Agents share conversation context — follow-up questions and cross-agent references work
+- [ ] Voice directives trigger real squad operations (task creation, assignment, priority changes)
+- [ ] End-to-end latency from end-of-speech to start-of-agent-audio is under 3 seconds (target: <2s)
+- [ ] Text transcript is always displayed alongside audio
+- [ ] Voice sessions are preserved and replayable
 
 ---
 
@@ -234,9 +237,9 @@ Phase 0: Project Setup
 
 | Agent | Primary Responsibilities | Phase Load |
 |-------|-------------------------|------------|
-| **Leela** | Architecture decisions, shared types, code review, documentation, scope management | P0: 2 items · P1: 1 item · P5: 1 item + review all |
-| **Fry** | All frontend work — UI components, pages, interactions, voice UI | P0: 1 item · P2: 8 items · P3: 4 items · P4: 3 items · P5: 5 items |
-| **Bender** | All backend work — API, file parsing, WebSocket, voice pipeline, infra | P0: 3 items · P1: 8 items · P3: 4 items · P4: 4 items · P5: 2 items |
+| **Leela** | Architecture decisions, shared types, code review, documentation, scope management | P0: 2 items · P1: 1 item · P4: 2 items (co-owner) · P5: 1 item + review all |
+| **Fry** | All frontend work — UI components, pages, interactions, voice UI | P0: 1 item · P2: 8 items · P3: 4 items · P4: 2 items · P5: 5 items |
+| **Bender** | All backend work — API, file parsing, WebSocket, voice pipeline, infra | P0: 3 items · P1: 8 items · P3: 4 items · P4: 6 items · P5: 2 items |
 | **Zoidberg** | Testing at every phase — unit, integration, E2E, performance | P0: 1 item · P1: 1 item · P2: 1 item · P3: 1 item · P4: 1 item · P5: 2 items |
 
 ---
@@ -252,8 +255,8 @@ Decisions must be resolved before the work items that depend on them:
 | D5 — Auth strategy | PRD §8 | P5-3 (can defer to Phase 5) | Before Phase 5 |
 | D4 — Task file format | PRD §8 | P1-3 (task data model) | Before P1-3 starts |
 | D7 — Chat persistence | PRD §8 | P3-4 (chat backend) | Before P3-4 starts |
-| D3 — Voice service provider | PRD §8 | P4-1, P4-2 | Before Phase 4 |
-| D6 — Voice latency handling | PRD §8 | P4-3 (voice pipeline) | Before P4-3 starts |
+| D3 — Voice service / real-time API | PRD §8 | P4-1, P4-2, P4-4 | Before Phase 4 |
+| D6 — Real-time voice session architecture | PRD §8 | P4-1, P4-2 (voice session manager) | Before Phase 4 |
 
 ---
 
@@ -262,8 +265,8 @@ Decisions must be resolved before the work items that depend on them:
 | Complexity | Count | Estimated Sessions |
 |------------|-------|--------------------|
 | Small (1 session) | 12 items | 12 |
-| Medium (2–3 sessions) | 25 items | 50–75 |
-| Large (4+ sessions) | 6 items | 24+ |
-| **Total** | **43 items** | **~25–32 sessions** (with parallelism) |
+| Medium (2–3 sessions) | 24 items | 48–72 |
+| Large (4+ sessions) | 8 items | 32+ |
+| **Total** | **44 items** | **~28–36 sessions** (with parallelism) |
 
-*Note: Sessions overlap because Fry and Bender work in parallel. The 25–32 estimate is wall-clock time, not sum of all sessions.*
+*Note: Phase 4 grew from 8 to 9 work items and shifted toward Large complexity due to the real-time multi-agent voice architecture. Sessions overlap because Fry and Bender work in parallel. The 28–36 estimate is wall-clock time, not sum of all sessions.*

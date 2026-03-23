@@ -269,19 +269,54 @@ The key insight: **the squad already exists and works.** openspace.ai doesn't re
 | **Database (optional)** | SQLite (via better-sqlite3 or Drizzle) | For indexing, search, caching, and chat history. Augments the file system, doesn't replace it. |
 | **File Watching** | chokidar or Node.js `fs.watch` | Watch `.squad/` for changes and push updates to clients via WebSocket |
 
-### 4.4 Voice Pipeline
+### 4.4 Voice Pipeline — Real-time Streaming Architecture
 
 ```
-User speaks → [Microphone] → [STT Service] → Text
-    → [Agent Router] → Agent processes message → Response text
-    → [TTS Service] → Audio → [Speaker]
+┌─────────────────────────────── Voice Session (WebSocket) ───────────────────────────────┐
+│                                                                                          │
+│  User speaks (continuous)                                                                │
+│       │                                                                                  │
+│       ▼                                                                                  │
+│  [Browser VAD] ──── detects speech ────► [Audio Stream via WebSocket]                    │
+│                                              │                                           │
+│                                              ▼                                           │
+│                                     [Realtime STT Service]                               │
+│                                     (streaming transcription)                            │
+│                                              │                                           │
+│                                              ▼                                           │
+│                                   [Coordinator / Agent Router]                           │
+│                                   (determines which agent(s) respond)                    │
+│                                        │          │          │                           │
+│                                        ▼          ▼          ▼                           │
+│                                     [Leela]    [Bender]    [Fry]                         │
+│                                        │          │          │                           │
+│                                        └─────┬────┘──────────┘                           │
+│                                              │                                           │
+│                                              ▼                                           │
+│                                   [Conversation Context Manager]                         │
+│                                   (shared state across all agents)                       │
+│                                              │                                           │
+│                                              ▼                                           │
+│                                   [Streaming TTS Service]                                │
+│                                   (per-agent voice, audio chunks)                        │
+│                                              │                                           │
+│                                              ▼                                           │
+│                                   [Audio Stream via WebSocket] ──► [Speaker]             │
+│                                                                                          │
+│  Meanwhile:  [Intent Parser] ─── voice action detected ───► [Squad Operations API]      │
+│              "Bender, create auth endpoint"  →  POST /api/tasks  →  Task created         │
+│                                                                                          │
+└──────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 | Component | Options | v1 Recommendation |
 |-----------|---------|-------------------|
-| **Speech-to-Text** | Azure Speech Services, OpenAI Whisper API, Deepgram, browser Web Speech API | **OpenAI Whisper API** — high accuracy, simple API, aligns with existing AI stack |
-| **Text-to-Speech** | Azure Speech Services, ElevenLabs, OpenAI TTS, browser speechSynthesis | **OpenAI TTS** — multiple voice options, good quality, simple API. Use distinct voices per agent. |
-| **Voice Activity Detection** | Browser-based VAD (e.g., @ricky0123/vad-web) | Start with push-to-talk; add VAD in a fast follow. |
+| **Real-time Voice API** | OpenAI Realtime API, custom WebSocket + Whisper/TTS, LiveKit, Daily.co | **OpenAI Realtime API** — WebSocket-based, bidirectional audio streaming, built-in VAD, sub-second latency. Single provider for STT + LLM + TTS in one connection. If unavailable, fall back to streaming Whisper + TTS with a custom WebSocket layer. |
+| **Speech-to-Text** | OpenAI Realtime API (built-in), Whisper API (streaming), Deepgram (real-time), Azure Speech Services | **OpenAI Realtime API** (includes streaming STT). Fallback: **Deepgram** for real-time streaming transcription with word-level timestamps. |
+| **Text-to-Speech** | OpenAI Realtime API (built-in), OpenAI TTS (streaming), ElevenLabs (streaming), Azure Neural TTS | **OpenAI Realtime API** (includes streaming TTS with multiple voices). Fallback: **OpenAI TTS API** with streaming enabled. Use distinct voices per agent. |
+| **Voice Activity Detection** | OpenAI Realtime API (server-side VAD), browser VAD (@ricky0123/vad-web), WebRTC VAD | **OpenAI Realtime API server-side VAD** (built-in, handles turn detection). Browser-side VAD as supplementary for UI feedback. |
+| **Multi-Agent Routing** | Coordinator-based routing, keyword detection, LLM-based intent classification | **Coordinator routes via LLM intent classification** — the Coordinator receives transcribed text, determines which agent(s) should respond, and sequences their replies. |
+| **Action Execution** | Intent parser → API mapping, function calling, agent tool use | **LLM function calling** — the responding agent maps voice intents to squad operations (task CRUD, priority changes, status queries) via defined function schemas. |
 
 ### 4.5 Real-time Communication
 
@@ -393,17 +428,17 @@ To keep the team focused, these are things we are **explicitly not building** in
 |---|----------|---------|--------|-------|
 | **D1** | **Monorepo or separate repos?** | (a) Monorepo with `apps/web` and `apps/api` (b) Separate frontend and backend repos | Affects CI/CD, shared types, developer experience. | Leela + team |
 | **D2** | **Backend framework choice** | (a) Fastify (b) Hono (c) Express (d) Next.js API routes for everything | Affects performance, WebSocket support, developer familiarity. | Bender |
-| **D3** | **Voice service provider** | (a) OpenAI Whisper + TTS (b) Azure Speech Services (c) Deepgram + ElevenLabs (d) Browser-native (free, lower quality) | Affects cost, latency, voice quality. | Leela + Fry |
+| **D3** | **Voice service provider / real-time API** | (a) OpenAI Realtime API (WebSocket, full-duplex, built-in VAD+STT+TTS) (b) Custom pipeline: Deepgram streaming STT + OpenAI TTS streaming (c) LiveKit + Whisper + ElevenLabs (d) Azure Speech Services real-time | Affects cost, latency, voice quality, multi-agent routing complexity. OpenAI Realtime API is recommended for lowest integration effort and sub-second latency. | Leela + Fry |
 | **D4** | **How do tasks map to `.squad/` files?** | Need to design the task file format or extend existing `.squad/` conventions. | Core data model question — affects everything. | Bender + Leela |
 | **D5** | **Auth strategy for local dev vs. deployed** | Local: skip auth? Simple token? Deployed: OAuth? | Affects developer experience and security. | Bender |
-| **D6** | **How does the voice pipeline handle latency?** | Stream responses (word-by-word TTS) vs. wait for full response? | Affects perceived responsiveness of voice interactions. | Fry |
+| **D6** | **Real-time voice session architecture** | (a) Single persistent WebSocket per voice session (OpenAI Realtime API style) (b) Per-utterance HTTP requests with streaming responses (c) WebRTC for peer-to-peer-style audio with server relay | Affects latency, multi-agent turn management, and conversation context sharing. Persistent WebSocket recommended for lowest latency and simplest multi-agent sequencing. | Fry + Bender |
 | **D7** | **Chat persistence — where does chat history live?** | (a) In `.squad/` as markdown (b) In SQLite (c) Both | Affects whether chat is part of the squad's "memory" or a UI-only concern. | Leela |
 
 ### Technical Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
-| **Voice latency too high for natural conversation** | Medium | High | Stream TTS output; use faster models; show text while audio loads |
+| **Voice latency too high for natural conversation** | Medium | High | Use OpenAI Realtime API for sub-second latency; stream audio bidirectionally; show real-time transcription while agent audio loads; target <2s end-to-end |
 | **File system watching is unreliable on some OS/FS** | Medium | Medium | Use polling fallback; test on target OS early |
 | **Squad file format changes break the UI** | Low | High | Define a contract/schema for `.squad/` files the UI depends on; version it |
 | **Real-time updates overwhelm the client** | Low | Medium | Throttle/batch WebSocket events; virtual scrolling for activity feed |
