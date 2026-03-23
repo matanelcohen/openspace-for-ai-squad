@@ -2,24 +2,28 @@
  * Tests for Chat routes — P3-4
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
-import BetterSqlite3 from 'better-sqlite3';
-import type Database from 'better-sqlite3';
 
-import { initializeSchema } from '../services/db/schema.js';
+import type Database from 'better-sqlite3';
+import BetterSqlite3 from 'better-sqlite3';
+import type { FastifyInstance } from 'fastify';
+import Fastify from 'fastify';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+
 import { ChatService } from '../services/chat/index.js';
+import { initializeSchema } from '../services/db/schema.js';
+import type { WebSocketManager } from '../services/websocket/index.js';
 import chatRoute from './chat.js';
 
 // ── Mock WebSocket Manager ────────────────────────────────────────
 
 class MockWsManager {
   broadcasts: unknown[] = [];
-  broadcast(envelope: unknown) { this.broadcasts.push(envelope); }
+  broadcast(envelope: unknown) {
+    this.broadcasts.push(envelope);
+  }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────
@@ -39,7 +43,7 @@ describe('Chat Routes', () => {
 
     const chatService = new ChatService({ db, sessionsDir: tmpDir });
     const mockWs = new MockWsManager();
-    chatService.setWebSocketManager(mockWs as unknown as import('../services/websocket/index.js').WebSocketManager);
+    chatService.setWebSocketManager(mockWs as unknown as WebSocketManager);
 
     app = Fastify({ logger: false });
     app.decorate('chatService', chatService);

@@ -2,13 +2,13 @@
  * Tests for Activity Feed route — P3-3
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Fastify from 'fastify';
+import type { ActivityEvent } from '@openspace/shared';
 import type { FastifyInstance } from 'fastify';
+import Fastify from 'fastify';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { ActivityFeed } from '../services/activity/index.js';
 import activityRoute from './activity.js';
-import type { ActivityEvent } from '@openspace/shared';
 
 // ── Test helpers ──────────────────────────────────────────────────
 

@@ -5,8 +5,10 @@
  * and client message handling.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WebSocket } from 'ws';
 
 import { WebSocketManager } from './manager.js';
 import type { WsEnvelope, WsEventType } from './types.js';
@@ -67,7 +69,7 @@ describe('WebSocketManager', () => {
   describe('connection lifecycle', () => {
     it('should add a client and assign an ID', () => {
       const ws = new MockWebSocket();
-      const id = manager.addClient(ws as unknown as import('ws').WebSocket);
+      const id = manager.addClient(ws as unknown as WebSocket);
 
       expect(id).toBeTypeOf('string');
       expect(id.length).toBeGreaterThan(0);
@@ -76,7 +78,7 @@ describe('WebSocketManager', () => {
 
     it('should send a welcome message on connect', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       expect(ws.sentMessages).toHaveLength(1);
       const welcome = JSON.parse(ws.sentMessages[0]!);
@@ -87,7 +89,7 @@ describe('WebSocketManager', () => {
 
     it('should remove client on close', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
       expect(manager.clientCount).toBe(1);
 
       ws.emit('close');
@@ -96,7 +98,7 @@ describe('WebSocketManager', () => {
 
     it('should remove client on error', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
       expect(manager.clientCount).toBe(1);
 
       ws.emit('error', new Error('test'));
@@ -108,9 +110,9 @@ describe('WebSocketManager', () => {
       const ws2 = new MockWebSocket();
       const ws3 = new MockWebSocket();
 
-      manager.addClient(ws1 as unknown as import('ws').WebSocket);
-      manager.addClient(ws2 as unknown as import('ws').WebSocket);
-      manager.addClient(ws3 as unknown as import('ws').WebSocket);
+      manager.addClient(ws1 as unknown as WebSocket);
+      manager.addClient(ws2 as unknown as WebSocket);
+      manager.addClient(ws3 as unknown as WebSocket);
 
       expect(manager.clientCount).toBe(3);
       expect(manager.getClientIds()).toHaveLength(3);
@@ -118,7 +120,7 @@ describe('WebSocketManager', () => {
 
     it('should remove a client by ID', () => {
       const ws = new MockWebSocket();
-      const id = manager.addClient(ws as unknown as import('ws').WebSocket);
+      const id = manager.addClient(ws as unknown as WebSocket);
       expect(manager.clientCount).toBe(1);
 
       manager.removeClient(id);
@@ -132,8 +134,8 @@ describe('WebSocketManager', () => {
       const ws1 = new MockWebSocket();
       const ws2 = new MockWebSocket();
 
-      manager.addClient(ws1 as unknown as import('ws').WebSocket);
-      manager.addClient(ws2 as unknown as import('ws').WebSocket);
+      manager.addClient(ws1 as unknown as WebSocket);
+      manager.addClient(ws2 as unknown as WebSocket);
 
       const envelope: WsEnvelope = {
         type: 'task:updated',
@@ -154,7 +156,7 @@ describe('WebSocketManager', () => {
 
     it('should not send to closed connections', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       ws.readyState = 3; // CLOSED
 
@@ -172,7 +174,7 @@ describe('WebSocketManager', () => {
 
     it('should handle send errors gracefully', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       ws.send = () => {
         throw new Error('Connection reset');
@@ -192,7 +194,7 @@ describe('WebSocketManager', () => {
   describe('subscriptions', () => {
     it('should deliver all events when no subscription filter', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       manager.broadcast({
         type: 'task:updated',
@@ -211,7 +213,7 @@ describe('WebSocketManager', () => {
 
     it('should filter events based on subscriptions', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       // Subscribe only to task events
       ws.simulateMessage({ action: 'subscribe', events: ['task:updated', 'task:created'] });
@@ -235,7 +237,7 @@ describe('WebSocketManager', () => {
 
     it('should handle unsubscribe', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       // Subscribe then unsubscribe
       ws.simulateMessage({ action: 'subscribe', events: ['task:updated'] });
@@ -253,7 +255,7 @@ describe('WebSocketManager', () => {
 
     it('should ignore invalid event types in subscription', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       ws.simulateMessage({ action: 'subscribe', events: ['invalid:type' as WsEventType] });
 
@@ -270,7 +272,7 @@ describe('WebSocketManager', () => {
       manager.startHeartbeat();
 
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       // Advance past one heartbeat interval
       vi.advanceTimersByTime(100);
@@ -287,7 +289,7 @@ describe('WebSocketManager', () => {
       manager.startHeartbeat();
 
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       // First heartbeat: marks as not-alive, pings
       vi.advanceTimersByTime(100);
@@ -309,7 +311,7 @@ describe('WebSocketManager', () => {
       manager.startHeartbeat();
 
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       // First heartbeat
       vi.advanceTimersByTime(100);
@@ -331,8 +333,8 @@ describe('WebSocketManager', () => {
       const ws1 = new MockWebSocket();
       const ws2 = new MockWebSocket();
 
-      manager.addClient(ws1 as unknown as import('ws').WebSocket);
-      manager.addClient(ws2 as unknown as import('ws').WebSocket);
+      manager.addClient(ws1 as unknown as WebSocket);
+      manager.addClient(ws2 as unknown as WebSocket);
 
       await manager.shutdown();
 
@@ -345,7 +347,7 @@ describe('WebSocketManager', () => {
   describe('message handling', () => {
     it('should ignore unparseable messages', () => {
       const ws = new MockWebSocket();
-      manager.addClient(ws as unknown as import('ws').WebSocket);
+      manager.addClient(ws as unknown as WebSocket);
 
       // Send invalid JSON
       ws.simulateMessage('not json at all {{{');

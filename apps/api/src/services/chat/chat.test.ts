@@ -5,14 +5,16 @@
  * WebSocket emission, and coordinator echo.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import BetterSqlite3 from 'better-sqlite3';
+
 import type Database from 'better-sqlite3';
+import BetterSqlite3 from 'better-sqlite3';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { initializeSchema } from '../db/schema.js';
+import type { WebSocketManager } from '../websocket/index.js';
 import { ChatService } from './index.js';
 
 // ── Mock WebSocket Manager ────────────────────────────────────────
@@ -45,7 +47,7 @@ async function setupChatService(): Promise<void> {
     db,
     sessionsDir: tmpDir,
   });
-  chatService.setWebSocketManager(mockWs as unknown as import('../websocket/index.js').WebSocketManager);
+  chatService.setWebSocketManager(mockWs as unknown as WebSocketManager);
 }
 
 // ── Tests ─────────────────────────────────────────────────────────

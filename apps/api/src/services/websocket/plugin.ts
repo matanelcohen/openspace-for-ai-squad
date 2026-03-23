@@ -6,8 +6,8 @@
  * WebSocketManager for event broadcasting, subscriptions, and heartbeat.
  */
 
-import type { FastifyPluginAsync } from 'fastify';
 import websocketPlugin from '@fastify/websocket';
+import type { FastifyPluginAsync } from 'fastify';
 
 import { WebSocketManager } from './manager.js';
 

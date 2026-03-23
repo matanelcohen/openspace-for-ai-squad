@@ -4,10 +4,13 @@
  * Tests ring buffer, pagination, FileWatcher integration, WebSocket emission.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 
 import type { ActivityEvent } from '@openspace/shared';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+import type { FileWatcher } from '../file-watcher/index.js';
+import type { WebSocketManager } from '../websocket/index.js';
 import { ActivityFeed } from './index.js';
 
 // ── Mock WebSocket Manager ────────────────────────────────────────
@@ -109,7 +112,7 @@ describe('ActivityFeed', () => {
   describe('WebSocket emission', () => {
     it('should broadcast activity:new events', () => {
       const mockWs = new MockWsManager();
-      feed.setWebSocketManager(mockWs as unknown as import('../websocket/index.js').WebSocketManager);
+      feed.setWebSocketManager(mockWs as unknown as WebSocketManager);
 
       const event = makeEvent();
       feed.push(event);
@@ -123,7 +126,7 @@ describe('ActivityFeed', () => {
   describe('FileWatcher integration', () => {
     it('should create activity events from file watcher changes', () => {
       const watcher = new MockFileWatcher();
-      feed.connectFileWatcher(watcher as unknown as import('../file-watcher/index.js').FileWatcher);
+      feed.connectFileWatcher(watcher as unknown as FileWatcher);
 
       watcher.emit('change', {
         type: 'task:created',
@@ -139,7 +142,7 @@ describe('ActivityFeed', () => {
 
     it('should extract agent ID from agent file paths', () => {
       const watcher = new MockFileWatcher();
-      feed.connectFileWatcher(watcher as unknown as import('../file-watcher/index.js').FileWatcher);
+      feed.connectFileWatcher(watcher as unknown as FileWatcher);
 
       watcher.emit('change', {
         type: 'agent:updated',
@@ -153,7 +156,7 @@ describe('ActivityFeed', () => {
 
     it('should disconnect from file watcher', () => {
       const watcher = new MockFileWatcher();
-      feed.connectFileWatcher(watcher as unknown as import('../file-watcher/index.js').FileWatcher);
+      feed.connectFileWatcher(watcher as unknown as FileWatcher);
       feed.disconnectFileWatcher();
 
       watcher.emit('change', {

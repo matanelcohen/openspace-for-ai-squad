@@ -4,13 +4,14 @@
  * Tests event mapping, throttling/batching, and deduplication.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from 'node:events';
 
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WebSocket } from 'ws';
+
+import type { FileWatcher, FileWatcherEvent } from '../file-watcher/index.js';
 import { FileWatcherBridge } from './bridge.js';
 import { WebSocketManager } from './manager.js';
-import type { FileWatcherEvent } from '../file-watcher/index.js';
-import type { FileWatcher } from '../file-watcher/index.js';
 
 // ── Mock FileWatcher ──────────────────────────────────────────────
 
@@ -26,9 +27,15 @@ class MockFileWatcher extends EventEmitter {
 class MockWebSocket extends EventEmitter {
   readyState = 1;
   sentMessages: string[] = [];
-  send(data: string) { this.sentMessages.push(data); }
-  close() { this.readyState = 3; }
-  terminate() { this.readyState = 3; }
+  send(data: string) {
+    this.sentMessages.push(data);
+  }
+  close() {
+    this.readyState = 3;
+  }
+  terminate() {
+    this.readyState = 3;
+  }
   ping() {}
 }
 
@@ -48,14 +55,12 @@ describe('FileWatcherBridge', () => {
 
     // Connect a mock client
     clientWs = new MockWebSocket();
-    wsManager.addClient(clientWs as unknown as import('ws').WebSocket);
+    wsManager.addClient(clientWs as unknown as WebSocket);
     clientWs.sentMessages = []; // clear welcome message
 
-    bridge = new FileWatcherBridge(
-      watcher as unknown as FileWatcher,
-      wsManager,
-      { batchWindowMs: 200 },
-    );
+    bridge = new FileWatcherBridge(watcher as unknown as FileWatcher, wsManager, {
+      batchWindowMs: 200,
+    });
   });
 
   afterEach(async () => {
