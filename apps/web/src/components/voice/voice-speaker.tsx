@@ -62,21 +62,34 @@ export function VoiceSpeaker({
         onSpeakingStart?.(item.agentId);
       };
 
-      utterance.onend = () => {
-        console.log('[TTS] Finished', item.agentId);
+      const advance = () => {
+        if (!isSpeakingRef.current) return;
         isSpeakingRef.current = false;
         onSpeakingEnd?.(item.agentId);
         setCurrentIndex((prev) => prev + 1);
+      };
+
+      utterance.onend = () => {
+        console.log('[TTS] Finished', item.agentId);
+        advance();
       };
 
       utterance.onerror = (e) => {
         console.warn('[TTS] Error:', e.error);
-        isSpeakingRef.current = false;
-        onSpeakingEnd?.(item.agentId);
-        setCurrentIndex((prev) => prev + 1);
+        advance();
       };
 
       window.speechSynthesis.speak(utterance);
+
+      // Safety timeout — if onend never fires, unstick after estimated duration
+      const estimatedMs = Math.max(3000, (item.text.length * 80) / config.rate);
+      setTimeout(() => {
+        if (isSpeakingRef.current) {
+          console.warn('[TTS] Timeout, forcing advance for', item.agentId);
+          window.speechSynthesis.cancel();
+          advance();
+        }
+      }, estimatedMs + 2000);
     },
     [onSpeakingStart, onSpeakingEnd],
   );
