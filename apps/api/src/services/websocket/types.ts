@@ -15,6 +15,10 @@ export const WS_EVENT_TYPES = [
   'activity:new',
   'chat:message',
   'chat:typing',
+  'voice:session',
+  'voice:transcript',
+  'voice:audio',
+  'voice:speaking',
 ] as const;
 
 export type WsEventType = (typeof WS_EVENT_TYPES)[number];

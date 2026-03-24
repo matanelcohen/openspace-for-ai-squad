@@ -1,23 +1,27 @@
 'use client';
 
 import { CHAT_TEAM_RECIPIENT } from '@openspace/shared';
-import { AlertCircle, ArrowLeft } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Mic } from 'lucide-react';
 import { useState } from 'react';
 
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { MessageInput } from '@/components/chat/message-input';
 import { MessageList } from '@/components/chat/message-list';
 import { Button } from '@/components/ui/button';
+import { VoiceRoom } from '@/components/voice/voice-room';
 import { useAgents } from '@/hooks/use-agents';
 import { useChatMessages, useSendMessage, useTypingIndicator } from '@/hooks/use-chat';
+import { useVoiceSession } from '@/hooks/use-voice-session';
 
 export function ChatClient() {
   const [selectedChannel, setSelectedChannel] = useState<string>(CHAT_TEAM_RECIPIENT);
   const [showMessages, setShowMessages] = useState(false);
+  const [showVoiceRoom, setShowVoiceRoom] = useState(false);
   const { data: agents = [] } = useAgents();
   const { data: messages = [], isLoading, error: fetchError } = useChatMessages(selectedChannel);
   const sendMessage = useSendMessage();
   const typingAgents = useTypingIndicator();
+  const voice = useVoiceSession();
 
   const channelLabel =
     selectedChannel === CHAT_TEAM_RECIPIENT
@@ -35,6 +39,14 @@ export function ChatClient() {
   const handleSelectChannel = (channel: string) => {
     setSelectedChannel(channel);
     setShowMessages(true);
+  };
+
+  const toggleVoiceRoom = () => {
+    if (!showVoiceRoom && !voice.session) {
+      const agentIds = agents.map((a) => a.id).filter((id) => !['scribe', 'ralph'].includes(id));
+      voice.startSession(agentIds.length > 0 ? agentIds : ['leela', 'fry', 'bender', 'zoidberg']);
+    }
+    setShowVoiceRoom((prev) => !prev);
   };
 
   return (
@@ -62,7 +74,17 @@ export function ChatClient() {
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h2 className="text-sm font-semibold">{channelLabel}</h2>
+          <h2 className="flex-1 text-sm font-semibold">{channelLabel}</h2>
+          <Button
+            variant={showVoiceRoom ? 'default' : 'outline'}
+            size="sm"
+            onClick={toggleVoiceRoom}
+            className="gap-1.5"
+            data-testid="voice-toggle"
+          >
+            <Mic className="h-3.5 w-3.5" />
+            {showVoiceRoom ? 'Close Voice' : 'Voice Room'}
+          </Button>
         </div>
 
         {/* Error banners */}
@@ -85,11 +107,23 @@ export function ChatClient() {
           </div>
         )}
 
+        {/* Voice room panel */}
+        {showVoiceRoom && (
+          <div className="border-b">
+            <VoiceRoom />
+          </div>
+        )}
+
         {/* Messages */}
         <MessageList messages={messages} isLoading={isLoading} typingAgents={typingAgents} />
 
-        {/* Input */}
-        <MessageInput onSend={handleSend} disabled={sendMessage.isPending} />
+        {/* Input with mic button */}
+        <MessageInput
+          onSend={handleSend}
+          disabled={sendMessage.isPending}
+          onVoiceRecord={voice.recordAndTranscribe}
+          isRecording={voice.isRecording}
+        />
       </div>
     </div>
   );

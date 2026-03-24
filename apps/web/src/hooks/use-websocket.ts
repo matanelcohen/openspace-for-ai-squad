@@ -9,7 +9,11 @@ export type WsEventType =
   | 'decision:added'
   | 'activity:new'
   | 'chat:message'
-  | 'chat:typing';
+  | 'chat:typing'
+  | 'voice:session'
+  | 'voice:transcript'
+  | 'voice:audio'
+  | 'voice:speaking';
 
 export interface WsEnvelope {
   type: string;
