@@ -19,6 +19,8 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
     session,
     isRecording,
     isMuted,
+    isSpeaking,
+    interimTranscript,
     currentSpeaker,
     startRecording,
     stopRecording,
@@ -61,6 +63,20 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
         />
       )}
 
+      {/* Live speech indicator */}
+      {isSpeaking && interimTranscript && (
+        <div className="mx-auto flex items-center gap-2 rounded-full bg-green-50 px-4 py-1.5 dark:bg-green-950">
+          <span className="flex gap-0.5">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-500 [animation-delay:0ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-500 [animation-delay:150ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-500 [animation-delay:300ms]" />
+          </span>
+          <span className="text-sm italic text-green-700 dark:text-green-300">
+            {interimTranscript}
+          </span>
+        </div>
+      )}
+
       {/* Controls: mute + recording indicator + end */}
       <div className="flex items-center justify-center gap-3">
         <Button
@@ -73,10 +89,17 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
           {isMuted ? 'Unmute' : 'Mute'}
         </Button>
 
-        {isRecording && !isMuted && (
-          <span className="flex items-center gap-1.5 text-xs text-green-600">
+        {isRecording && !isMuted && !isSpeaking && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
             Listening...
+          </span>
+        )}
+
+        {isSpeaking && (
+          <span className="flex items-center gap-1.5 text-xs font-medium text-green-600">
+            <span className="h-2 w-2 rounded-full bg-green-500" />
+            You&apos;re speaking
           </span>
         )}
 

@@ -45,6 +45,10 @@ export interface UseVoiceSessionReturn {
   session: VoiceSession | null;
   isRecording: boolean;
   isMuted: boolean;
+  /** Whether the user is currently speaking (voice detected). */
+  isSpeaking: boolean;
+  /** Live interim transcript while user is speaking. */
+  interimTranscript: string;
   currentSpeaker: string | null;
   startSession: (agentIds: string[]) => void;
   endSession: () => void;
@@ -53,7 +57,6 @@ export interface UseVoiceSessionReturn {
   toggleMute: () => void;
   sendTextMessage: (content: string, targetAgentId?: string) => void;
   playMessage: (messageId: string) => void;
-  /** Record a short audio clip and transcribe it. Returns the transcript text. */
   recordAndTranscribe: () => Promise<string | null>;
 }
 
@@ -61,6 +64,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const [session, setSession] = useState<VoiceSession | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
@@ -201,11 +206,15 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       recognition.maxAlternatives = 1;
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        // Only process final results
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
-          if (result?.[0] && result.isFinal) {
+          if (!result?.[0]) continue;
+
+          if (result.isFinal) {
+            // User stopped speaking — send final transcript
             const transcript = result[0].transcript.trim();
+            setIsSpeaking(false);
+            setInterimTranscript('');
             if (transcript) {
               console.log('[Voice] Heard:', transcript);
               const sid = sessionRef.current?.id;
@@ -217,6 +226,10 @@ export function useVoiceSession(): UseVoiceSessionReturn {
                 console.warn('[Voice] No active session to send transcript to');
               }
             }
+          } else {
+            // User is speaking — show interim transcript
+            setIsSpeaking(true);
+            setInterimTranscript(result[0].transcript);
           }
         }
       };
@@ -397,6 +410,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     session,
     isRecording,
     isMuted,
+    isSpeaking,
+    interimTranscript,
     currentSpeaker,
     startSession,
     endSession,
