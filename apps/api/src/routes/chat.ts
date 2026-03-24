@@ -3,6 +3,7 @@
  *
  * POST /api/chat/messages — send a message
  * GET  /api/chat/messages — retrieve message history (paginated, filterable)
+ * GET  /api/chat/stream   — SSE streaming chat endpoint
  */
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -62,6 +63,49 @@ const chatRoute: FastifyPluginAsync = async (app) => {
       limit,
       offset,
     });
+  });
+
+  // GET /api/chat/stream — SSE streaming chat endpoint
+  app.get<{
+    Querystring: { recipient?: string; content?: string };
+  }>('/chat/stream', async (request, reply) => {
+    const { recipient, content } = request.query;
+
+    if (!recipient || typeof recipient !== 'string' || recipient.trim() === '') {
+      return reply.status(400).send({ error: 'Query parameter "recipient" is required' });
+    }
+
+    if (!content || typeof content !== 'string' || content.trim() === '') {
+      return reply
+        .status(400)
+        .send({ error: 'Query parameter "content" is required and must be non-empty' });
+    }
+
+    const origin = request.headers.origin ?? '*';
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': origin,
+    });
+
+    try {
+      await app.chatService.sendStream(
+        {
+          sender: 'user',
+          recipient: recipient.trim(),
+          content,
+        },
+        (event) => {
+          reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+        },
+      );
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      reply.raw.write(`data: ${JSON.stringify({ error: errorMsg })}\n\n`);
+    }
+
+    reply.raw.end();
   });
 };
 

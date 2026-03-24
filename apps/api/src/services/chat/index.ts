@@ -39,6 +39,14 @@ export interface GetMessagesOptions {
   threadId?: string;
 }
 
+/** SSE chunk emitted during streaming chat responses. */
+export interface StreamEvent {
+  agentId: string;
+  chunk: string;
+  done: boolean;
+  fullContent?: string;
+}
+
 // ── Chat Service ──────────────────────────────────────────────────
 
 export class ChatService {
@@ -114,6 +122,45 @@ export class ChatService {
         this.handleDirectMessage(agent, message).catch((err) => {
           console.error(`[Chat] Direct message to ${agent.name} failed:`, err);
         });
+      }
+    }
+
+    return message;
+  }
+
+  // ── Send with streaming ────────────────────────────────────
+
+  /**
+   * Send a message and stream agent responses token-by-token via a callback.
+   * The caller (SSE route) writes each StreamEvent to the HTTP response.
+   */
+  async sendStream(
+    input: SendMessageInput,
+    onStreamEvent: (data: StreamEvent) => void,
+  ): Promise<ChatMessage> {
+    const message: ChatMessage = {
+      id: nanoid(12),
+      sender: input.sender,
+      recipient: input.recipient,
+      content: input.content,
+      timestamp: new Date().toISOString(),
+      threadId: input.threadId ?? null,
+    };
+
+    // Dual write
+    this.persistToSqlite(message);
+    await this.persistToMarkdown(message);
+
+    // Broadcast user message via WebSocket
+    this.emitChatMessage(message);
+
+    // Route to agents with streaming
+    if (input.recipient === CHAT_TEAM_RECIPIENT) {
+      await this.coordinatorEchoStream(message, onStreamEvent);
+    } else {
+      const agent = ChatService.AGENTS.find((a) => a.id === input.recipient);
+      if (agent && this.aiProvider) {
+        await this.handleDirectMessageStream(agent, message, onStreamEvent);
       }
     }
 
@@ -478,5 +525,135 @@ export class ChatService {
       this.emitTypingStop(agent.id);
       console.error(`[Chat] ${agent.name} direct message failed:`, err);
     }
+  }
+
+  // ── Private: Streaming agent responses ────────────────────────
+
+  /**
+   * Route a team message to agents and stream each response token-by-token.
+   */
+  private async coordinatorEchoStream(
+    original: ChatMessage,
+    onStreamEvent: (data: StreamEvent) => void,
+  ): Promise<void> {
+    if (this.aiProvider) {
+      try {
+        const agentIds = await this.routeToAgents(original.content);
+        const respondingAgents = ChatService.AGENTS.filter((a) => agentIds.includes(a.id));
+
+        for (const agent of respondingAgents) {
+          try {
+            this.emitTyping(agent.id, agent.name);
+            const response = await this.generateAgentResponseStream(
+              agent,
+              original,
+              CHAT_TEAM_RECIPIENT,
+              (chunk) => onStreamEvent({ agentId: agent.id, chunk, done: false }),
+            );
+            this.emitTypingStop(agent.id);
+            this.persistToSqlite(response);
+            await this.persistToMarkdown(response);
+            this.emitChatMessage(response);
+            this.emitChatActivity(agent.id, `${agent.name} responded in chat`);
+            onStreamEvent({
+              agentId: agent.id,
+              chunk: '',
+              done: true,
+              fullContent: response.content,
+            });
+          } catch (err) {
+            this.emitTypingStop(agent.id);
+            console.error(`[Chat] ${agent.name} stream failed:`, err);
+          }
+        }
+
+        if (respondingAgents.length > 0) return;
+      } catch (err) {
+        console.error('[Chat] Agent routing failed:', err);
+      }
+    }
+
+    // Fallback: simple echo from Leela
+    const echo: ChatMessage = {
+      id: nanoid(12),
+      sender: 'leela',
+      recipient: CHAT_TEAM_RECIPIENT,
+      content: 'The squad is here but the AI provider is not connected. Check the server logs.',
+      timestamp: new Date().toISOString(),
+      threadId: original.threadId,
+    };
+
+    this.persistToSqlite(echo);
+    await this.persistToMarkdown(echo);
+    this.emitChatMessage(echo);
+    onStreamEvent({ agentId: 'leela', chunk: echo.content, done: false });
+    onStreamEvent({ agentId: 'leela', chunk: '', done: true, fullContent: echo.content });
+  }
+
+  /** Handle a direct message to a specific agent with streaming. */
+  private async handleDirectMessageStream(
+    agent: { id: string; name: string; role: string; personality: string },
+    original: ChatMessage,
+    onStreamEvent: (data: StreamEvent) => void,
+  ): Promise<void> {
+    try {
+      this.emitTyping(agent.id, agent.name);
+      const response = await this.generateAgentResponseStream(agent, original, agent.id, (chunk) =>
+        onStreamEvent({ agentId: agent.id, chunk, done: false }),
+      );
+      this.emitTypingStop(agent.id);
+      this.persistToSqlite(response);
+      await this.persistToMarkdown(response);
+      this.emitChatMessage(response);
+      this.emitChatActivity(agent.id, `${agent.name} responded to direct message`);
+      onStreamEvent({
+        agentId: agent.id,
+        chunk: '',
+        done: true,
+        fullContent: response.content,
+      });
+    } catch (err) {
+      this.emitTypingStop(agent.id);
+      console.error(`[Chat] ${agent.name} direct message stream failed:`, err);
+    }
+  }
+
+  /** Generate a single agent's response with streaming via onChunk. */
+  private async generateAgentResponseStream(
+    agent: { id: string; name: string; role: string; personality: string },
+    original: ChatMessage,
+    responseRecipient: string,
+    onChunk: (chunk: string) => void,
+  ): Promise<ChatMessage> {
+    const isDirectMessage = responseRecipient !== CHAT_TEAM_RECIPIENT;
+    const systemPrompt = isDirectMessage
+      ? `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
+        `Personality: ${agent.personality} ` +
+        `The user is talking directly to you. Respond in character as ${agent.name}. ` +
+        `You can and should take action on requests — create files, write code, run commands. ` +
+        `If the user asks you to do something, do it. Don't just talk about it. ` +
+        `Never prefix your response with your name — the UI handles that.`
+      : `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
+        `Personality: ${agent.personality} ` +
+        `Respond in character as ${agent.name}. Keep responses concise (2-4 sentences). ` +
+        `IMPORTANT: Only speak for yourself. Never speak on behalf of other agents or summarize what they did. ` +
+        `Other agents will respond separately in their own messages. ` +
+        `Never prefix your response with your name or any other agent's name — the UI handles that.`;
+
+    const result = await this.aiProvider!.chatCompletion({
+      systemPrompt,
+      messages: [{ role: 'user', content: original.content }],
+      stream: true,
+      onChunk,
+    });
+
+    return {
+      id: nanoid(12),
+      sender: agent.id,
+      recipient: responseRecipient,
+      content: result.content,
+      timestamp: new Date().toISOString(),
+      threadId: original.threadId,
+    };
   }
 }
