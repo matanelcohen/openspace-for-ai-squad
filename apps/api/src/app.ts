@@ -1,7 +1,10 @@
+import { resolve } from 'node:path';
+
 import cors from '@fastify/cors';
 import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
+import { registerAuth } from './middleware/auth.js';
 import activityRoute from './routes/activity.js';
 import agentsRoute from './routes/agents.js';
 import chatRoute from './routes/chat.js';
@@ -10,7 +13,10 @@ import healthRoute from './routes/health.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import { ActivityFeed } from './services/activity/index.js';
+import type { AIProvider } from './services/ai/index.js';
+import { createAIProvider } from './services/ai/index.js';
 import { ChatService } from './services/chat/index.js';
+import { openDatabase } from './services/db/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import type { WebSocketManager } from './services/websocket/index.js';
 import { wsPlugin } from './services/websocket/index.js';
@@ -25,6 +31,8 @@ export interface AppOptions {
   wsManager?: WebSocketManager;
   /** Override .squad/sessions/ directory for chat markdown logs. */
   sessionsDir?: string | null;
+  /** Pre-created AI provider (for testing). */
+  aiProvider?: AIProvider | null;
 }
 
 export function buildApp(opts: AppOptions = {}) {
@@ -32,8 +40,12 @@ export function buildApp(opts: AppOptions = {}) {
     logger: opts.logger ?? true,
   });
 
+  // Initialize SQLite database if not provided
+  const squadDir = opts.squadDir ?? resolve(process.cwd(), '.squad');
+  const db = opts.db ?? openDatabase({ squadDir });
+
   // Decorate with a SquadParser instance
-  const parser = new SquadParser(opts.squadDir);
+  const parser = new SquadParser(squadDir);
   app.decorate('squadParser', parser);
 
   // Activity feed (in-memory ring buffer)
@@ -42,8 +54,9 @@ export function buildApp(opts: AppOptions = {}) {
 
   // Chat service
   const chatService = new ChatService({
-    db: opts.db ?? null,
-    sessionsDir: opts.sessionsDir ?? null,
+    db: db,
+    sessionsDir: opts.sessionsDir ?? resolve(squadDir, 'sessions'),
+    aiProvider: opts.aiProvider ?? null,
   });
   app.decorate('chatService', chatService);
 
@@ -59,7 +72,16 @@ export function buildApp(opts: AppOptions = {}) {
   app.addHook('onReady', async () => {
     activityFeed.setWebSocketManager(app.wsManager);
     chatService.setWebSocketManager(app.wsManager);
+
+    // Initialize AI provider (createAIProvider handles fallback to mock internally)
+    if (!opts.aiProvider) {
+      const provider = await createAIProvider();
+      chatService.setAIProvider(provider);
+    }
   });
+
+  // Auth middleware (runs before all routes)
+  registerAuth(app);
 
   // Routes
   app.register(healthRoute);
