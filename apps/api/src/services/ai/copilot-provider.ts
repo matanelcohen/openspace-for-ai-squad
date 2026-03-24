@@ -84,6 +84,12 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
   private client: CopilotClientLike | null = null;
   private readonly config: Required<Pick<CopilotProviderConfig, 'model'>> & CopilotProviderConfig;
   private initialized = false;
+  /** Semaphore to limit concurrent session creation. */
+  private activeRequests = 0;
+  private readonly maxConcurrent = 3;
+  private readonly requestQueue: Array<{
+    resolve: () => void;
+  }> = [];
 
   constructor(config: CopilotProviderConfig = {}) {
     this.config = {
@@ -150,6 +156,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       throw new Error('CopilotProvider not initialized. Call initialize() first.');
     }
 
+    // Wait for a slot if at max concurrency
+    await this.acquireSlot();
+
     const model = options.model ?? this.config.model;
     const prompt = this.buildPrompt(options.messages, options.systemPrompt);
 
@@ -164,9 +173,10 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       sessionConfig.systemMessage = { content: options.systemPrompt };
     }
 
-    const session = await this.client.createSession(sessionConfig);
-
+    let session: CopilotSessionLike | null = null;
     try {
+      session = await this.client.createSession(sessionConfig);
+
       if (options.stream && options.onChunk) {
         const content = await this.streamResponse(session, prompt, options.onChunk);
         return { content, model };
@@ -176,7 +186,31 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       const content = (result?.data?.content as string) ?? '';
       return { content, model };
     } finally {
-      await session.disconnect();
+      if (session) {
+        await session.disconnect().catch(() => {
+          /* ok */
+        });
+      }
+      this.releaseSlot();
+    }
+  }
+
+  private acquireSlot(): Promise<void> {
+    if (this.activeRequests < this.maxConcurrent) {
+      this.activeRequests++;
+      return Promise.resolve();
+    }
+    return new Promise((resolve) => {
+      this.requestQueue.push({ resolve });
+    });
+  }
+
+  private releaseSlot(): void {
+    const next = this.requestQueue.shift();
+    if (next) {
+      next.resolve();
+    } else {
+      this.activeRequests--;
     }
   }
 
