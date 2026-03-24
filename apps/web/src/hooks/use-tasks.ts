@@ -67,6 +67,7 @@ export function useCreateTask() {
         status: 'backlog',
         priority: input.priority,
         assignee: input.assignee,
+        assigneeType: 'agent', // Default to agent for now
         labels: input.labels,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),

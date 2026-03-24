@@ -385,6 +385,60 @@ const teamMembersRoute: FastifyPluginAsync = async (app) => {
     db().prepare('DELETE FROM team_members WHERE id = ?').run(request.params.id);
     return reply.status(204).send();
   });
+
+  // GET /api/team-members/:id/tasks — get tasks assigned to this member
+  app.get<{ Params: { id: string } }>('/team-members/:id/tasks', async (request, reply) => {
+    // First verify the team member exists
+    const member = db()
+      .prepare('SELECT id FROM team_members WHERE id = ?')
+      .get(request.params.id) as { id: string } | undefined;
+
+    if (!member) {
+      return reply.status(404).send({ error: `Team member not found: ${request.params.id}` });
+    }
+
+    // Get all tasks assigned to this team member
+    const tasks = db()
+      .prepare(
+        `
+        SELECT 
+          id, title, description, status, priority, assignee, 
+          labels, created_at, updated_at, sort_index
+        FROM tasks 
+        WHERE assignee = ?
+        ORDER BY status = 'in-progress' DESC, priority, sort_index, created_at
+      `,
+      )
+      .all(request.params.id) as Array<{
+      id: string;
+      title: string;
+      description: string;
+      status: string;
+      priority: string;
+      assignee: string;
+      labels: string;
+      created_at: string;
+      updated_at: string;
+      sort_index: number;
+    }>;
+
+    // Format the response to match Task interface
+    const formattedTasks = tasks.map((row) => ({
+      id: row.id,
+      title: row.title,
+      description: row.description,
+      status: row.status,
+      priority: row.priority,
+      assignee: row.assignee,
+      assigneeType: 'member' as const,
+      labels: JSON.parse(row.labels || '[]'),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+      sortIndex: row.sort_index,
+    }));
+
+    return reply.send(formattedTasks);
+  });
 };
 
 export default teamMembersRoute;
