@@ -26,11 +26,12 @@ type SortDir = 'asc' | 'desc';
 
 const priorityOrder: Record<TaskPriority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 const statusOrder: Record<TaskStatus, number> = {
-  'backlog': 0,
-  'in-progress': 1,
-  'in-review': 2,
-  'done': 3,
-  'blocked': 4,
+  'pending-approval': 0,
+  backlog: 1,
+  'in-progress': 2,
+  'in-review': 3,
+  done: 4,
+  blocked: 5,
 };
 
 function applyFilters(tasks: Task[], filters: TaskFilters): Task[] {
@@ -77,11 +78,22 @@ function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
   return dir === 'desc' ? sorted.reverse() : sorted;
 }
 
-function SortIcon({ field, sortField, sortDir }: { field: SortField; sortField: SortField; sortDir: SortDir }) {
-  if (field !== sortField) return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground" />;
-  return sortDir === 'asc'
-    ? <ArrowUp className="ml-1 inline h-3 w-3" />
-    : <ArrowDown className="ml-1 inline h-3 w-3" />;
+function SortIcon({
+  field,
+  sortField,
+  sortDir,
+}: {
+  field: SortField;
+  sortField: SortField;
+  sortDir: SortDir;
+}) {
+  if (field !== sortField)
+    return <ArrowUpDown className="ml-1 inline h-3 w-3 text-muted-foreground" />;
+  return sortDir === 'asc' ? (
+    <ArrowUp className="ml-1 inline h-3 w-3" />
+  ) : (
+    <ArrowDown className="ml-1 inline h-3 w-3" />
+  );
 }
 
 export function TaskListView() {
@@ -123,10 +135,11 @@ export function TaskListView() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4" data-testid="list-error">
-        <p className="text-sm text-destructive">
-          Failed to load tasks: {error.message}
-        </p>
+      <div
+        className="rounded-lg border border-destructive/50 bg-destructive/10 p-4"
+        data-testid="list-error"
+      >
+        <p className="text-sm text-destructive">Failed to load tasks: {error.message}</p>
       </div>
     );
   }
@@ -142,17 +155,29 @@ export function TaskListView() {
               <TableHead className="cursor-pointer select-none" onClick={() => handleSort('title')}>
                 Title <SortIcon field="title" sortField={sortField} sortDir={sortDir} />
               </TableHead>
-              <TableHead className="cursor-pointer select-none w-32" onClick={() => handleSort('status')}>
+              <TableHead
+                className="cursor-pointer select-none w-32"
+                onClick={() => handleSort('status')}
+              >
                 Status <SortIcon field="status" sortField={sortField} sortDir={sortDir} />
               </TableHead>
-              <TableHead className="cursor-pointer select-none w-36" onClick={() => handleSort('assignee')}>
+              <TableHead
+                className="cursor-pointer select-none w-36"
+                onClick={() => handleSort('assignee')}
+              >
                 Assignee <SortIcon field="assignee" sortField={sortField} sortDir={sortDir} />
               </TableHead>
-              <TableHead className="cursor-pointer select-none w-36" onClick={() => handleSort('priority')}>
+              <TableHead
+                className="cursor-pointer select-none w-36"
+                onClick={() => handleSort('priority')}
+              >
                 Priority <SortIcon field="priority" sortField={sortField} sortDir={sortDir} />
               </TableHead>
               <TableHead className="w-40">Labels</TableHead>
-              <TableHead className="cursor-pointer select-none w-36" onClick={() => handleSort('updatedAt')}>
+              <TableHead
+                className="cursor-pointer select-none w-36"
+                onClick={() => handleSort('updatedAt')}
+              >
                 Updated <SortIcon field="updatedAt" sortField={sortField} sortDir={sortDir} />
               </TableHead>
             </TableRow>

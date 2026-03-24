@@ -41,9 +41,7 @@ export function useRealtimeDashboard(
         if (!agentId) return;
 
         queryClient.setQueryData<Agent[]>(['agents'], (old) =>
-          old?.map((a) =>
-            a.id === agentId ? { ...a, status: status as Agent['status'] } : a,
-          ),
+          old?.map((a) => (a.id === agentId ? { ...a, status: status as Agent['status'] } : a)),
         );
 
         queryClient.setQueryData<SquadOverview>(['squad'], (old) => {
@@ -80,7 +78,7 @@ export function useRealtimeDashboard(
     // task:created — add new task to cache
     removers.push(
       addWsListener('task:created', (envelope: WsEnvelope) => {
-        const task = envelope.payload as Task;
+        const task = envelope.payload as unknown as Task;
         if (!task.id) return;
 
         queryClient.setQueryData<Task[]>(['tasks'], (old) => {

@@ -96,7 +96,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
   constructor(config: CopilotProviderConfig = {}) {
     this.config = {
       ...config,
-      model: config.model ?? process.env.COPILOT_MODEL ?? 'gpt-4o',
+      model: config.model ?? process.env.COPILOT_MODEL ?? 'claude-sonnet-4',
     };
   }
 

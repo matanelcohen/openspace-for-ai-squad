@@ -11,6 +11,7 @@ import decisionsRoute from './routes/decisions.js';
 import healthRoute from './routes/health.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
+import teamMembersRoute from './routes/team-members.js';
 import voiceRoute from './routes/voice.js';
 import { ActivityFeed } from './services/activity/index.js';
 import { AgentWorkerService } from './services/agent-worker/index.js';
@@ -185,6 +186,9 @@ export function buildApp(opts: AppOptions = {}) {
     });
   });
 
+  // Decorate Fastify instance with the SQLite database
+  app.decorate('db', db);
+
   // Routes
   app.register(healthRoute);
   app.register(agentsRoute, { prefix: '/api' });
@@ -194,6 +198,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(activityRoute, { prefix: '/api' });
   app.register(chatRoute, { prefix: '/api' });
   app.register(voiceRoute, { prefix: '/api' });
+  app.register(teamMembersRoute, { prefix: '/api' });
 
   app.setErrorHandler((error, _request, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;

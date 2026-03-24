@@ -1,10 +1,13 @@
 'use client';
 
-import { TEAM_MEMBER_RANK_LABELS } from '@openspace/shared';
-import { ArrowLeft, Building2, Calendar, Mail } from 'lucide-react';
+import type { Task } from '@openspace/shared';
+import { TASK_STATUS_LABELS, TEAM_MEMBER_RANK_LABELS } from '@openspace/shared';
+import { ArrowLeft, Building2, Calendar, CheckCircle2, ListTodo, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useMemo } from 'react';
 
+import { PriorityBadge } from '@/components/priority-badge';
 import { RankManagementDialog } from '@/components/team-members/rank-management-dialog';
 import { SkillsEditor } from '@/components/team-members/skills-editor';
 import {
@@ -16,6 +19,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTasks } from '@/hooks/use-tasks';
 import {
   useTeamMember,
   useUpdateTeamMember,
@@ -63,6 +67,13 @@ export default function TeamMemberDetailPage() {
   const updateRank = useUpdateTeamMemberRank();
   const updateStatus = useUpdateTeamMemberStatus();
   const updateMember = useUpdateTeamMember();
+  const { data: allTasks } = useTasks();
+
+  const assignedTasks = useMemo(() => {
+    if (!allTasks || !member) return [];
+    const memberNameLower = member.name.toLowerCase();
+    return allTasks.filter((t) => t.assignee && t.assignee.toLowerCase() === memberNameLower);
+  }, [allTasks, member]);
 
   if (isLoading) return <DetailSkeleton />;
 
@@ -214,6 +225,51 @@ export default function TeamMemberDetailPage() {
             </CardHeader>
             <CardContent>
               <SkillsEditor skills={member.skills} onSkillsChange={handleSkillsChange} editable />
+            </CardContent>
+          </Card>
+
+          {/* Assigned Tasks */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+              <CardTitle className="text-sm font-medium">Assigned Tasks</CardTitle>
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <ListTodo className="h-3.5 w-3.5" />
+                <span>
+                  {assignedTasks.length} task{assignedTasks.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {assignedTasks.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No tasks assigned to this member.</p>
+              ) : (
+                <div className="space-y-2" data-testid="assigned-tasks-list">
+                  {assignedTasks.map((task: Task) => (
+                    <Link
+                      key={task.id}
+                      href={`/tasks/${task.id}`}
+                      className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50"
+                      data-testid={`assigned-task-${task.id}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <CheckCircle2
+                          className={cn(
+                            'h-4 w-4 shrink-0',
+                            task.status === 'done' ? 'text-green-500' : 'text-muted-foreground',
+                          )}
+                        />
+                        <span className="truncate text-sm font-medium">{task.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        <PriorityBadge priority={task.priority} />
+                        <Badge variant="outline" className="text-[10px]">
+                          {TASK_STATUS_LABELS[task.status]}
+                        </Badge>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
