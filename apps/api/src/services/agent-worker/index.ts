@@ -257,6 +257,9 @@ export class AgentWorkerService {
 
       console.log(`[AgentWorker] ${agent.name} started: ${task.title}`);
 
+      // Collect progress events during execution
+      const progressLog: string[] = [];
+
       const result = await this.config.aiProvider.chatCompletion({
         systemPrompt:
           `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
@@ -270,13 +273,52 @@ export class AgentWorkerService {
             content: `Task: ${task.title}\n\nDescription: ${task.description || '(none)'}\n\nPriority: ${task.priority}\n\nPlease complete this task.`,
           },
         ],
+        onEvent: (event) => {
+          const ts = new Date().toISOString().replace('T', ' ').substring(0, 19);
+          let logEntry = '';
+
+          switch (event.type) {
+            case 'intent':
+              logEntry = `🎯 Intent: ${(event.data?.intent as string) ?? 'analyzing'}`;
+              break;
+            case 'thinking':
+              logEntry = `🧠 Thinking: ${((event.data?.content as string) ?? '').substring(0, 150)}`;
+              break;
+            case 'tool_start':
+              logEntry = `🔧 Using tool: \`${(event.data?.name as string) ?? 'unknown'}\``;
+              break;
+            case 'info':
+              logEntry = `ℹ️ ${(event.data?.message as string) ?? ''}`;
+              break;
+          }
+
+          if (logEntry) {
+            progressLog.push(`**[${ts}]** ${logEntry}`);
+            // Broadcast progress in real-time
+            this.config.wsManager?.broadcast({
+              type: 'task:updated',
+              payload: {
+                id: taskId,
+                taskId,
+                agentId,
+                progressEvent: event.type,
+                progressMessage: logEntry,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+        },
       });
+
+      const progressSection =
+        progressLog.length > 0 ? `\n\n**Progress:**\n${progressLog.join('\n')}` : '';
 
       await updateTask(this.config.tasksDir, taskId, {
         status: 'done',
         description:
           task.description +
           `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.` +
+          progressSection +
           `\n\n**[${now()}]** ✅ ${agent.name} completed this task.\n\n**Result:**\n${result.content}`,
       });
       this.broadcastTaskUpdate(taskId, 'done');

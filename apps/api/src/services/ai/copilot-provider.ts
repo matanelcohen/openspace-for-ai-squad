@@ -46,6 +46,8 @@ export interface ChatCompletionOptions {
   stream?: boolean;
   /** Callback for streaming chunks. */
   onChunk?: (chunk: string) => void;
+  /** Callback for all session events (thinking, tool calls, progress). */
+  onEvent?: (event: { type: string; data?: Record<string, unknown> }) => void;
 }
 
 export interface ChatCompletionResult {
@@ -176,6 +178,36 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     let session: CopilotSessionLike | null = null;
     try {
       session = await this.client.createSession(sessionConfig);
+
+      // Subscribe to session events for progress tracking
+      if (options.onEvent) {
+        const eventCallback = options.onEvent;
+        session.on('assistant.intent', (e: unknown) => {
+          const ev = e as { type: string; data?: { intent?: string } };
+          eventCallback({ type: 'intent', data: { intent: ev.data?.intent } });
+        });
+        session.on('assistant.reasoning', (e: unknown) => {
+          const ev = e as { type: string; data?: { content?: string } };
+          eventCallback({ type: 'thinking', data: { content: ev.data?.content } });
+        });
+        session.on('tool.execution_start', (e: unknown) => {
+          const ev = e as { type: string; data?: { name?: string; arguments?: unknown } };
+          eventCallback({
+            type: 'tool_start',
+            data: { name: ev.data?.name, arguments: ev.data?.arguments },
+          });
+        });
+        session.on('session.info', (e: unknown) => {
+          const ev = e as { type: string; data?: { message?: string } };
+          eventCallback({ type: 'info', data: { message: ev.data?.message } });
+        });
+        session.on('assistant.message_delta', (e: unknown) => {
+          const ev = e as { type: string; data?: { deltaContent?: string } };
+          if (ev.data?.deltaContent) {
+            eventCallback({ type: 'progress', data: { content: ev.data.deltaContent } });
+          }
+        });
+      }
 
       if (options.stream && options.onChunk) {
         const content = await this.streamResponse(session, prompt, options.onChunk);
