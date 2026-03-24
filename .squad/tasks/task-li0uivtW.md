@@ -1,7 +1,7 @@
 ---
 id: task-li0uivtW
 title: Write tests for HR Department feature
-status: in-progress
+status: blocked
 priority: P1
 assignee: zoidberg
 labels:
@@ -11,7 +11,7 @@ labels:
   - QA
   - 'parent:task-ZOSFVe1k'
 created: '2026-03-24T16:03:22.002Z'
-updated: '2026-03-24T18:48:30.714Z'
+updated: '2026-03-24T21:41:55.787Z'
 sortIndex: 7
 ---
 Add comprehensive tests: (1) Unit tests for the team-members API routes (CRUD operations, validation, error cases, filtering) using Vitest, following existing test patterns. (2) Unit tests for React Query hooks (use-team-members). (3) E2E tests with Playwright covering: create a team member, view list, edit details, change rank/status, delete member, assign task to member. Place E2E tests in `e2e/` directory following existing patterns. Ensure all existing tests still pass.
@@ -80,3 +80,6 @@ Error: Request session.create failed with message: fetch failed
 
 ---
 **[2026-03-24 18:48:30]** 🚀 Zoidberg started working on this task.
+
+---
+**[2026-03-24 21:41:55]** 🛑 Permanently blocked after 11 failed attempts.

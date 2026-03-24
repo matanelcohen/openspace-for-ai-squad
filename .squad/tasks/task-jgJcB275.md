@@ -1,7 +1,7 @@
 ---
 id: task-jgJcB275
 title: Implement task assignment to team members
-status: in-progress
+status: blocked
 priority: P1
 assignee: fry
 labels:
@@ -11,7 +11,7 @@ labels:
   - assignment
   - 'parent:task-ZOSFVe1k'
 created: '2026-03-24T16:03:21.999Z'
-updated: '2026-03-24T18:48:30.714Z'
+updated: '2026-03-24T21:41:55.783Z'
 sortIndex: 5
 ---
 Extend the existing task assignment system to support assigning tasks to human team members (not just agents). Update the task form dialog to show a combined assignee picker (agents + team members). Update the task detail page to display the assigned team member profile. On the team member detail page, show tasks assigned to that member. Ensure the API supports filtering tasks by team member assignee. This bridges the existing task system with the new HR system.
@@ -44,3 +44,6 @@ Error: Request session.create failed with message: fetch failed
 
 ---
 **[2026-03-24 18:48:30]** 🚀 Fry started working on this task.
+
+---
+**[2026-03-24 21:41:55]** 🛑 Permanently blocked after 5 failed attempts.
