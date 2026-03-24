@@ -65,7 +65,6 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
 
   // Listen for real-time voice events
   useWsEvent(
@@ -160,35 +159,43 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const startRecording = useCallback(async () => {
     if (!session || session.status !== 'active') return;
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      const mediaRecorder = new MediaRecorder(stream);
-      mediaRecorderRef.current = mediaRecorder;
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        await sendAudioToAPI(session.id, audioBlob);
-      };
-
-      mediaRecorder.start();
-      setIsRecording(true);
-    } catch (error) {
-      console.error('Failed to start recording:', error);
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      console.warn('Speech Recognition not supported');
+      return;
     }
+
+    const recognition = new Recognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.continuous = true;
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      const last = event.results[event.results.length - 1];
+      const transcript = last?.[0]?.transcript;
+      if (transcript && session) {
+        // Send transcript to backend for agent responses
+        api
+          .post('/api/voice/speak', { sessionId: session.id, text: transcript })
+          .catch((err: unknown) => console.error('Voice speak failed:', err));
+      }
+    };
+
+    recognition.onerror = () => setIsRecording(false);
+    recognition.onend = () => setIsRecording(false);
+
+    // Store reference for stopRecording
+    mediaRecorderRef.current = recognition as unknown as MediaRecorder;
+    recognition.start();
+    setIsRecording(true);
   }, [session]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      // mediaRecorderRef holds a SpeechRecognition instance
+      const recognition = mediaRecorderRef.current as unknown as SpeechRecognition;
+      recognition.stop();
+      mediaRecorderRef.current = null;
       setIsRecording(false);
     }
   }, [isRecording]);
