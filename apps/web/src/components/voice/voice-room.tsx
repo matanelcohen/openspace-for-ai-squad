@@ -26,19 +26,13 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
     endSession,
   } = voice;
 
-  // Auto-start continuous recording when the voice room opens
+  // Auto-start continuous recording when session becomes active
   useEffect(() => {
     if (session?.status === 'active' && !isRecording) {
       startRecording();
     }
-    return () => {
-      if (isRecording) {
-        stopRecording();
-      }
-    };
-    // Only run on mount/unmount
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [session?.status]);
 
   const handleEndSession = () => {
     stopRecording();

@@ -64,6 +64,12 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
 
   const streamRef = useRef<MediaStream | null>(null);
+  const sessionRef = useRef<VoiceSession | null>(null);
+
+  // Keep sessionRef in sync
+  useEffect(() => {
+    sessionRef.current = session;
+  }, [session]);
 
   // Listen for real-time voice events
   useWsEvent(
@@ -165,7 +171,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const shouldListenRef = useRef(false);
 
   const startRecording = useCallback(async () => {
-    if (!session || session.status !== 'active') return;
+    const currentSession = sessionRef.current;
+    if (!currentSession || currentSession.status !== 'active') return;
 
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
@@ -201,12 +208,13 @@ export function useVoiceSession(): UseVoiceSessionReturn {
             const transcript = result[0].transcript.trim();
             if (transcript) {
               console.log('[Voice] Heard:', transcript);
-              // Use sessionRef to avoid stale closure
-              const sid = session?.id;
+              const sid = sessionRef.current?.id;
               if (sid) {
                 api
                   .post('/api/voice/speak', { sessionId: sid, text: transcript })
                   .catch((err: unknown) => console.error('Voice speak failed:', err));
+              } else {
+                console.warn('[Voice] No active session to send transcript to');
               }
             }
           }
@@ -246,7 +254,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     };
 
     startListening();
-  }, [session]);
+  }, []);
 
   const stopRecording = useCallback(() => {
     shouldListenRef.current = false;
