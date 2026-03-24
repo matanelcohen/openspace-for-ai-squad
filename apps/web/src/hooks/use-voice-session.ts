@@ -5,6 +5,42 @@ import { useWsEvent } from '@/components/providers/websocket-provider';
 import type { WsEnvelope } from '@/hooks/use-websocket';
 import { api } from '@/lib/api-client';
 
+// ── Browser Speech API helpers ───────────────────────────────────
+
+/** Get the SpeechRecognition constructor (vendor-prefixed in some browsers). */
+function getSpeechRecognition(): (new () => SpeechRecognition) | null {
+  if (typeof window === 'undefined') return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition ?? null;
+}
+
+/** Agent voice configs for browser SpeechSynthesis. */
+const AGENT_VOICE_PITCH: Record<string, { pitch: number; rate: number }> = {
+  leela: { pitch: 1.1, rate: 1.0 },
+  fry: { pitch: 1.2, rate: 1.05 },
+  bender: { pitch: 0.7, rate: 0.95 },
+  zoidberg: { pitch: 1.3, rate: 1.0 },
+};
+
+/** Speak text using browser SpeechSynthesis with agent-specific voice. */
+function speakAsAgent(agentId: string, text: string): void {
+  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  const config = AGENT_VOICE_PITCH[agentId] ?? { pitch: 1, rate: 1 };
+  utterance.pitch = config.pitch;
+  utterance.rate = config.rate;
+
+  // Try to pick a distinct voice per agent
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(agentId);
+    utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
+  }
+
+  window.speechSynthesis.speak(utterance);
+}
+
 export interface UseVoiceSessionReturn {
   session: VoiceSession | null;
   isRecording: boolean;
@@ -69,18 +105,23 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
   useWsEvent(
     'voice:audio',
+    useCallback((_envelope: WsEnvelope) => {
+      // Audio playback is handled by voice:transcript via browser TTS
+    }, []),
+  );
+
+  // Also speak agent transcript responses via browser TTS
+  useWsEvent(
+    'voice:transcript',
     useCallback((envelope: WsEnvelope) => {
-      const { audio } = envelope.payload as { audio: string };
-      if (!audio) return;
-      // Decode and play audio
-      const audioData = Uint8Array.from(atob(audio), (c) => c.charCodeAt(0));
-      const blob = new Blob([audioData], { type: 'audio/opus' });
-      const url = URL.createObjectURL(blob);
-      const player = new Audio(url);
-      player.play().catch(() => {
-        /* autoplay blocked */
-      });
-      player.onended = () => URL.revokeObjectURL(url);
+      const { agentId, text } = envelope.payload as {
+        sessionId: string;
+        agentId: string;
+        text: string;
+      };
+      if (agentId && text) {
+        speakAsAgent(agentId, text);
+      }
     }, []),
   );
 
@@ -152,51 +193,40 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     }
   }, [isRecording]);
 
-  /** Record a short clip, transcribe it, and return the text. */
+  /** Use browser Speech Recognition to listen and return transcript text. */
   const recordAndTranscribe = useCallback(async (): Promise<string | null> => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      return new Promise((resolve) => {
-        const recorder = new MediaRecorder(stream);
-        const chunks: Blob[] = [];
-
-        recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
-        };
-
-        recorder.onstop = async () => {
-          stream.getTracks().forEach((t) => t.stop());
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          const base64 = await blobToBase64(blob);
-
-          // If we have an active session, use it. Otherwise create a temp one.
-          const sid = session?.id ?? 'inline-voice';
-          try {
-            const result = await api.post<{ transcript: { text: string } }>(
-              '/api/voice/transcribe',
-              { sessionId: sid, audio: base64, finalize: true },
-            );
-            resolve(result.transcript?.text ?? null);
-          } catch {
-            resolve(null);
-          }
-        };
-
-        recorder.start();
-        setIsRecording(true);
-
-        // Auto-stop after silence or max 10 seconds
-        setTimeout(() => {
-          if (recorder.state === 'recording') {
-            recorder.stop();
-            setIsRecording(false);
-          }
-        }, 10_000);
-      });
-    } catch {
+    const Recognition = getSpeechRecognition();
+    if (!Recognition) {
+      console.warn('Speech Recognition not supported in this browser');
       return null;
     }
-  }, [session]);
+
+    return new Promise((resolve) => {
+      const recognition = new Recognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      setIsRecording(true);
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        const transcript = event.results[0]?.[0]?.transcript ?? null;
+        setIsRecording(false);
+        resolve(transcript);
+      };
+
+      recognition.onerror = () => {
+        setIsRecording(false);
+        resolve(null);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.start();
+    });
+  }, []);
 
   const toggleMute = useCallback(() => {
     setIsMuted((prev) => !prev);
@@ -223,12 +253,11 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
       setSession((prev) => (prev ? { ...prev, messages: [...prev.messages, userMsg] } : null));
 
-      // Send as audio transcription (text-only, no audio)
+      // Send transcript to backend for agent responses via copilot-sdk
       api
-        .post('/api/voice/transcribe', {
+        .post('/api/voice/speak', {
           sessionId: session.id,
-          audio: btoa(content), // placeholder — route handles text
-          finalize: true,
+          text: content,
         })
         .catch((err: unknown) => console.error('Voice text send failed:', err));
     },
@@ -269,28 +298,4 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     playMessage,
     recordAndTranscribe,
   };
-}
-
-// ── Helpers ──────────────────────────────────────────────────────
-
-async function sendAudioToAPI(sessionId: string, blob: Blob): Promise<void> {
-  const base64 = await blobToBase64(blob);
-  await api.post('/api/voice/transcribe', {
-    sessionId,
-    audio: base64,
-    finalize: true,
-  });
-}
-
-function blobToBase64(blob: Blob): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const dataUrl = reader.result as string;
-      // Strip "data:audio/webm;base64," prefix
-      resolve(dataUrl.split(',')[1] ?? '');
-    };
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
 }

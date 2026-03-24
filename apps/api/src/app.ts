@@ -20,8 +20,6 @@ import { openDatabase } from './services/db/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import {
   ConversationContextManager,
-  STTService,
-  TTSService,
   VoiceRouter,
   VoiceSessionManager,
 } from './services/voice/index.js';
@@ -31,8 +29,6 @@ import { wsPlugin } from './services/websocket/index.js';
 /** Voice service bundle exposed on the Fastify instance. */
 export interface VoiceServices {
   sessionManager: VoiceSessionManager;
-  stt: STTService;
-  tts: TTSService;
   router: VoiceRouter;
   context: ConversationContextManager;
   aiProvider: AIProvider | null;
@@ -108,8 +104,6 @@ export function buildApp(opts: AppOptions = {}) {
 
   const voiceServices: VoiceServices = {
     sessionManager: new VoiceSessionManager(),
-    stt: new STTService({ apiKey: process.env.OPENAI_API_KEY }),
-    tts: new TTSService({ apiKey: process.env.OPENAI_API_KEY }),
     router: new VoiceRouter(),
     context: new ConversationContextManager({
       sessionsDir: opts.sessionsDir ?? resolve(squadDir, 'sessions'),

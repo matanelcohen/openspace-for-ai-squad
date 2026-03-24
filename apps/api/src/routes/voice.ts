@@ -1,10 +1,14 @@
 /**
- * Voice API routes — session management and transcription.
+ * Voice API routes — session management and text-based voice conversation.
+ *
+ * STT is handled by browser Web Speech API (no OpenAI key needed).
+ * TTS is handled by browser SpeechSynthesis (no OpenAI key needed).
+ * Agent responses are powered by copilot-sdk.
  *
  * POST   /api/voice/sessions       — Start a new voice session
  * DELETE /api/voice/sessions/:id   — End a voice session
  * GET    /api/voice/sessions       — List active sessions
- * POST   /api/voice/transcribe     — Upload audio for STT transcription
+ * POST   /api/voice/speak          — Send text transcript, get agent responses
  */
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -19,12 +23,10 @@ const voiceRoute: FastifyPluginAsync = async (app) => {
     const { title = 'Voice Session', agentIds = [] } = request.body ?? {};
     const session = app.voiceServices.sessionManager.createSession(title, agentIds);
 
-    // Join all requested agents as participants
     for (const agentId of session.participantAgentIds ?? agentIds) {
       app.voiceServices.sessionManager.joinSession(session.id, agentId, agentId, 'agent');
     }
 
-    // Join the user
     app.voiceServices.sessionManager.joinSession(session.id, 'user', 'User', 'user');
 
     return reply.status(201).send(session);
@@ -45,44 +47,27 @@ const voiceRoute: FastifyPluginAsync = async (app) => {
     return reply.send(session);
   });
 
-  // POST /api/voice/transcribe — upload audio chunk for STT
+  // POST /api/voice/speak — send text transcript, get agent responses
+  // Browser handles STT (Web Speech API) and TTS (SpeechSynthesis)
   app.post<{
-    Body: { sessionId: string; audio: string; finalize?: boolean };
-  }>('/voice/transcribe', async (request, reply) => {
-    const { sessionId, audio, finalize = true } = request.body ?? {};
+    Body: { sessionId: string; text: string };
+  }>('/voice/speak', async (request, reply) => {
+    const { sessionId, text } = request.body ?? {};
 
-    if (!sessionId || !audio) {
-      return reply.status(400).send({ error: 'sessionId and audio (base64) are required' });
+    if (!sessionId || !text) {
+      return reply.status(400).send({ error: 'sessionId and text are required' });
     }
 
-    const audioBuffer = Buffer.from(audio, 'base64');
-    app.voiceServices.stt.pushAudioChunk(sessionId, audioBuffer);
+    const routing = await app.voiceServices.router.route(text);
 
-    if (!finalize) {
-      return reply.send({ status: 'buffered' });
-    }
+    await app.voiceServices.context.addMessage(sessionId, 'user', null, text);
 
-    const transcript = await app.voiceServices.stt.finalize(sessionId);
-
-    // Route the transcript to agents
-    const routing = await app.voiceServices.router.route(transcript.text);
-
-    // Add to conversation context
-    await app.voiceServices.context.addMessage(sessionId, 'user', null, transcript.text);
-
-    // Generate agent responses and TTS
-    const responses: Array<{
-      agentId: string;
-      text: string;
-      audioBase64?: string;
-    }> = [];
+    const responses: Array<{ agentId: string; text: string }> = [];
 
     for (const agentId of routing.agents) {
       try {
-        // Notify speaking state
         app.voiceServices.sessionManager.setSpeaking(sessionId, agentId, true);
 
-        // Get AI response
         const agent = app.voiceServices.chatAgents.find((a) => a.id === agentId);
         if (!agent || !app.voiceServices.aiProvider) continue;
 
@@ -96,48 +81,21 @@ const voiceRoute: FastifyPluginAsync = async (app) => {
             `Only speak for yourself. Other agents will respond separately.`,
           messages: [
             ...(contextWindow
-              ? [
-                  {
-                    role: 'system' as const,
-                    content: `Recent conversation:\n${contextWindow}`,
-                  },
-                ]
+              ? [{ role: 'system' as const, content: `Recent conversation:\n${contextWindow}` }]
               : []),
-            { role: 'user' as const, content: transcript.text },
+            { role: 'user' as const, content: text },
           ],
         });
 
-        // Add agent response to context
         await app.voiceServices.context.addMessage(sessionId, 'agent', agentId, result.content);
+        responses.push({ agentId, text: result.content });
 
-        // Synthesize TTS
-        let audioBase64: string | undefined;
-        try {
-          const chunks = await app.voiceServices.tts.synthesize(sessionId, agentId, result.content);
-          if (chunks.length > 0) {
-            const combined = Buffer.concat(chunks.map((c) => c.data));
-            audioBase64 = combined.toString('base64');
-          }
-        } catch {
-          // TTS failure is non-fatal — text response still works
-        }
-
-        responses.push({ agentId, text: result.content, audioBase64 });
-
-        // Broadcast transcript + audio via WebSocket
+        // Broadcast via WebSocket — browser plays TTS client-side
         app.wsManager?.broadcast({
           type: 'voice:transcript',
           payload: { sessionId, agentId, text: result.content },
           timestamp: new Date().toISOString(),
         });
-
-        if (audioBase64) {
-          app.wsManager?.broadcast({
-            type: 'voice:audio',
-            payload: { sessionId, agentId, audio: audioBase64 },
-            timestamp: new Date().toISOString(),
-          });
-        }
 
         app.voiceServices.sessionManager.setSpeaking(sessionId, agentId, false);
       } catch (err) {
@@ -146,17 +104,11 @@ const voiceRoute: FastifyPluginAsync = async (app) => {
       }
     }
 
-    return reply.send({
-      transcript,
-      routing,
-      responses,
-    });
+    return reply.send({ text, routing, responses });
   });
 };
 
 export default voiceRoute;
-
-// ── Fastify type augmentation ────────────────────────────────────
 
 declare module 'fastify' {
   interface FastifyInstance {
