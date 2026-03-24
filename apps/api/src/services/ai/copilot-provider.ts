@@ -172,7 +172,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
         return { content, model };
       }
 
-      const result = await session.sendAndWait({ prompt }, 60_000);
+      const result = await session.sendAndWait({ prompt }, 300_000);
       const content = (result?.data?.content as string) ?? '';
       return { content, model };
     } finally {
