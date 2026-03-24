@@ -75,7 +75,8 @@ export async function createTask(tasksDir: string, input: CreateTaskInput): Prom
 
   // Determine the next sortIndex
   const { tasks: existing } = await parseAllTasks(tasksDir);
-  const maxSortIndex = existing.length > 0 ? Math.max(...existing.map((t) => t.task.sortIndex)) : -1;
+  const maxSortIndex =
+    existing.length > 0 ? Math.max(...existing.map((t) => t.task.sortIndex)) : -1;
 
   const now = new Date().toISOString();
   const task: Task = {
@@ -85,6 +86,9 @@ export async function createTask(tasksDir: string, input: CreateTaskInput): Prom
     status: input.status ?? 'backlog',
     priority: input.priority ?? 'P2',
     assignee: input.assignee ?? null,
+    assigneeType:
+      ((input as unknown as Record<string, unknown>).assigneeType as Task['assigneeType']) ??
+      'agent',
     labels: input.labels ?? [],
     createdAt: now,
     updatedAt: now,

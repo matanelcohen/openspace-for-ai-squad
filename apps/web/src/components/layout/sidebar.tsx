@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutDashboard, ListTodo, MessageSquare, Scale } from 'lucide-react';
+import { LayoutDashboard, ListTodo, MessageSquare, Scale, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -11,6 +11,7 @@ const navItems = [
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/decisions', label: 'Decisions', icon: Scale },
+  { href: '/team-members', label: 'Team', icon: Users },
 ];
 
 export function Sidebar() {

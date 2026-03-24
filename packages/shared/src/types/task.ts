@@ -14,6 +14,9 @@ export type TaskStatus =
 /** Priority levels (P0 = highest urgency). */
 export type TaskPriority = 'P0' | 'P1' | 'P2' | 'P3';
 
+/** Whether the assignee is an AI agent or a human team member. */
+export type TaskAssigneeType = 'agent' | 'member';
+
 /** A task tracked on the squad's task board. */
 export interface Task {
   /** Unique identifier. */
@@ -26,8 +29,10 @@ export interface Task {
   status: TaskStatus;
   /** Urgency level. */
   priority: TaskPriority;
-  /** Agent ID assigned to this task, or null if unassigned. */
+  /** Agent or team member ID assigned to this task, or null if unassigned. */
   assignee: string | null;
+  /** Whether the assignee is an AI agent or a human team member. */
+  assigneeType: TaskAssigneeType;
   /** Freeform labels/tags for filtering. */
   labels: string[];
   /** ISO-8601 creation timestamp. */

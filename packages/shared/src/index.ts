@@ -20,6 +20,7 @@ export type {
   SquadConfig,
   SquadOverview,
   Task,
+  TaskAssigneeType,
   TaskCounts,
   TaskPriority,
   TaskStatus,

@@ -149,6 +149,11 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
 
       try {
         const task = await updateTask(tasksDir(), request.params.id, body);
+
+        if (task.status === 'backlog' && task.assignee && app.agentWorker) {
+          app.agentWorker.enqueue(task);
+        }
+
         return reply.send(task);
       } catch {
         return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
@@ -167,6 +172,12 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
 
       try {
         const task = await updateTask(tasksDir(), request.params.id, { status });
+
+        // If moved to backlog and has an assignee, enqueue for agent work
+        if (status === 'backlog' && task.assignee && app.agentWorker) {
+          app.agentWorker.enqueue(task);
+        }
+
         return reply.send(task);
       } catch {
         return reply.status(404).send({ error: `Task not found: ${request.params.id}` });

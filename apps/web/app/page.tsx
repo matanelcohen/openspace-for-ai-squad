@@ -1,5 +1,6 @@
 import { AgentGrid } from '@/components/dashboard/agent-grid';
 import { SummaryStats } from '@/components/dashboard/summary-stats';
+import { TeamSummaryStats } from '@/components/dashboard/team-summary-stats';
 
 export default function DashboardPage() {
   return (
@@ -9,6 +10,10 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Your squad at a glance.</p>
       </div>
       <SummaryStats />
+      <div>
+        <h2 className="mb-4 text-xl font-semibold">Team Overview</h2>
+        <TeamSummaryStats />
+      </div>
       <div>
         <h2 className="mb-4 text-xl font-semibold">Squad Members</h2>
         <AgentGrid />

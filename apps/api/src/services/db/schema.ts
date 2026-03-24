@@ -131,6 +131,53 @@ CREATE TRIGGER IF NOT EXISTS tasks_au AFTER UPDATE ON tasks BEGIN
   VALUES (new.rowid, new.id, new.title, new.description);
 END;
 
+-- Team members table — stored directly in SQLite (not markdown)
+CREATE TABLE IF NOT EXISTS team_members (
+  id          TEXT PRIMARY KEY,
+  name        TEXT NOT NULL,
+  email       TEXT NOT NULL UNIQUE,
+  role        TEXT NOT NULL,
+  department  TEXT NOT NULL,
+  skills      TEXT NOT NULL DEFAULT '[]',
+  rank        TEXT NOT NULL DEFAULT 'mid',
+  status      TEXT NOT NULL DEFAULT 'active',
+  joined_at   TEXT NOT NULL,
+  updated_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_team_members_department ON team_members(department);
+CREATE INDEX IF NOT EXISTS idx_team_members_status ON team_members(status);
+CREATE INDEX IF NOT EXISTS idx_team_members_rank ON team_members(rank);
+CREATE INDEX IF NOT EXISTS idx_team_members_email ON team_members(email);
+
+-- FTS5 for team member search (name, role, skills)
+CREATE VIRTUAL TABLE IF NOT EXISTS team_members_fts USING fts5(
+  id UNINDEXED,
+  name,
+  role,
+  skills,
+  content='team_members',
+  content_rowid='rowid'
+);
+
+-- Triggers to keep team_members FTS in sync
+CREATE TRIGGER IF NOT EXISTS team_members_ai AFTER INSERT ON team_members BEGIN
+  INSERT INTO team_members_fts(rowid, id, name, role, skills)
+  VALUES (new.rowid, new.id, new.name, new.role, new.skills);
+END;
+
+CREATE TRIGGER IF NOT EXISTS team_members_ad AFTER DELETE ON team_members BEGIN
+  INSERT INTO team_members_fts(team_members_fts, rowid, id, name, role, skills)
+  VALUES ('delete', old.rowid, old.id, old.name, old.role, old.skills);
+END;
+
+CREATE TRIGGER IF NOT EXISTS team_members_au AFTER UPDATE ON team_members BEGIN
+  INSERT INTO team_members_fts(team_members_fts, rowid, id, name, role, skills)
+  VALUES ('delete', old.rowid, old.id, old.name, old.role, old.skills);
+  INSERT INTO team_members_fts(rowid, id, name, role, skills)
+  VALUES (new.rowid, new.id, new.name, new.role, new.skills);
+END;
+
 -- Metadata table for tracking sync state
 CREATE TABLE IF NOT EXISTS _meta (
   key   TEXT PRIMARY KEY,
@@ -148,7 +195,5 @@ export function initializeSchema(db: Database.Database): void {
   db.exec(SCHEMA_SQL);
 
   // Record schema version
-  db.prepare(
-    `INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '1')`,
-  ).run();
+  db.prepare(`INSERT OR REPLACE INTO _meta (key, value) VALUES ('schema_version', '1')`).run();
 }

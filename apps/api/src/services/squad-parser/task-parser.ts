@@ -8,7 +8,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { Task, TaskPriority, TaskStatus } from '@openspace/shared';
+import type { Task, TaskAssigneeType, TaskPriority, TaskStatus } from '@openspace/shared';
 import { TASK_PRIORITIES, TASK_STATUSES } from '@openspace/shared';
 import matter from 'gray-matter';
 
@@ -22,6 +22,10 @@ function isTaskStatus(value: unknown): value is TaskStatus {
 
 function isTaskPriority(value: unknown): value is TaskPriority {
   return typeof value === 'string' && (TASK_PRIORITIES as readonly string[]).includes(value);
+}
+
+function isTaskAssigneeType(value: unknown): value is TaskAssigneeType {
+  return value === 'agent' || value === 'member';
 }
 
 function toISOString(value: unknown): string {
@@ -85,6 +89,7 @@ export function parseTaskFile(content: string, filePath: string): ParseTaskResul
     status: isTaskStatus(fm.status) ? fm.status : 'backlog',
     priority: isTaskPriority(fm.priority) ? fm.priority : 'P2',
     assignee: typeof fm.assignee === 'string' && fm.assignee !== 'null' ? fm.assignee : null,
+    assigneeType: isTaskAssigneeType(fm.assigneeType) ? fm.assigneeType : 'agent',
     labels: toStringArray(fm.labels),
     createdAt: toISOString(fm.created),
     updatedAt: toISOString(fm.updated),

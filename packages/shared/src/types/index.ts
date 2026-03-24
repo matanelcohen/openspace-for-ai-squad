@@ -7,7 +7,7 @@ export type { Agent, AgentBoundaries, AgentDetail, AgentIdentity, AgentStatus } 
 export type { ChatMessage } from './chat.js';
 export type { Decision, DecisionStatus } from './decision.js';
 export type { SquadConfig, SquadOverview, TaskCounts } from './squad.js';
-export type { Task, TaskPriority, TaskStatus } from './task.js';
+export type { Task, TaskAssigneeType, TaskPriority, TaskStatus } from './task.js';
 export type { TeamMember, TeamMemberRank, TeamMemberStatus } from './team-member.js';
 export type {
   VoiceMessage,
