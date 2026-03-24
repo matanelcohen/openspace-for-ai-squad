@@ -41,8 +41,28 @@ function speakAsAgent(agentId: string, text: string): Promise<void> {
       utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
     }
 
-    utterance.onend = () => resolve();
+    // Chrome fires onend before audio finishes — poll speaking state instead
+    utterance.onstart = () => {
+      const poll = setInterval(() => {
+        if (!window.speechSynthesis.speaking) {
+          clearInterval(poll);
+          resolve();
+        }
+      }, 100);
+    };
     utterance.onerror = () => resolve();
+
+    // Chrome pauses synthesis on long text — keep it alive
+    const keepAlive = setInterval(() => {
+      if (window.speechSynthesis.speaking) {
+        window.speechSynthesis.pause();
+        window.speechSynthesis.resume();
+      } else {
+        clearInterval(keepAlive);
+      }
+    }, 10_000);
+
+    utterance.onend = () => clearInterval(keepAlive);
 
     window.speechSynthesis.speak(utterance);
   });
