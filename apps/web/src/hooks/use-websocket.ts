@@ -22,7 +22,11 @@ export interface WsEnvelope {
 }
 
 function buildWsUrl(): string {
-  const base = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+  const base =
+    process.env.NEXT_PUBLIC_API_URL ??
+    (typeof window !== 'undefined'
+      ? `${window.location.protocol}//${window.location.hostname}:3001`
+      : 'http://localhost:3001');
   const wsBase = base.replace(/^http/, 'ws');
   return `${wsBase}/ws`;
 }

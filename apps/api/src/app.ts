@@ -117,7 +117,8 @@ export function buildApp(opts: AppOptions = {}) {
 
   // Plugins
   app.register(cors, {
-    origin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
+    origin:
+      process.env.CORS_ORIGIN === '*' ? true : (process.env.CORS_ORIGIN ?? 'http://localhost:3000'),
   });
 
   // WebSocket plugin
