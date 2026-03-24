@@ -52,13 +52,16 @@ export function VoiceSpeaker({
 
     const config = AGENT_VOICE_PITCH[item.agentId] ?? { pitch: 1, rate: 1 };
     const utterance = new SpeechSynthesisUtterance(item.text);
+    utterance.lang = 'en-US';
     utterance.pitch = config.pitch;
     utterance.rate = config.rate;
 
     const voices = synth.getVoices();
-    if (voices.length > 0) {
+    const enVoices = voices.filter((v) => v.lang.startsWith('en'));
+    const voicePool = enVoices.length > 0 ? enVoices : voices;
+    if (voicePool.length > 0) {
       const idx = Object.keys(AGENT_VOICE_PITCH).indexOf(item.agentId);
-      utterance.voice = voices[idx % voices.length] ?? voices[0] ?? null;
+      utterance.voice = voicePool[idx % voicePool.length] ?? voicePool[0] ?? null;
     }
 
     let done = false;
