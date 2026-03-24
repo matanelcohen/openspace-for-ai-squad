@@ -2,9 +2,12 @@
  * Agent Worker Service — picks up backlog tasks and executes them via copilot-sdk.
  *
  * Each agent works on one task at a time (queue-based).
- * Updates task status: backlog → in-progress → done.
- * Emits activity events for progress tracking.
+ * Queue is persisted to .squad/.cache/agent-queue.json for crash recovery.
+ * On startup, recovers in-progress tasks back into the queue.
  */
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 import type { Task } from '@openspace/shared';
 
@@ -24,24 +27,34 @@ interface AgentProfile {
 
 interface AgentWorkerConfig {
   tasksDir: string;
+  /** Path to persist queue state. Default: <tasksDir>/../.cache/agent-queue.json */
+  queueFilePath?: string;
   aiProvider: AIProvider;
   activityFeed: ActivityFeed;
   wsManager: WebSocketManager | null;
   agents: AgentProfile[];
-  /** How often to check for queued tasks (ms). Default: 5000 */
   pollIntervalMs?: number;
+}
+
+interface QueueState {
+  queues: Record<string, string[]>;
+  active: Record<string, string | null>;
 }
 
 // ── Agent Worker ─────────────────────────────────────────────────
 
 export class AgentWorkerService {
   private readonly config: AgentWorkerConfig;
-  private readonly queues = new Map<string, string[]>(); // agentId → taskId[]
-  private readonly activeTask = new Map<string, string>(); // agentId → taskId currently working on
+  private readonly queues = new Map<string, string[]>();
+  private readonly activeTask = new Map<string, string>();
+  private readonly queueFilePath: string;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(config: AgentWorkerConfig) {
     this.config = config;
+    this.queueFilePath =
+      config.queueFilePath ?? join(config.tasksDir, '..', '.cache', 'agent-queue.json');
+
     for (const agent of config.agents) {
       this.queues.set(agent.id, []);
     }
@@ -53,20 +66,20 @@ export class AgentWorkerService {
     const queue = this.queues.get(task.assignee);
     if (!queue) return;
 
-    // Don't add duplicates
     if (queue.includes(task.id) || this.activeTask.get(task.assignee) === task.id) return;
 
     queue.push(task.id);
+    this.persistQueue();
     console.log(`[AgentWorker] Queued ${task.id} for ${task.assignee} (queue: ${queue.length})`);
 
     this.emitActivity(task.assignee, 'spawned', `Task queued: ${task.title}`);
-
-    // Try to process immediately
     this.processNext(task.assignee);
   }
 
-  /** Start periodic polling for idle agents. */
-  start(): void {
+  /** Start the worker — recovers state from disk, then polls. */
+  async start(): Promise<void> {
+    await this.recover();
+
     if (this.pollTimer) return;
     this.pollTimer = setInterval(() => {
       for (const agent of this.config.agents) {
@@ -77,15 +90,14 @@ export class AgentWorkerService {
     }, this.config.pollIntervalMs ?? 5000);
   }
 
-  /** Stop the worker. */
   stop(): void {
     if (this.pollTimer) {
       clearInterval(this.pollTimer);
       this.pollTimer = null;
     }
+    this.persistQueue();
   }
 
-  /** Get queue status for all agents. */
   getStatus(): Record<string, { activeTask: string | null; queueLength: number }> {
     const status: Record<string, { activeTask: string | null; queueLength: number }> = {};
     for (const agent of this.config.agents) {
@@ -97,7 +109,102 @@ export class AgentWorkerService {
     return status;
   }
 
-  // ── Private: Task Processing ───────────────────────────────────
+  // ── Recovery ───────────────────────────────────────────────────
+
+  /** Recover queue state from disk + re-enqueue in-progress tasks. */
+  private async recover(): Promise<void> {
+    // 1. Load persisted queue state
+    this.loadQueue();
+
+    // 2. Scan for orphaned in-progress tasks (server crashed mid-work)
+    try {
+      const { readdir } = await import('node:fs/promises');
+      const files = await readdir(this.config.tasksDir);
+      for (const file of files) {
+        if (!file.endsWith('.md')) continue;
+        try {
+          const taskId = file.replace('.md', '');
+          const task = await getTask(this.config.tasksDir, taskId);
+          if (task.status === 'in-progress' && task.assignee) {
+            const queue = this.queues.get(task.assignee);
+            const isAlreadyQueued = queue?.includes(task.id);
+            const isActive = this.activeTask.get(task.assignee) === task.id;
+            if (!isAlreadyQueued && !isActive) {
+              // Reset to backlog and re-enqueue
+              await updateTask(this.config.tasksDir, taskId, { status: 'backlog' });
+              queue?.push(task.id);
+              console.log(`[AgentWorker] Recovered orphaned task ${taskId} for ${task.assignee}`);
+              this.emitActivity(task.assignee, 'spawned', `Recovered after restart: ${task.title}`);
+            }
+          }
+        } catch {
+          // Skip unparseable files
+        }
+      }
+    } catch {
+      // Tasks dir might not exist yet
+    }
+
+    this.persistQueue();
+
+    // 3. Kick off processing for any recovered queues
+    for (const agent of this.config.agents) {
+      if (!this.activeTask.has(agent.id) && (this.queues.get(agent.id)?.length ?? 0) > 0) {
+        this.processNext(agent.id);
+      }
+    }
+  }
+
+  // ── Persistence ────────────────────────────────────────────────
+
+  private persistQueue(): void {
+    try {
+      const dir = dirname(this.queueFilePath);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+
+      const state: QueueState = {
+        queues: Object.fromEntries(this.queues),
+        active: Object.fromEntries(
+          this.config.agents.map((a) => [a.id, this.activeTask.get(a.id) ?? null]),
+        ),
+      };
+      writeFileSync(this.queueFilePath, JSON.stringify(state, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('[AgentWorker] Failed to persist queue:', err);
+    }
+  }
+
+  private loadQueue(): void {
+    try {
+      if (!existsSync(this.queueFilePath)) return;
+      const raw = readFileSync(this.queueFilePath, 'utf-8');
+      const state = JSON.parse(raw) as QueueState;
+
+      for (const [agentId, taskIds] of Object.entries(state.queues)) {
+        if (this.queues.has(agentId)) {
+          this.queues.set(agentId, taskIds);
+        }
+      }
+      // Don't restore activeTask — those need re-processing
+      // Instead, add them back to front of queue
+      for (const [agentId, taskId] of Object.entries(state.active)) {
+        if (taskId && this.queues.has(agentId)) {
+          const queue = this.queues.get(agentId)!;
+          if (!queue.includes(taskId)) {
+            queue.unshift(taskId);
+          }
+        }
+      }
+
+      console.log('[AgentWorker] Loaded queue state from disk');
+    } catch {
+      // No state file or corrupt — start fresh
+    }
+  }
+
+  // ── Task Processing ────────────────────────────────────────────
 
   private async processNext(agentId: string): Promise<void> {
     if (this.activeTask.has(agentId)) return;
@@ -107,24 +214,24 @@ export class AgentWorkerService {
 
     const taskId = queue.shift()!;
     this.activeTask.set(agentId, taskId);
+    this.persistQueue();
 
     try {
-      // Load task
       const task = await getTask(this.config.tasksDir, taskId);
       const agent = this.config.agents.find((a) => a.id === agentId);
       if (!agent) {
         this.activeTask.delete(agentId);
+        this.persistQueue();
         return;
       }
 
-      // Move to in-progress
       await updateTask(this.config.tasksDir, taskId, { status: 'in-progress' });
       this.broadcastTaskUpdate(taskId, 'in-progress');
       this.emitActivity(agentId, 'started', `Started working on: ${task.title}`);
+      this.persistQueue();
 
       console.log(`[AgentWorker] ${agent.name} started: ${task.title}`);
 
-      // Execute the task via copilot-sdk
       const result = await this.config.aiProvider.chatCompletion({
         systemPrompt:
           `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
@@ -140,7 +247,6 @@ export class AgentWorkerService {
         ],
       });
 
-      // Move to done
       await updateTask(this.config.tasksDir, taskId, { status: 'done' });
       this.broadcastTaskUpdate(taskId, 'done');
       this.emitActivity(
@@ -154,7 +260,6 @@ export class AgentWorkerService {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[AgentWorker] ${agentId} failed on ${taskId}:`, message);
 
-      // Move to blocked on failure
       try {
         await updateTask(this.config.tasksDir, taskId, { status: 'blocked' });
         this.broadcastTaskUpdate(taskId, 'blocked');
@@ -164,12 +269,12 @@ export class AgentWorkerService {
       this.emitActivity(agentId, 'failed', `Failed: ${taskId} — ${message.substring(0, 80)}`);
     } finally {
       this.activeTask.delete(agentId);
-      // Check for next task
+      this.persistQueue();
       this.processNext(agentId);
     }
   }
 
-  // ── Private: Broadcasting ──────────────────────────────────────
+  // ── Broadcasting ───────────────────────────────────────────────
 
   private broadcastTaskUpdate(taskId: string, status: string): void {
     this.config.wsManager?.broadcast({

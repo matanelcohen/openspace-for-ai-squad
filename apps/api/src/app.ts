@@ -144,7 +144,7 @@ export function buildApp(opts: AppOptions = {}) {
         wsManager: app.wsManager ?? null,
         agents: AGENT_PROFILES,
       });
-      workerService.start();
+      await workerService.start();
       app.decorate('agentWorker', workerService);
 
       // Shut down worker on close
