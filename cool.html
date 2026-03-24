@@ -30,6 +30,41 @@
         text-shadow: 0 0 80px rgba(120, 115, 245, 0.3);
         letter-spacing: 0.05em;
       }
+      .button-container {
+        display: flex;
+        gap: 1.5rem;
+        margin-top: 2rem;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .cool-btn {
+        padding: 0.8rem 2rem;
+        font-size: 1.1rem;
+        font-weight: 700;
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        transition:
+          transform 0.2s,
+          box-shadow 0.2s;
+        color: #fff;
+        letter-spacing: 0.05em;
+      }
+      .cool-btn:hover {
+        transform: scale(1.08);
+      }
+      .cool-btn.pink {
+        background: linear-gradient(135deg, #ff6ec4, #ff3c8e);
+        box-shadow: 0 0 20px rgba(255, 110, 196, 0.4);
+      }
+      .cool-btn.purple {
+        background: linear-gradient(135deg, #7873f5, #5a55d2);
+        box-shadow: 0 0 20px rgba(120, 115, 245, 0.4);
+      }
+      .cool-btn.teal {
+        background: linear-gradient(135deg, #4aeadc, #2bc4b6);
+        box-shadow: 0 0 20px rgba(74, 234, 220, 0.4);
+      }
       @keyframes shimmer {
         0%,
         100% {

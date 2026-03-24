@@ -24,6 +24,8 @@ export interface UseVoiceSessionReturn {
   setCurrentSpeaker: (agentId: string | null) => void;
   /** Queue of agent speech items for TTS playback (rendered by VoiceSpeaker). */
   speechQueue: SpeechQueueItem[];
+  /** Agents currently generating a response (thinking). */
+  thinkingAgents: Set<string>;
   startSession: (agentIds: string[]) => void;
   endSession: () => void;
   startListening: () => void;
@@ -44,6 +46,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const [isMuted, setIsMuted] = useState(false);
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
   const [speechQueue, setSpeechQueue] = useState<SpeechQueueItem[]>([]);
+  const [thinkingAgents, setThinkingAgents] = useState<Set<string>>(new Set());
 
   const sessionRef = useRef<VoiceSession | null>(null);
   const seenTranscriptsRef = useRef<Set<string>>(new Set());
@@ -76,6 +79,9 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     const sid = sessionRef.current?.id;
     if (sid) {
       console.log('[Voice] Heard:', text);
+      // Mark all agents as thinking while we wait for responses
+      const agentIds = sessionRef.current?.participantAgentIds ?? [];
+      setThinkingAgents(new Set(agentIds));
       api
         .post('/api/voice/speak', { sessionId: sid, text })
         .catch((err: unknown) => console.error('Voice speak failed:', err));
@@ -102,6 +108,13 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       if (seenResponsesRef.current.has(key)) return;
       seenResponsesRef.current.add(key);
       setTimeout(() => seenResponsesRef.current.delete(key), 30_000);
+
+      // Remove this agent from thinking
+      setThinkingAgents((prev) => {
+        const next = new Set(prev);
+        next.delete(agentId);
+        return next;
+      });
 
       // Add message to session transcript
       setSession((prev) => {
@@ -187,6 +200,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     currentSpeaker,
     setCurrentSpeaker,
     speechQueue,
+    thinkingAgents,
     startSession,
     endSession,
     startListening: startListeningFn,

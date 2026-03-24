@@ -24,6 +24,7 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
     currentSpeaker,
     setCurrentSpeaker,
     speechQueue,
+    thinkingAgents,
     startListening,
     stopListening,
     toggleMute,
@@ -96,9 +97,32 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
       {/* Agent circles row */}
       <div className="flex items-center justify-center gap-4">
         {session.participantAgentIds.map((agentId) => (
-          <AgentCircle key={agentId} agentId={agentId} isSpeaking={currentSpeaker === agentId} />
+          <div key={agentId} className="relative">
+            <AgentCircle agentId={agentId} isSpeaking={currentSpeaker === agentId} />
+            {thinkingAgents.has(agentId) && currentSpeaker !== agentId && (
+              <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 flex gap-0.5">
+                <span className="h-1 w-1 animate-bounce rounded-full bg-yellow-500 [animation-delay:0ms]" />
+                <span className="h-1 w-1 animate-bounce rounded-full bg-yellow-500 [animation-delay:150ms]" />
+                <span className="h-1 w-1 animate-bounce rounded-full bg-yellow-500 [animation-delay:300ms]" />
+              </div>
+            )}
+          </div>
         ))}
       </div>
+
+      {/* Thinking indicator */}
+      {thinkingAgents.size > 0 && (
+        <div className="mx-auto flex items-center gap-2 rounded-full bg-yellow-50 px-4 py-1.5 dark:bg-yellow-950">
+          <span className="flex gap-0.5">
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-yellow-500 [animation-delay:0ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-yellow-500 [animation-delay:150ms]" />
+            <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-yellow-500 [animation-delay:300ms]" />
+          </span>
+          <span className="text-sm text-yellow-700 dark:text-yellow-300">
+            {[...thinkingAgents].join(', ')} {thinkingAgents.size === 1 ? 'is' : 'are'} thinking...
+          </span>
+        </div>
+      )}
 
       {/* Transcript (compact) */}
       {session.messages.length > 0 && (
