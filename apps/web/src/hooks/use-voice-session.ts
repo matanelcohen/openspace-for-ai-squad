@@ -63,7 +63,6 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const [isMuted, setIsMuted] = useState(false);
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
   // Listen for real-time voice events
@@ -148,57 +147,119 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       streamRef.current.getTracks().forEach((track) => track.stop());
       streamRef.current = null;
     }
-    if (mediaRecorderRef.current) {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
+    shouldListenRef.current = false;
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* ok */
+      }
+      recognitionRef.current = null;
     }
     setSession(null);
     setIsRecording(false);
   }, [session]);
+
+  // Speech recognition refs
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+  const shouldListenRef = useRef(false);
 
   const startRecording = useCallback(async () => {
     if (!session || session.status !== 'active') return;
 
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
-      console.warn('Speech Recognition not supported');
+      console.warn('Speech Recognition not supported in this browser. Try Chrome.');
       return;
     }
 
-    const recognition = new Recognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.continuous = true;
+    // Stop any existing recognition
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* ok */
+      }
+    }
 
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      const last = event.results[event.results.length - 1];
-      const transcript = last?.[0]?.transcript;
-      if (transcript && session) {
-        // Send transcript to backend for agent responses
-        api
-          .post('/api/voice/speak', { sessionId: session.id, text: transcript })
-          .catch((err: unknown) => console.error('Voice speak failed:', err));
+    shouldListenRef.current = true;
+
+    const startListening = () => {
+      if (!shouldListenRef.current) return;
+
+      const recognition = new Recognition();
+      recognition.lang = 'en-US';
+      recognition.interimResults = true;
+      recognition.continuous = true;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        // Only process final results
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result?.[0] && result.isFinal) {
+            const transcript = result[0].transcript.trim();
+            if (transcript) {
+              console.log('[Voice] Heard:', transcript);
+              // Use sessionRef to avoid stale closure
+              const sid = session?.id;
+              if (sid) {
+                api
+                  .post('/api/voice/speak', { sessionId: sid, text: transcript })
+                  .catch((err: unknown) => console.error('Voice speak failed:', err));
+              }
+            }
+          }
+        }
+      };
+
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.warn('[Voice] Recognition error:', event.error);
+        // "no-speech" and "aborted" are normal — restart
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          return; // onend will fire and restart
+        }
+        // For "not-allowed" or "service-not-available", stop trying
+        if (event.error === 'not-allowed') {
+          shouldListenRef.current = false;
+          setIsRecording(false);
+        }
+      };
+
+      recognition.onend = () => {
+        // Auto-restart if we should still be listening
+        if (shouldListenRef.current) {
+          setTimeout(startListening, 300);
+        } else {
+          setIsRecording(false);
+        }
+      };
+
+      recognitionRef.current = recognition;
+      try {
+        recognition.start();
+        setIsRecording(true);
+      } catch (err) {
+        console.error('[Voice] Failed to start:', err);
+        setIsRecording(false);
       }
     };
 
-    recognition.onerror = () => setIsRecording(false);
-    recognition.onend = () => setIsRecording(false);
-
-    // Store reference for stopRecording
-    mediaRecorderRef.current = recognition as unknown as MediaRecorder;
-    recognition.start();
-    setIsRecording(true);
+    startListening();
   }, [session]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isRecording) {
-      // mediaRecorderRef holds a SpeechRecognition instance
-      const recognition = mediaRecorderRef.current as unknown as SpeechRecognition;
-      recognition.stop();
-      mediaRecorderRef.current = null;
-      setIsRecording(false);
+    shouldListenRef.current = false;
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        /* ok */
+      }
+      recognitionRef.current = null;
     }
-  }, [isRecording]);
+    setIsRecording(false);
+  }, []);
 
   /** Use browser Speech Recognition to listen and return transcript text. */
   const recordAndTranscribe = useCallback(async (): Promise<string | null> => {
@@ -310,6 +371,14 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
   useEffect(() => {
     return () => {
+      shouldListenRef.current = false;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          /* ok */
+        }
+      }
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
       }
