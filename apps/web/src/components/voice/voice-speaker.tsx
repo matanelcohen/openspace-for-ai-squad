@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface SpeechItem {
   id: string;
@@ -15,7 +15,6 @@ interface VoiceSpeakerProps {
   onQueueEmpty?: () => void;
 }
 
-/** Agent voice configs for browser SpeechSynthesis. */
 const AGENT_VOICE_PITCH: Record<string, { pitch: number; rate: number }> = {
   leela: { pitch: 1.1, rate: 1.0 },
   fry: { pitch: 1.2, rate: 1.05 },
@@ -24,8 +23,8 @@ const AGENT_VOICE_PITCH: Record<string, { pitch: number; rate: number }> = {
 };
 
 /**
- * Invisible component that plays TTS for queued speech items.
- * Uses native SpeechSynthesis directly for maximum reliability.
+ * Invisible component — plays TTS queue sequentially.
+ * Processes items one at a time, advances on completion or timeout.
  */
 export function VoiceSpeaker({
   queue,
@@ -33,88 +32,81 @@ export function VoiceSpeaker({
   onSpeakingEnd,
   onQueueEmpty,
 }: VoiceSpeakerProps) {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const isSpeakingRef = useRef(false);
-  const lastQueueLenRef = useRef(0);
+  const processedCountRef = useRef(0);
+  const busyRef = useRef(false);
 
-  const speakItem = useCallback(
-    (item: SpeechItem) => {
-      if (typeof window === 'undefined' || !window.speechSynthesis) return;
+  const processNext = useCallback(() => {
+    if (busyRef.current) return;
+    if (processedCountRef.current >= queue.length) return;
 
-      // Cancel any in-progress speech
-      window.speechSynthesis.cancel();
+    const item = queue[processedCountRef.current];
+    if (!item) return;
 
-      const utterance = new SpeechSynthesisUtterance(item.text);
-      const config = AGENT_VOICE_PITCH[item.agentId] ?? { pitch: 1, rate: 1 };
-      utterance.pitch = config.pitch;
-      utterance.rate = config.rate;
-
-      // Pick a voice
-      const voices = window.speechSynthesis.getVoices();
-      if (voices.length > 0) {
-        const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(item.agentId);
-        utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
-      }
-
-      utterance.onstart = () => {
-        console.log('[TTS] Speaking as', item.agentId);
-        isSpeakingRef.current = true;
-        onSpeakingStart?.(item.agentId);
-      };
-
-      const advance = () => {
-        if (!isSpeakingRef.current) return;
-        isSpeakingRef.current = false;
-        onSpeakingEnd?.(item.agentId);
-        setCurrentIndex((prev) => prev + 1);
-      };
-
-      utterance.onend = () => {
-        console.log('[TTS] Finished', item.agentId);
-        advance();
-      };
-
-      utterance.onerror = (e) => {
-        console.warn('[TTS] Error:', e.error);
-        advance();
-      };
-
-      window.speechSynthesis.speak(utterance);
-
-      // Safety timeout — if onend never fires, unstick after estimated duration
-      const estimatedMs = Math.max(3000, (item.text.length * 80) / config.rate);
-      setTimeout(() => {
-        if (isSpeakingRef.current) {
-          console.warn('[TTS] Timeout, forcing advance for', item.agentId);
-          window.speechSynthesis.cancel();
-          advance();
-        }
-      }, estimatedMs + 2000);
-    },
-    [onSpeakingStart, onSpeakingEnd],
-  );
-
-  // Process next item when index advances or new items arrive
-  useEffect(() => {
-    if (currentIndex < queue.length && !isSpeakingRef.current) {
-      const item = queue[currentIndex];
-      if (item) {
-        speakItem(item);
-      }
+    busyRef.current = true;
+    const synth = window.speechSynthesis;
+    if (!synth) {
+      busyRef.current = false;
+      processedCountRef.current++;
+      return;
     }
-  }, [currentIndex, queue, speakItem]);
 
-  // Detect when queue is fully drained
+    const config = AGENT_VOICE_PITCH[item.agentId] ?? { pitch: 1, rate: 1 };
+    const utterance = new SpeechSynthesisUtterance(item.text);
+    utterance.pitch = config.pitch;
+    utterance.rate = config.rate;
+
+    const voices = synth.getVoices();
+    if (voices.length > 0) {
+      const idx = Object.keys(AGENT_VOICE_PITCH).indexOf(item.agentId);
+      utterance.voice = voices[idx % voices.length] ?? voices[0] ?? null;
+    }
+
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      busyRef.current = false;
+      processedCountRef.current++;
+      onSpeakingEnd?.(item.agentId);
+      // Process next in queue on next tick
+      setTimeout(processNext, 100);
+    };
+
+    console.log('[TTS] Speaking as', item.agentId, '-', item.text.substring(0, 40));
+    onSpeakingStart?.(item.agentId);
+
+    utterance.onend = () => {
+      console.log('[TTS] Finished', item.agentId);
+      finish();
+    };
+    utterance.onerror = () => finish();
+
+    synth.speak(utterance);
+
+    // Safety: if nothing happens in estimated time + 3s, force advance
+    const timeoutMs = Math.max(3000, (item.text.length * 80) / config.rate) + 3000;
+    setTimeout(() => {
+      if (!done) {
+        console.warn('[TTS] Timeout for', item.agentId);
+        synth.cancel();
+        finish();
+      }
+    }, timeoutMs);
+  }, [queue, onSpeakingStart, onSpeakingEnd]);
+
+  // Trigger processing when queue grows
   useEffect(() => {
-    if (
-      queue.length > 0 &&
-      currentIndex >= queue.length &&
-      lastQueueLenRef.current < queue.length
-    ) {
+    if (queue.length > processedCountRef.current && !busyRef.current) {
+      processNext();
+    }
+  }, [queue.length, processNext]);
+
+  // Notify when all items are processed
+  useEffect(() => {
+    if (queue.length > 0 && processedCountRef.current >= queue.length && !busyRef.current) {
       onQueueEmpty?.();
     }
-    lastQueueLenRef.current = queue.length;
-  }, [currentIndex, queue.length, onQueueEmpty]);
+  });
 
   return null;
 }
