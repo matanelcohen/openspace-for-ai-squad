@@ -10,6 +10,7 @@ import type { ActivityEventType, AgentStatus, TaskPriority, TaskStatus } from '.
 // ---------------------------------------------------------------------------
 
 export const TASK_STATUSES = [
+  'pending-approval',
   'backlog',
   'in-progress',
   'in-review',
@@ -18,6 +19,7 @@ export const TASK_STATUSES = [
 ] as const satisfies readonly TaskStatus[];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
+  'pending-approval': 'Pending Approval',
   backlog: 'Backlog',
   'in-progress': 'In Progress',
   'in-review': 'In Review',

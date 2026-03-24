@@ -22,6 +22,7 @@ import {
   updateTask,
   type UpdateTaskInput,
 } from '../services/squad-writer/task-writer.js';
+import { breakdownTask } from '../services/task-breakdown/index.js';
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -57,16 +58,16 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       if (!isValidStatus(status)) {
         return reply.status(400).send({ error: `Invalid status filter: ${status}` });
       }
-      tasks = tasks.filter(t => t.status === status);
+      tasks = tasks.filter((t) => t.status === status);
     }
     if (assignee) {
-      tasks = tasks.filter(t => t.assignee === assignee);
+      tasks = tasks.filter((t) => t.assignee === assignee);
     }
     if (priority) {
       if (!isValidPriority(priority)) {
         return reply.status(400).send({ error: `Invalid priority filter: ${priority}` });
       }
-      tasks = tasks.filter(t => t.priority === priority);
+      tasks = tasks.filter((t) => t.priority === priority);
     }
 
     return reply.send(tasks);
@@ -90,7 +91,9 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'Request body is required' });
     }
     if (typeof body.title !== 'string' || body.title.trim() === '') {
-      return reply.status(400).send({ error: 'Field "title" is required and must be a non-empty string' });
+      return reply
+        .status(400)
+        .send({ error: 'Field "title" is required and must be a non-empty string' });
     }
     if (body.status !== undefined && !isValidStatus(body.status)) {
       return reply.status(400).send({ error: `Invalid status: ${body.status}` });
@@ -100,6 +103,32 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
     }
 
     const task = await createTask(tasksDir(), body);
+
+    // Auto-breakdown: if task is backlog, generate sub-tasks in background
+    if (task.status === 'backlog' && app.voiceServices?.aiProvider) {
+      breakdownTask(task, app.voiceServices.aiProvider)
+        .then(async (result) => {
+          for (const sub of result.subtasks) {
+            const subTask = await createTask(tasksDir(), {
+              title: sub.title,
+              description: sub.description,
+              assignee: sub.assignee,
+              priority: sub.priority,
+              labels: [...sub.labels, `parent:${task.id}`],
+              status: 'pending-approval',
+            });
+            app.wsManager?.broadcast({
+              type: 'task:created',
+              payload: subTask as unknown as Record<string, unknown>,
+              timestamp: new Date().toISOString(),
+            });
+          }
+        })
+        .catch((err: unknown) => {
+          console.error('[TaskBreakdown] Failed:', err);
+        });
+    }
+
     return reply.status(201).send(task);
   });
 
@@ -151,7 +180,9 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
     async (request, reply) => {
       const { sortIndex } = request.body ?? {};
       if (typeof sortIndex !== 'number' || !Number.isFinite(sortIndex)) {
-        return reply.status(400).send({ error: 'Field "sortIndex" is required and must be a number' });
+        return reply
+          .status(400)
+          .send({ error: 'Field "sortIndex" is required and must be a number' });
       }
 
       try {
@@ -162,6 +193,34 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  // PATCH /api/tasks/:id/approve — move pending-approval → backlog
+  app.patch<{ Params: { id: string } }>('/tasks/:id/approve', async (request, reply) => {
+    try {
+      const existing = await getTask(tasksDir(), request.params.id);
+      if (existing.status !== 'pending-approval') {
+        return reply.status(400).send({ error: 'Task is not pending approval' });
+      }
+      const task = await updateTask(tasksDir(), request.params.id, { status: 'backlog' });
+      return reply.send(task);
+    } catch {
+      return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
+    }
+  });
+
+  // PATCH /api/tasks/:id/reject — delete a pending-approval task
+  app.patch<{ Params: { id: string } }>('/tasks/:id/reject', async (request, reply) => {
+    try {
+      const existing = await getTask(tasksDir(), request.params.id);
+      if (existing.status !== 'pending-approval') {
+        return reply.status(400).send({ error: 'Task is not pending approval' });
+      }
+      await deleteTask(tasksDir(), request.params.id);
+      return reply.status(204).send();
+    } catch {
+      return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
+    }
+  });
 
   // DELETE /api/tasks/:id
   app.delete<{ Params: { id: string } }>('/tasks/:id', async (request, reply) => {

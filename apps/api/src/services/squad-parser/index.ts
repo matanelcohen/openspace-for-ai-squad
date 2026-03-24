@@ -52,7 +52,7 @@ export class SquadParser {
   /** Parse a single agent's full detail (charter + history). */
   async getAgent(id: string): Promise<AgentDetail | null> {
     const agents = await this.getAgents();
-    const agent = agents.find(a => a.id === id);
+    const agent = agents.find((a) => a.id === id);
     if (!agent) return null;
 
     return parseAgentCharter(this.squadDir, agent);
@@ -71,7 +71,7 @@ export class SquadParser {
   /** Parse all tasks from .squad/tasks/. */
   async getTasks(): Promise<Task[]> {
     const { tasks } = await parseAllTasks(this.getTasksDir());
-    return tasks.map(t => t.task);
+    return tasks.map((t) => t.task);
   }
 
   /** Parse config.json and compose into SquadConfig. */
@@ -94,11 +94,12 @@ export class SquadParser {
     ]);
 
     const byStatus: Record<TaskStatus, number> = {
-      'backlog': 0,
+      'pending-approval': 0,
+      backlog: 0,
       'in-progress': 0,
       'in-review': 0,
-      'done': 0,
-      'blocked': 0,
+      done: 0,
+      blocked: 0,
     };
     for (const task of tasks) {
       byStatus[task.status]++;
@@ -118,11 +119,7 @@ export class SquadParser {
 }
 
 /** Compose a raw config.json + agents into the full SquadConfig type. */
-function composeSquadConfig(
-  raw: RawSquadConfig,
-  agents: Agent[],
-  squadDir: string,
-): SquadConfig {
+function composeSquadConfig(raw: RawSquadConfig, agents: Agent[], squadDir: string): SquadConfig {
   return {
     id: 'default',
     name: 'Squad',
@@ -133,7 +130,12 @@ function composeSquadConfig(
 }
 
 // Re-export individual parsers for direct use
-export { parseAgentCharter, parseAgentHistory, parseCharterContent, parseHistoryContent } from './agent-parser.js';
+export {
+  parseAgentCharter,
+  parseAgentHistory,
+  parseCharterContent,
+  parseHistoryContent,
+} from './agent-parser.js';
 export { parseConfigContent, parseConfigFile, type RawSquadConfig } from './config-parser.js';
 export { parseDecisionsContent, parseDecisionsFile } from './decision-parser.js';
 export { parseAllTasks, parseTaskFile } from './task-parser.js';

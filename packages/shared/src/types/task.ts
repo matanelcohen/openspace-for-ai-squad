@@ -3,7 +3,13 @@
  */
 
 /** Kanban column statuses matching the PRD task board. */
-export type TaskStatus = 'backlog' | 'in-progress' | 'in-review' | 'done' | 'blocked';
+export type TaskStatus =
+  | 'pending-approval'
+  | 'backlog'
+  | 'in-progress'
+  | 'in-review'
+  | 'done'
+  | 'blocked';
 
 /** Priority levels (P0 = highest urgency). */
 export type TaskPriority = 'P0' | 'P1' | 'P2' | 'P3';
