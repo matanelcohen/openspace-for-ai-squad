@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-} from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef } from 'react';
 
 import type { WsEnvelope, WsEventType } from '@/hooks/use-websocket';
 import { useWebSocket } from '@/hooks/use-websocket';
@@ -24,35 +18,36 @@ interface WsContextValue {
 const WsContext = createContext<WsContextValue | null>(null);
 
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
-  const { lastEvent, isConnected, send, subscribe } = useWebSocket();
+  const { lastEvent, isConnected, send, subscribe, onEventRef } = useWebSocket();
   const listenersRef = useRef<Map<string, Set<WsEventCallback>>>(new Map());
 
-  const addListener = useCallback(
-    (type: string, cb: WsEventCallback): (() => void) => {
-      if (!listenersRef.current.has(type)) {
-        listenersRef.current.set(type, new Set());
-      }
-      listenersRef.current.get(type)!.add(cb);
-
-      return () => {
-        listenersRef.current.get(type)?.delete(cb);
-      };
-    },
-    [],
-  );
-
-  useEffect(() => {
-    if (!lastEvent) return;
-    const callbacks = listenersRef.current.get(lastEvent.type);
-    if (callbacks) {
-      callbacks.forEach((cb) => cb(lastEvent));
+  const addListener = useCallback((type: string, cb: WsEventCallback): (() => void) => {
+    if (!listenersRef.current.has(type)) {
+      listenersRef.current.set(type, new Set());
     }
-  }, [lastEvent]);
+    listenersRef.current.get(type)!.add(cb);
+
+    return () => {
+      listenersRef.current.get(type)?.delete(cb);
+    };
+  }, []);
+
+  // Dispatch events directly from the WebSocket onmessage handler
+  // to avoid React state batching dropping rapid events
+  useEffect(() => {
+    onEventRef.current = (envelope: WsEnvelope) => {
+      const callbacks = listenersRef.current.get(envelope.type);
+      if (callbacks) {
+        callbacks.forEach((cb) => cb(envelope));
+      }
+    };
+    return () => {
+      onEventRef.current = null;
+    };
+  }, [onEventRef]);
 
   return (
-    <WsContext.Provider
-      value={{ lastEvent, isConnected, send, subscribe, addListener }}
-    >
+    <WsContext.Provider value={{ lastEvent, isConnected, send, subscribe, addListener }}>
       {children}
     </WsContext.Provider>
   );

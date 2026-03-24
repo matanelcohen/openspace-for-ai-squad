@@ -8,6 +8,7 @@
 
 import websocketPlugin from '@fastify/websocket';
 import type { FastifyPluginAsync } from 'fastify';
+import fp from 'fastify-plugin';
 
 import { WebSocketManager } from './manager.js';
 
@@ -16,7 +17,7 @@ export interface WebSocketPluginOptions {
   manager?: WebSocketManager;
 }
 
-const wsPlugin: FastifyPluginAsync<WebSocketPluginOptions> = async (app, opts) => {
+const wsPluginImpl: FastifyPluginAsync<WebSocketPluginOptions> = async (app, opts) => {
   const manager = opts.manager ?? new WebSocketManager();
 
   // Register @fastify/websocket
@@ -39,7 +40,7 @@ const wsPlugin: FastifyPluginAsync<WebSocketPluginOptions> = async (app, opts) =
   });
 };
 
-export default wsPlugin;
+export default fp(wsPluginImpl);
 
 // ── Fastify type augmentation ────────────────────────────────────
 

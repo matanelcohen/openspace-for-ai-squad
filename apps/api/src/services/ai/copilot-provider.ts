@@ -13,6 +13,8 @@
  *   COPILOT_MODEL      -- Model to use (default: "gpt-4o")
  */
 
+import { approveAll, CopilotClient } from '@github/copilot-sdk';
+
 import type { LLMIntentParser, ParsedIntent } from '../voice/actions.js';
 import type { AgentRoutingProfile, LLMRouter } from '../voice/router.js';
 
@@ -25,6 +27,8 @@ export interface CopilotProviderConfig {
   model?: string;
   /** Path to the Copilot CLI executable. */
   cliPath?: string;
+  /** Working directory for agent tool operations. Defaults to process.cwd(). */
+  workingDirectory?: string;
 }
 
 export interface ChatCompletionMessage {
@@ -98,8 +102,6 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     if (this.initialized) return;
 
     try {
-      // Dynamic import so the module compiles even if the SDK isn't installed
-      const sdk = await import('@github/copilot-sdk');
       const token =
         this.config.githubToken ??
         process.env.COPILOT_GITHUB_TOKEN ??
@@ -113,7 +115,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       if (token) clientOpts.githubToken = token;
       if (this.config.cliPath) clientOpts.cliPath = this.config.cliPath;
 
-      this.client = new sdk.CopilotClient(clientOpts) as unknown as CopilotClientLike;
+      this.client = new CopilotClient(clientOpts) as unknown as CopilotClientLike;
       await this.client.start();
       this.initialized = true;
     } catch (err) {
@@ -153,7 +155,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
 
     const sessionConfig: Record<string, unknown> = {
       model,
-      onPermissionRequest: () => ({ allow: true }),
+      onPermissionRequest: approveAll,
+      onUserInputRequest: () => ({ response: '' }),
+      workingDirectory: this.config.workingDirectory ?? process.cwd(),
     };
 
     if (options.systemPrompt) {
@@ -439,7 +443,7 @@ export async function createAIProvider(
   type?: AIProviderType,
   config?: CopilotProviderConfig,
 ): Promise<AIProvider> {
-  const providerType = type ?? (process.env.AI_PROVIDER as AIProviderType) ?? 'mock';
+  const providerType = type ?? (process.env.AI_PROVIDER as AIProviderType) ?? 'copilot-sdk';
 
   if (providerType === 'copilot-sdk') {
     try {

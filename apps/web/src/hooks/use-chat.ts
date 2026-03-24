@@ -1,6 +1,9 @@
 import type { ChatMessage } from '@openspace/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useState } from 'react';
 
+import { useWsEvent } from '@/components/providers/websocket-provider';
+import type { WsEnvelope } from '@/hooks/use-websocket';
 import { api } from '@/lib/api-client';
 
 /** Shape returned by GET /api/chat/messages (paginated envelope). */
@@ -12,6 +15,25 @@ interface ChatMessagesResponse {
 }
 
 export function useChatMessages(recipient: string) {
+  const queryClient = useQueryClient();
+
+  // Listen for real-time chat messages via WebSocket
+  useWsEvent('chat:message', (envelope: WsEnvelope) => {
+    const msg = envelope.payload as unknown as ChatMessage;
+    if (!msg?.id) return;
+
+    // Add the message to the cache if it belongs to this channel
+    const isRelevant = msg.sender === recipient || msg.recipient === recipient;
+
+    if (isRelevant) {
+      queryClient.setQueryData<ChatMessage[]>(['chat', recipient], (old = []) => {
+        // Avoid duplicates (from optimistic update or refetch)
+        if (old.some((m) => m.id === msg.id)) return old;
+        return [...old, msg];
+      });
+    }
+  });
+
   return useQuery<ChatMessage[]>({
     queryKey: ['chat', recipient],
     queryFn: async () => {
@@ -65,4 +87,33 @@ export function useSendMessage() {
       }
     },
   });
+}
+
+/** Track which agents are currently typing via WebSocket events. */
+export function useTypingIndicator() {
+  const [typingAgents, setTypingAgents] = useState<Map<string, string>>(new Map());
+
+  useWsEvent(
+    'chat:typing',
+    useCallback((envelope: WsEnvelope) => {
+      const { agentId, agentName, isTyping } = envelope.payload as {
+        agentId: string;
+        agentName?: string;
+        isTyping: boolean;
+      };
+      if (!agentId) return;
+
+      setTypingAgents((prev) => {
+        const next = new Map(prev);
+        if (isTyping) {
+          next.set(agentId, agentName ?? agentId);
+        } else {
+          next.delete(agentId);
+        }
+        return next;
+      });
+    }, []),
+  );
+
+  return typingAgents;
 }

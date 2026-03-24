@@ -17,6 +17,7 @@ import { CHAT_TEAM_RECIPIENT } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 
+import type { AIProvider } from '../ai/copilot-provider.js';
 import type { WebSocketManager, WsEnvelope } from '../websocket/index.js';
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -43,14 +44,18 @@ export class ChatService {
   private readonly db: Database.Database | null;
   private readonly sessionsDir: string | null;
   private wsManager: WebSocketManager | null = null;
+  private aiProvider: AIProvider | null = null;
 
   constructor(opts: {
     db?: Database.Database | null;
     /** .squad/sessions/ directory for markdown logs. */
     sessionsDir?: string | null;
+    /** AI provider for generating agent responses. */
+    aiProvider?: AIProvider | null;
   }) {
     this.db = opts.db ?? null;
     this.sessionsDir = opts.sessionsDir ?? null;
+    this.aiProvider = opts.aiProvider ?? null;
 
     if (this.sessionsDir && !existsSync(this.sessionsDir)) {
       mkdirSync(this.sessionsDir, { recursive: true });
@@ -60,6 +65,11 @@ export class ChatService {
   /** Connect to a WebSocket manager for broadcasting chat events. */
   setWebSocketManager(wsManager: WebSocketManager): void {
     this.wsManager = wsManager;
+  }
+
+  /** Set the AI provider for generating agent responses. */
+  setAIProvider(provider: AIProvider): void {
+    this.aiProvider = provider;
   }
 
   // ── Send message ────────────────────────────────────────────
@@ -85,10 +95,19 @@ export class ChatService {
     // Broadcast via WebSocket
     this.emitChatMessage(message);
 
-    // If team message → coordinator echo (stub for now)
+    // Route to agents — team messages go through routing, direct messages go to the specific agent
     if (input.recipient === CHAT_TEAM_RECIPIENT) {
-      const echo = await this.coordinatorEcho(message);
-      return echo; // return the echo as the "response" 
+      this.coordinatorEcho(message).catch((err) => {
+        console.error('[Chat] coordinatorEcho failed:', err);
+      });
+    } else {
+      // Direct message to a specific agent
+      const agent = ChatService.AGENTS.find((a) => a.id === input.recipient);
+      if (agent && this.aiProvider) {
+        this.handleDirectMessage(agent, message).catch((err) => {
+          console.error(`[Chat] Direct message to ${agent.name} failed:`, err);
+        });
+      }
     }
 
     return message;
@@ -127,7 +146,7 @@ export class ChatService {
     const countSql = `SELECT COUNT(*) as total FROM chat_messages ${whereClause}`;
     const totalRow = this.db.prepare(countSql).get(params) as { total: number };
 
-    const querySql = `SELECT * FROM chat_messages ${whereClause} ORDER BY timestamp DESC LIMIT @limit OFFSET @offset`;
+    const querySql = `SELECT * FROM chat_messages ${whereClause} ORDER BY timestamp ASC LIMIT @limit OFFSET @offset`;
     const rows = this.db.prepare(querySql).all({ ...params, limit, offset }) as Array<{
       id: string;
       sender: string;
@@ -153,14 +172,16 @@ export class ChatService {
   getMessage(id: string): ChatMessage | null {
     if (!this.db) return null;
 
-    const row = this.db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(id) as {
-      id: string;
-      sender: string;
-      recipient: string;
-      content: string;
-      timestamp: string;
-      thread_id: string | null;
-    } | undefined;
+    const row = this.db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(id) as
+      | {
+          id: string;
+          sender: string;
+          recipient: string;
+          content: string;
+          timestamp: string;
+          thread_id: string | null;
+        }
+      | undefined;
 
     if (!row) return null;
 
@@ -229,19 +250,98 @@ export class ChatService {
     this.wsManager.broadcast(envelope);
   }
 
-  // ── Private: Coordinator stub ─────────────────────────────────
+  private emitTyping(agentId: string, agentName: string): void {
+    if (!this.wsManager) return;
+
+    this.wsManager.broadcast({
+      type: 'chat:typing',
+      payload: { agentId, agentName, isTyping: true },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private emitTypingStop(agentId: string): void {
+    if (!this.wsManager) return;
+
+    this.wsManager.broadcast({
+      type: 'chat:typing',
+      payload: { agentId, isTyping: false },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  // ── Private: Agent responses ──────────────────────────────────
+
+  /** Agent definitions for routing and personality. */
+  private static readonly AGENTS = [
+    {
+      id: 'leela',
+      name: 'Leela',
+      role: 'Lead',
+      personality: 'Strategic, decisive, direct. Keeps the team focused on what matters.',
+    },
+    {
+      id: 'fry',
+      name: 'Fry',
+      role: 'Frontend Dev',
+      personality: 'Enthusiastic, creative, friendly. Loves building beautiful UIs.',
+    },
+    {
+      id: 'bender',
+      name: 'Bender',
+      role: 'Backend Dev',
+      personality: 'Blunt, efficient, matter-of-fact. Gets things done with minimal fuss.',
+    },
+    {
+      id: 'zoidberg',
+      name: 'Zoidberg',
+      role: 'Tester',
+      personality: 'Methodical, thorough, precise. Finds edge cases others miss.',
+    },
+  ] as const;
 
   /**
-   * Simple coordinator echo: when a team message arrives, echo it back
-   * with a coordinator/agent response. In the future this will route to
-   * actual AI agents via copilot-sdk.
+   * Route a team message to relevant agents. Each agent responds
+   * individually as a separate chat message sent via WebSocket.
    */
   private async coordinatorEcho(original: ChatMessage): Promise<ChatMessage> {
+    if (this.aiProvider) {
+      try {
+        // First, determine which agents should respond
+        const agentIds = await this.routeToAgents(original.content);
+        const respondingAgents = ChatService.AGENTS.filter((a) => agentIds.includes(a.id));
+
+        // Generate responses individually — don't let one failure kill all
+        const responses: ChatMessage[] = [];
+        for (const agent of respondingAgents) {
+          try {
+            this.emitTyping(agent.id, agent.name);
+            const response = await this.generateAgentResponse(agent, original);
+            this.emitTypingStop(agent.id);
+            this.persistToSqlite(response);
+            await this.persistToMarkdown(response);
+            this.emitChatMessage(response);
+            responses.push(response);
+          } catch (err) {
+            this.emitTypingStop(agent.id);
+            console.error(`[Chat] ${agent.name} failed to respond:`, err);
+          }
+        }
+
+        if (responses.length > 0) {
+          return responses[responses.length - 1]!;
+        }
+      } catch (err) {
+        console.error('[Chat] Agent routing failed:', err);
+      }
+    }
+
+    // Fallback: simple echo from Leela
     const echo: ChatMessage = {
       id: nanoid(12),
-      sender: 'coordinator',
-      recipient: original.sender,
-      content: `[Coordinator] Received your message: "${original.content}". Routing to the team…`,
+      sender: 'leela',
+      recipient: CHAT_TEAM_RECIPIENT,
+      content: 'The squad is here but the AI provider is not connected. Check the server logs.',
       timestamp: new Date().toISOString(),
       threadId: original.threadId,
     };
@@ -251,5 +351,105 @@ export class ChatService {
     this.emitChatMessage(echo);
 
     return echo;
+  }
+
+  /** Determine which agents should respond. Direct name match first, then LLM routing. */
+  private async routeToAgents(content: string): Promise<string[]> {
+    const lower = content.toLowerCase();
+
+    // "team", "everyone", "each one", "all of you", "squad" → all agents
+    if (/\b(team|everyone|each one|all of you|all agents|squad|everybody)\b/.test(lower)) {
+      return ChatService.AGENTS.map((a) => a.id);
+    }
+
+    // Direct name match — if the user mentions an agent by name, route to them
+    const mentioned = ChatService.AGENTS.filter(
+      (a) => lower.includes(a.name.toLowerCase()) || lower.includes(a.id),
+    );
+    if (mentioned.length > 0) {
+      return mentioned.map((a) => a.id);
+    }
+
+    // No name mentioned — try LLM routing, fallback to all agents
+    if (!this.aiProvider) return ChatService.AGENTS.map((a) => a.id);
+
+    try {
+      const profiles = ChatService.AGENTS.map((a) => ({
+        id: a.id,
+        name: a.name,
+        role: a.role,
+        keywords: [a.role.toLowerCase(), a.id],
+      }));
+
+      const result = await this.aiProvider.route(content, profiles, []);
+      return result.agentIds.length > 0 ? result.agentIds : ChatService.AGENTS.map((a) => a.id);
+    } catch {
+      return ChatService.AGENTS.map((a) => a.id);
+    }
+  }
+
+  /** Generate a single agent's response with their personality. */
+  private async generateAgentResponse(
+    agent: { id: string; name: string; role: string; personality: string },
+    original: ChatMessage,
+  ): Promise<ChatMessage> {
+    const result = await this.aiProvider!.chatCompletion({
+      systemPrompt:
+        `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
+        `Personality: ${agent.personality} ` +
+        `Respond in character as ${agent.name}. Keep responses concise (2-4 sentences). ` +
+        `IMPORTANT: Only speak for yourself. Never speak on behalf of other agents or summarize what they did. ` +
+        `Other agents will respond separately in their own messages. ` +
+        `Never prefix your response with your name or any other agent's name — the UI handles that.`,
+      messages: [{ role: 'user', content: original.content }],
+    });
+
+    return {
+      id: nanoid(12),
+      sender: agent.id,
+      recipient: CHAT_TEAM_RECIPIENT,
+      content: result.content,
+      timestamp: new Date().toISOString(),
+      threadId: original.threadId,
+    };
+  }
+
+  /** Handle a direct message to a specific agent. */
+  private async handleDirectMessage(
+    agent: { id: string; name: string; role: string; personality: string },
+    original: ChatMessage,
+  ): Promise<void> {
+    try {
+      this.emitTyping(agent.id, agent.name);
+
+      const result = await this.aiProvider!.chatCompletion({
+        systemPrompt:
+          `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
+          `Personality: ${agent.personality} ` +
+          `The user is talking directly to you. Respond in character as ${agent.name}. ` +
+          `You can and should take action on requests — create files, write code, run commands. ` +
+          `If the user asks you to do something, do it. Don't just talk about it. ` +
+          `Never prefix your response with your name — the UI handles that.`,
+        messages: [{ role: 'user', content: original.content }],
+      });
+
+      this.emitTypingStop(agent.id);
+
+      const response: ChatMessage = {
+        id: nanoid(12),
+        sender: agent.id,
+        recipient: agent.id,
+        content: result.content,
+        timestamp: new Date().toISOString(),
+        threadId: original.threadId,
+      };
+
+      this.persistToSqlite(response);
+      await this.persistToMarkdown(response);
+      this.emitChatMessage(response);
+    } catch (err) {
+      this.emitTypingStop(agent.id);
+      console.error(`[Chat] ${agent.name} direct message failed:`, err);
+    }
   }
 }

@@ -9,7 +9,7 @@ import { MessageInput } from '@/components/chat/message-input';
 import { MessageList } from '@/components/chat/message-list';
 import { Button } from '@/components/ui/button';
 import { useAgents } from '@/hooks/use-agents';
-import { useChatMessages, useSendMessage } from '@/hooks/use-chat';
+import { useChatMessages, useSendMessage, useTypingIndicator } from '@/hooks/use-chat';
 
 export function ChatClient() {
   const [selectedChannel, setSelectedChannel] = useState<string>(CHAT_TEAM_RECIPIENT);
@@ -17,6 +17,7 @@ export function ChatClient() {
   const { data: agents = [] } = useAgents();
   const { data: messages = [], isLoading, error: fetchError } = useChatMessages(selectedChannel);
   const sendMessage = useSendMessage();
+  const typingAgents = useTypingIndicator();
 
   const channelLabel =
     selectedChannel === CHAT_TEAM_RECIPIENT
@@ -85,7 +86,7 @@ export function ChatClient() {
         )}
 
         {/* Messages */}
-        <MessageList messages={messages} isLoading={isLoading} />
+        <MessageList messages={messages} isLoading={isLoading} typingAgents={typingAgents} />
 
         {/* Input */}
         <MessageInput onSend={handleSend} disabled={sendMessage.isPending} />

@@ -14,6 +14,7 @@ export const WS_EVENT_TYPES = [
   'decision:added',
   'activity:new',
   'chat:message',
+  'chat:typing',
 ] as const;
 
 export type WsEventType = (typeof WS_EVENT_TYPES)[number];

@@ -8,7 +8,8 @@ export type WsEventType =
   | 'task:created'
   | 'decision:added'
   | 'activity:new'
-  | 'chat:message';
+  | 'chat:message'
+  | 'chat:typing';
 
 export interface WsEnvelope {
   type: string;
@@ -32,6 +33,7 @@ export function useWebSocket(url?: string) {
   const reconnectDelay = useRef(INITIAL_RECONNECT_DELAY);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
+  const onEventRef = useRef<((envelope: WsEnvelope) => void) | null>(null);
 
   const [lastEvent, setLastEvent] = useState<WsEnvelope | null>(null);
   const [isConnected, setIsConnected] = useState(false);
@@ -74,6 +76,8 @@ export function useWebSocket(url?: string) {
       try {
         const parsed = JSON.parse(raw) as WsEnvelope;
         setLastEvent(parsed);
+        // Dispatch immediately via callback ref so rapid events aren't lost to React batching
+        onEventRef.current?.(parsed);
       } catch {
         // ignore non-JSON messages (e.g. welcome)
       }
@@ -84,10 +88,7 @@ export function useWebSocket(url?: string) {
       setIsConnected(false);
 
       const delay = reconnectDelay.current;
-      reconnectDelay.current = Math.min(
-        delay * RECONNECT_FACTOR,
-        MAX_RECONNECT_DELAY,
-      );
+      reconnectDelay.current = Math.min(delay * RECONNECT_FACTOR, MAX_RECONNECT_DELAY);
       reconnectTimer.current = setTimeout(connect, delay);
     };
 
@@ -110,5 +111,5 @@ export function useWebSocket(url?: string) {
     };
   }, [connect]);
 
-  return { lastEvent, isConnected, send, subscribe };
+  return { lastEvent, isConnected, send, subscribe, onEventRef };
 }

@@ -4,7 +4,6 @@ import cors from '@fastify/cors';
 import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
-import { registerAuth } from './middleware/auth.js';
 import activityRoute from './routes/activity.js';
 import agentsRoute from './routes/agents.js';
 import chatRoute from './routes/chat.js';
@@ -13,8 +12,8 @@ import healthRoute from './routes/health.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import { ActivityFeed } from './services/activity/index.js';
-import type { AIProvider } from './services/ai/index.js';
-import { createAIProvider } from './services/ai/index.js';
+import type { AIProvider } from './services/ai/copilot-provider.js';
+import { createAIProvider } from './services/ai/copilot-provider.js';
 import { ChatService } from './services/chat/index.js';
 import { openDatabase } from './services/db/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
@@ -41,7 +40,7 @@ export function buildApp(opts: AppOptions = {}) {
   });
 
   // Initialize SQLite database if not provided
-  const squadDir = opts.squadDir ?? resolve(process.cwd(), '.squad');
+  const squadDir = opts.squadDir ?? resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
   const db = opts.db ?? openDatabase({ squadDir });
 
   // Decorate with a SquadParser instance
@@ -73,15 +72,14 @@ export function buildApp(opts: AppOptions = {}) {
     activityFeed.setWebSocketManager(app.wsManager);
     chatService.setWebSocketManager(app.wsManager);
 
-    // Initialize AI provider (createAIProvider handles fallback to mock internally)
+    // Initialize AI provider and connect to chat service
     if (!opts.aiProvider) {
-      const provider = await createAIProvider();
+      const provider = await createAIProvider(undefined, {
+        workingDirectory: resolve(squadDir, '..'),
+      });
       chatService.setAIProvider(provider);
     }
   });
-
-  // Auth middleware (runs before all routes)
-  registerAuth(app);
 
   // Routes
   app.register(healthRoute);
@@ -93,10 +91,10 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(chatRoute, { prefix: '/api' });
 
   app.setErrorHandler((error, _request, reply) => {
-    const statusCode = error.statusCode ?? 500;
+    const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
     const code = statusCode >= 500 ? 'INTERNAL_ERROR' : 'VALIDATION_ERROR';
     reply.status(statusCode).send({
-      error: error.message || 'Internal Server Error',
+      error: (error as Error).message || 'Internal Server Error',
       code,
     });
   });
