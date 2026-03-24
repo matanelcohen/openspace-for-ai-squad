@@ -194,86 +194,88 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     shouldListenRef.current = true;
     console.log('[Voice] Starting continuous listening...');
 
-    const startListening = () => {
-      if (!shouldListenRef.current) return;
+    const recognition = new Recognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognition.maxAlternatives = 1;
 
-      const recognition = new Recognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = true;
-      recognition.continuous = true;
-      recognition.maxAlternatives = 1;
+    recognition.onspeechstart = () => {
+      console.log('[Voice] Speech detected');
+      setIsSpeaking(true);
+    };
 
-      recognition.onspeechstart = () => {
-        console.log('[Voice] Speech detected');
-        setIsSpeaking(true);
-      };
+    recognition.onspeechend = () => {
+      console.log('[Voice] Speech ended');
+      setIsSpeaking(false);
+      setInterimTranscript('');
+    };
 
-      recognition.onspeechend = () => {
-        console.log('[Voice] Speech ended');
-        setIsSpeaking(false);
-        setInterimTranscript('');
-      };
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (!result?.[0]) continue;
 
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const result = event.results[i];
-          if (!result?.[0]) continue;
-
-          if (result.isFinal) {
-            const transcript = result[0].transcript.trim();
-            setIsSpeaking(false);
-            setInterimTranscript('');
-            if (transcript) {
-              console.log('[Voice] Heard:', transcript);
-              const sid = sessionRef.current?.id;
-              if (sid) {
-                api
-                  .post('/api/voice/speak', { sessionId: sid, text: transcript })
-                  .catch((err: unknown) => console.error('Voice speak failed:', err));
-              } else {
-                console.warn('[Voice] No active session to send transcript to');
-              }
+        if (result.isFinal) {
+          const transcript = result[0].transcript.trim();
+          setIsSpeaking(false);
+          setInterimTranscript('');
+          if (transcript) {
+            console.log('[Voice] Heard:', transcript);
+            const sid = sessionRef.current?.id;
+            if (sid) {
+              api
+                .post('/api/voice/speak', { sessionId: sid, text: transcript })
+                .catch((err: unknown) => console.error('Voice speak failed:', err));
+            } else {
+              console.warn('[Voice] No active session to send transcript to');
             }
-          } else {
-            setIsSpeaking(true);
-            setInterimTranscript(result[0].transcript);
           }
-        }
-      };
-
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.warn('[Voice] Recognition error:', event.error);
-        if (event.error === 'no-speech' || event.error === 'aborted') {
-          return;
-        }
-        if (event.error === 'not-allowed') {
-          shouldListenRef.current = false;
-          setIsRecording(false);
-        }
-      };
-
-      recognition.onend = () => {
-        setIsSpeaking(false);
-        setInterimTranscript('');
-        if (shouldListenRef.current) {
-          setTimeout(startListening, 300);
         } else {
-          setIsRecording(false);
+          setIsSpeaking(true);
+          setInterimTranscript(result[0].transcript);
         }
-      };
+      }
+    };
 
-      recognitionRef.current = recognition;
-      try {
-        recognition.start();
-        setIsRecording(true);
-        console.log('[Voice] Recognition started');
-      } catch (err) {
-        console.error('[Voice] Failed to start:', err);
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      console.warn('[Voice] Recognition error:', event.error);
+      if (event.error === 'not-allowed' || event.error === 'service-not-available') {
+        shouldListenRef.current = false;
+        setIsRecording(false);
+      }
+      // For no-speech/aborted, onend will fire and we restart there
+    };
+
+    recognition.onend = () => {
+      console.log('[Voice] Recognition ended, shouldListen:', shouldListenRef.current);
+      setIsSpeaking(false);
+      setInterimTranscript('');
+      if (shouldListenRef.current) {
+        // Restart the same instance after a pause
+        setTimeout(() => {
+          if (!shouldListenRef.current) return;
+          try {
+            recognition.start();
+            console.log('[Voice] Recognition restarted');
+          } catch {
+            // Already started or other error — ignore
+          }
+        }, 1000);
+      } else {
         setIsRecording(false);
       }
     };
 
-    startListening();
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setIsRecording(true);
+      console.log('[Voice] Recognition started');
+    } catch (err) {
+      console.error('[Voice] Failed to start:', err);
+      setIsRecording(false);
+    }
   }, []);
 
   const stopRecording = useCallback(() => {
