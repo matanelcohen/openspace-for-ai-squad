@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useSpeech } from 'react-text-to-speech';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 interface SpeechItem {
   id: string;
@@ -10,13 +9,9 @@ interface SpeechItem {
 }
 
 interface VoiceSpeakerProps {
-  /** Queue of speech items to play. New items are appended. */
   queue: SpeechItem[];
-  /** Called when an agent starts speaking. */
   onSpeakingStart?: (agentId: string) => void;
-  /** Called when an agent finishes speaking. */
   onSpeakingEnd?: (agentId: string) => void;
-  /** Called when the queue is fully drained and all speech is done. */
   onQueueEmpty?: () => void;
 }
 
@@ -29,8 +24,8 @@ const AGENT_VOICE_PITCH: Record<string, { pitch: number; rate: number }> = {
 };
 
 /**
- * Renders nothing visible — plays TTS for each item in the queue sequentially.
- * Uses react-text-to-speech for reliable onStart/onEnd callbacks.
+ * Invisible component that plays TTS for queued speech items.
+ * Uses native SpeechSynthesis directly for maximum reliability.
  */
 export function VoiceSpeaker({
   queue,
@@ -39,49 +34,73 @@ export function VoiceSpeaker({
   onQueueEmpty,
 }: VoiceSpeakerProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const processedRef = useRef(0);
+  const isSpeakingRef = useRef(false);
+  const lastQueueLenRef = useRef(0);
 
-  const current = queue[currentIndex] as SpeechItem | undefined;
-  const config = current
-    ? (AGENT_VOICE_PITCH[current.agentId] ?? { pitch: 1, rate: 1 })
-    : { pitch: 1, rate: 1 };
+  const speakItem = useCallback(
+    (item: SpeechItem) => {
+      if (typeof window === 'undefined' || !window.speechSynthesis) return;
 
-  const { start, speechStatus } = useSpeech({
-    text: current?.text ?? '',
-    pitch: config.pitch,
-    rate: config.rate,
-    onStart: () => {
-      if (current) {
-        onSpeakingStart?.(current.agentId);
-      }
-    },
-    onEnd: () => {
-      if (current) {
-        onSpeakingEnd?.(current.agentId);
-      }
-      setCurrentIndex((prev) => prev + 1);
-    },
-    onError: () => {
-      if (current) {
-        onSpeakingEnd?.(current.agentId);
-      }
-      setCurrentIndex((prev) => prev + 1);
-    },
-  });
+      // Cancel any in-progress speech
+      window.speechSynthesis.cancel();
 
-  // Auto-start when a new item is ready
+      const utterance = new SpeechSynthesisUtterance(item.text);
+      const config = AGENT_VOICE_PITCH[item.agentId] ?? { pitch: 1, rate: 1 };
+      utterance.pitch = config.pitch;
+      utterance.rate = config.rate;
+
+      // Pick a voice
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length > 0) {
+        const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(item.agentId);
+        utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
+      }
+
+      utterance.onstart = () => {
+        console.log('[TTS] Speaking as', item.agentId);
+        isSpeakingRef.current = true;
+        onSpeakingStart?.(item.agentId);
+      };
+
+      utterance.onend = () => {
+        console.log('[TTS] Finished', item.agentId);
+        isSpeakingRef.current = false;
+        onSpeakingEnd?.(item.agentId);
+        setCurrentIndex((prev) => prev + 1);
+      };
+
+      utterance.onerror = (e) => {
+        console.warn('[TTS] Error:', e.error);
+        isSpeakingRef.current = false;
+        onSpeakingEnd?.(item.agentId);
+        setCurrentIndex((prev) => prev + 1);
+      };
+
+      window.speechSynthesis.speak(utterance);
+    },
+    [onSpeakingStart, onSpeakingEnd],
+  );
+
+  // Process next item when index advances or new items arrive
   useEffect(() => {
-    if (current && currentIndex >= processedRef.current && speechStatus !== 'started') {
-      processedRef.current = currentIndex + 1;
-      start();
+    if (currentIndex < queue.length && !isSpeakingRef.current) {
+      const item = queue[currentIndex];
+      if (item) {
+        speakItem(item);
+      }
     }
-  }, [current, currentIndex, start, speechStatus]);
+  }, [currentIndex, queue, speakItem]);
 
-  // Notify when queue is drained
+  // Detect when queue is fully drained
   useEffect(() => {
-    if (currentIndex > 0 && currentIndex >= queue.length) {
+    if (
+      queue.length > 0 &&
+      currentIndex >= queue.length &&
+      lastQueueLenRef.current < queue.length
+    ) {
       onQueueEmpty?.();
     }
+    lastQueueLenRef.current = queue.length;
   }, [currentIndex, queue.length, onQueueEmpty]);
 
   return null;
