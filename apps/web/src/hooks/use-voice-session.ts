@@ -22,50 +22,28 @@ const AGENT_VOICE_PITCH: Record<string, { pitch: number; rate: number }> = {
   zoidberg: { pitch: 1.3, rate: 1.0 },
 };
 
-/** Speak text using browser SpeechSynthesis with agent-specific voice. Returns a promise that resolves when done. */
+/** Speak text using browser SpeechSynthesis with agent-specific voice. Returns a promise that resolves when audio finishes. */
 function speakAsAgent(agentId: string, text: string): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      resolve();
-      return;
-    }
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    return Promise.resolve();
+  }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    const config = AGENT_VOICE_PITCH[agentId] ?? { pitch: 1, rate: 1 };
-    utterance.pitch = config.pitch;
-    utterance.rate = config.rate;
+  const utterance = new SpeechSynthesisUtterance(text);
+  const config = AGENT_VOICE_PITCH[agentId] ?? { pitch: 1, rate: 1 };
+  utterance.pitch = config.pitch;
+  utterance.rate = config.rate;
 
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length > 0) {
-      const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(agentId);
-      utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
-    }
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length > 0) {
+    const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(agentId);
+    utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
+  }
 
-    // Chrome fires onend before audio finishes — poll speaking state instead
-    utterance.onstart = () => {
-      const poll = setInterval(() => {
-        if (!window.speechSynthesis.speaking) {
-          clearInterval(poll);
-          resolve();
-        }
-      }, 100);
-    };
-    utterance.onerror = () => resolve();
+  window.speechSynthesis.speak(utterance);
 
-    // Chrome pauses synthesis on long text — keep it alive
-    const keepAlive = setInterval(() => {
-      if (window.speechSynthesis.speaking) {
-        window.speechSynthesis.pause();
-        window.speechSynthesis.resume();
-      } else {
-        clearInterval(keepAlive);
-      }
-    }, 10_000);
-
-    utterance.onend = () => clearInterval(keepAlive);
-
-    window.speechSynthesis.speak(utterance);
-  });
+  // Estimate duration: ~80ms per character at rate 1.0, minimum 2s
+  const estimatedMs = Math.max(2000, (text.length * 80) / config.rate);
+  return new Promise((resolve) => setTimeout(resolve, estimatedMs));
 }
 
 export interface UseVoiceSessionReturn {
