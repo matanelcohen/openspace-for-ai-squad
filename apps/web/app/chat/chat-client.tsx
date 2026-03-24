@@ -49,6 +49,10 @@ export function ChatClient() {
     setShowVoiceRoom((prev) => !prev);
   };
 
+  const closeVoiceRoom = () => {
+    setShowVoiceRoom(false);
+  };
+
   return (
     <div className="flex flex-1 overflow-hidden" data-testid="chat-client">
       {/* Sidebar — hidden on mobile when messages panel is shown */}
@@ -110,7 +114,7 @@ export function ChatClient() {
         {/* Voice room panel */}
         {showVoiceRoom && (
           <div className="border-b">
-            <VoiceRoom />
+            <VoiceRoom voice={voice} onClose={closeVoiceRoom} />
           </div>
         )}
 

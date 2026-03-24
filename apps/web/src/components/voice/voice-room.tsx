@@ -1,123 +1,95 @@
 'use client';
 
-import { useState } from 'react';
+import { Mic, MicOff, PhoneOff } from 'lucide-react';
+import { useEffect } from 'react';
 
-import { Card } from '@/components/ui/card';
-import { useVoiceSession } from '@/hooks/use-voice-session';
+import { Button } from '@/components/ui/button';
+import type { UseVoiceSessionReturn } from '@/hooks/use-voice-session';
 
 import { AgentCircle } from './agent-circle';
-import { AgentSelector } from './agent-selector';
-import { MicrophoneButton } from './microphone-button';
-import { SessionControls } from './session-controls';
-import { VoiceTextInput } from './voice-text-input';
 import { VoiceTranscript } from './voice-transcript';
 
-const DEFAULT_AGENTS = ['leela', 'bender', 'fry', 'zoidberg'];
+interface VoiceRoomProps {
+  voice: UseVoiceSessionReturn;
+  onClose: () => void;
+}
 
-export function VoiceRoom() {
-  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
   const {
     session,
     isRecording,
     isMuted,
     currentSpeaker,
-    startSession,
-    endSession,
     startRecording,
     stopRecording,
     toggleMute,
-    sendTextMessage,
-  } = useVoiceSession();
+    endSession,
+  } = voice;
 
-  const handleStartSession = () => {
-    startSession(DEFAULT_AGENTS);
-  };
-
-  const handleToggleRecording = () => {
-    if (isRecording) {
-      stopRecording();
-    } else {
+  // Auto-start continuous recording when the voice room opens
+  useEffect(() => {
+    if (session?.status === 'active' && !isRecording) {
       startRecording();
     }
+    return () => {
+      if (isRecording) {
+        stopRecording();
+      }
+    };
+    // Only run on mount/unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleEndSession = () => {
+    stopRecording();
+    endSession();
+    onClose();
   };
 
-  const handleSendMessage = (content: string) => {
-    sendTextMessage(content, selectedAgent || undefined);
-  };
-
-  const isActive = session?.status === 'active';
+  if (!session || session.status !== 'active') {
+    return null;
+  }
 
   return (
-    <div className="flex flex-col h-full" data-testid="voice-room">
-      {/* Header */}
-      <div className="p-4 border-b flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Voice Room</h1>
-          {session && (
-            <p className="text-sm text-muted-foreground">
-              Session: {session.id}
-            </p>
-          )}
-        </div>
-        <SessionControls
-          sessionStatus={session?.status || null}
-          isMuted={isMuted}
-          onStartSession={handleStartSession}
-          onEndSession={endSession}
-          onToggleMute={toggleMute}
-        />
+    <div className="flex flex-col gap-3 p-4" data-testid="voice-room">
+      {/* Agent circles row */}
+      <div className="flex items-center justify-center gap-4">
+        {session.participantAgentIds.map((agentId) => (
+          <AgentCircle key={agentId} agentId={agentId} isSpeaking={currentSpeaker === agentId} />
+        ))}
       </div>
 
-      {/* Main Content */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Left: Agent Circles */}
-        <div className="w-1/3 p-4 border-r overflow-y-auto">
-          <div className="grid grid-cols-2 gap-4">
-            {session ? (
-              session.participantAgentIds.map((agentId) => (
-                <AgentCircle
-                  key={agentId}
-                  agentId={agentId}
-                  isSpeaking={currentSpeaker === agentId}
-                />
-              ))
-            ) : (
-              <div className="col-span-2 text-center text-muted-foreground py-8">
-                Start a session to see agents
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Transcript (compact) */}
+      {session.messages.length > 0 && (
+        <VoiceTranscript
+          messages={session.messages.slice(-3)}
+          className="max-h-24 overflow-y-auto text-xs"
+        />
+      )}
 
-        {/* Right: Transcript */}
-        <div className="flex-1 flex flex-col">
-          <VoiceTranscript
-            messages={session?.messages || []}
-            className="flex-1"
-          />
+      {/* Controls: mute + recording indicator + end */}
+      <div className="flex items-center justify-center gap-3">
+        <Button
+          variant={isMuted ? 'destructive' : 'outline'}
+          size="sm"
+          onClick={toggleMute}
+          className="gap-1.5"
+        >
+          {isMuted ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+          {isMuted ? 'Unmute' : 'Mute'}
+        </Button>
 
-          {/* Controls */}
-          {isActive && (
-            <Card className="m-4 p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <AgentSelector
-                  availableAgents={session?.participantAgentIds || []}
-                  selectedAgent={selectedAgent}
-                  onSelectAgent={setSelectedAgent}
-                />
-                <MicrophoneButton
-                  isRecording={isRecording}
-                  isMuted={isMuted}
-                  onToggleRecording={handleToggleRecording}
-                />
-              </div>
-              <VoiceTextInput
-                onSendMessage={handleSendMessage}
-                placeholder="Type a message..."
-              />
-            </Card>
-          )}
-        </div>
+        {isRecording && !isMuted && (
+          <span className="flex items-center gap-1.5 text-xs text-green-600">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            Listening...
+          </span>
+        )}
+
+        <Button variant="destructive" size="sm" onClick={handleEndSession} className="gap-1.5">
+          <PhoneOff className="h-3.5 w-3.5" />
+          End
+        </Button>
       </div>
     </div>
   );
