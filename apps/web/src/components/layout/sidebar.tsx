@@ -14,24 +14,33 @@ const navItems = [
   { href: '/team-members', label: 'Team', icon: Users },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps) {
   const pathname = usePathname();
 
   return (
     <aside className="flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
       <div className="flex h-14 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold">
+        <Link href="/" className="flex items-center gap-2 font-semibold" onClick={onNavigate}>
           <span className="text-lg">🚀</span>
           <span>openspace.ai</span>
         </Link>
       </div>
-      <nav className="flex-1 space-y-1 p-2" role="navigation" aria-label="Main navigation">
+      <nav
+        className="flex-1 space-y-1 overflow-y-auto p-2"
+        role="navigation"
+        aria-label="Main navigation"
+      >
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
             <Link
               key={item.href}
               href={item.href}
+              onClick={onNavigate}
               className={cn(
                 'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                 isActive
