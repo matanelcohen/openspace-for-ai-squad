@@ -43,14 +43,12 @@ export function ChatClient() {
 
   const toggleVoiceRoom = () => {
     if (!showVoiceRoom) {
-      // Start session + recording from the user click (gesture required for mic)
       if (!voice.session) {
         const agentIds = agents.map((a) => a.id).filter((id) => !['scribe', 'ralph'].includes(id));
         voice.startSession(agentIds.length > 0 ? agentIds : ['leela', 'fry', 'bender', 'zoidberg']);
       }
-      voice.startRecording();
     } else {
-      voice.stopRecording();
+      voice.stopListening();
     }
     setShowVoiceRoom((prev) => !prev);
   };
@@ -127,13 +125,8 @@ export function ChatClient() {
         {/* Messages */}
         <MessageList messages={messages} isLoading={isLoading} typingAgents={typingAgents} />
 
-        {/* Input with mic button */}
-        <MessageInput
-          onSend={handleSend}
-          disabled={sendMessage.isPending}
-          onVoiceRecord={voice.recordAndTranscribe}
-          isRecording={voice.isRecording}
-        />
+        {/* Input */}
+        <MessageInput onSend={handleSend} disabled={sendMessage.isPending} />
       </div>
     </div>
   );

@@ -1,91 +1,92 @@
 import type { VoiceMessage, VoiceSession } from '@openspace/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 
 import { useWsEvent } from '@/components/providers/websocket-provider';
 import type { WsEnvelope } from '@/hooks/use-websocket';
 import { api } from '@/lib/api-client';
 
-// ── Browser Speech API helpers ───────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────
 
-/** Get the SpeechRecognition constructor (vendor-prefixed in some browsers). */
-function getSpeechRecognition(): (new () => SpeechRecognition) | null {
-  if (typeof window === 'undefined') return null;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition ?? null;
-}
-
-/** Agent voice configs for browser SpeechSynthesis. */
-const AGENT_VOICE_PITCH: Record<string, { pitch: number; rate: number }> = {
-  leela: { pitch: 1.1, rate: 1.0 },
-  fry: { pitch: 1.2, rate: 1.05 },
-  bender: { pitch: 0.7, rate: 0.95 },
-  zoidberg: { pitch: 1.3, rate: 1.0 },
-};
-
-/** Speak text using browser SpeechSynthesis with agent-specific voice. Returns a promise that resolves when audio finishes. */
-function speakAsAgent(agentId: string, text: string): Promise<void> {
-  if (typeof window === 'undefined' || !window.speechSynthesis) {
-    return Promise.resolve();
-  }
-
-  const utterance = new SpeechSynthesisUtterance(text);
-  const config = AGENT_VOICE_PITCH[agentId] ?? { pitch: 1, rate: 1 };
-  utterance.pitch = config.pitch;
-  utterance.rate = config.rate;
-
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length > 0) {
-    const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(agentId);
-    utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
-  }
-
-  window.speechSynthesis.speak(utterance);
-
-  // Estimate duration: ~80ms per character at rate 1.0, minimum 2s
-  const estimatedMs = Math.max(2000, (text.length * 80) / config.rate);
-  return new Promise((resolve) => setTimeout(resolve, estimatedMs));
+export interface SpeechQueueItem {
+  id: string;
+  agentId: string;
+  text: string;
 }
 
 export interface UseVoiceSessionReturn {
   session: VoiceSession | null;
-  isRecording: boolean;
+  isListening: boolean;
   isMuted: boolean;
-  /** Whether the user is currently speaking (voice detected). */
-  isSpeaking: boolean;
-  /** Live interim transcript while user is speaking. */
-  interimTranscript: string;
+  /** Live transcript while user is speaking. */
+  transcript: string;
   currentSpeaker: string | null;
+  setCurrentSpeaker: (agentId: string | null) => void;
+  /** Queue of agent speech items for TTS playback (rendered by VoiceSpeaker). */
+  speechQueue: SpeechQueueItem[];
   startSession: (agentIds: string[]) => void;
   endSession: () => void;
-  startRecording: () => Promise<void>;
-  stopRecording: () => void;
+  startListening: () => void;
+  stopListening: () => void;
   toggleMute: () => void;
-  sendTextMessage: (content: string, targetAgentId?: string) => void;
-  playMessage: (messageId: string) => void;
-  recordAndTranscribe: () => Promise<string | null>;
+  /** Whether the browser supports speech recognition. */
+  browserSupported: boolean;
+  /** Pause listening (e.g. while agent is speaking). */
+  pauseListening: () => void;
+  /** Resume listening after pause. */
+  resumeListening: () => void;
 }
+
+// ── Hook ─────────────────────────────────────────────────────────
 
 export function useVoiceSession(): UseVoiceSessionReturn {
   const [session, setSession] = useState<VoiceSession | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState('');
   const [currentSpeaker, setCurrentSpeaker] = useState<string | null>(null);
+  const [speechQueue, setSpeechQueue] = useState<SpeechQueueItem[]>([]);
 
-  const streamRef = useRef<MediaStream | null>(null);
   const sessionRef = useRef<VoiceSession | null>(null);
+  const seenTranscriptsRef = useRef<Set<string>>(new Set());
 
   // Keep sessionRef in sync
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
 
-  // Track seen transcripts to prevent duplicates
-  const seenTranscriptsRef = useRef<Set<string>>(new Set());
+  // react-speech-recognition hook
+  const {
+    transcript,
+    listening,
+    resetTranscript,
+    finalTranscript,
+    browserSupportsSpeechRecognition,
+  } = useSpeechRecognition();
 
-  // Listen for real-time voice events
-  // Handle agent transcript: add to messages, speak via TTS, pause mic
+  // When a final transcript is ready, send it to the backend
+  useEffect(() => {
+    if (!finalTranscript) return;
+    const text = finalTranscript.trim();
+    if (!text) return;
+
+    // Deduplicate
+    if (seenTranscriptsRef.current.has(text)) return;
+    seenTranscriptsRef.current.add(text);
+    setTimeout(() => seenTranscriptsRef.current.delete(text), 30_000);
+
+    const sid = sessionRef.current?.id;
+    if (sid) {
+      console.log('[Voice] Heard:', text);
+      api
+        .post('/api/voice/speak', { sessionId: sid, text })
+        .catch((err: unknown) => console.error('Voice speak failed:', err));
+    }
+
+    resetTranscript();
+  }, [finalTranscript, resetTranscript]);
+
+  // Listen for agent responses via WebSocket and queue them for TTS
+  const seenResponsesRef = useRef<Set<string>>(new Set());
+
   useWsEvent(
     'voice:transcript',
     useCallback((envelope: WsEnvelope) => {
@@ -96,14 +97,13 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       };
       if (!agentId || !text) return;
 
-      // Deduplicate by agent+text combo
-      const dedupeKey = `${agentId}:${text}`;
-      if (seenTranscriptsRef.current.has(dedupeKey)) return;
-      seenTranscriptsRef.current.add(dedupeKey);
-      // Clean up old keys after 30s
-      setTimeout(() => seenTranscriptsRef.current.delete(dedupeKey), 30_000);
+      // Deduplicate
+      const key = `${agentId}:${text}`;
+      if (seenResponsesRef.current.has(key)) return;
+      seenResponsesRef.current.add(key);
+      setTimeout(() => seenResponsesRef.current.delete(key), 30_000);
 
-      // Add message to session
+      // Add message to session transcript
       setSession((prev) => {
         if (!prev || prev.id !== sessionId) return prev;
         const msg: VoiceMessage = {
@@ -118,36 +118,12 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         return { ...prev, messages: [...prev.messages, msg] };
       });
 
-      // Pause recognition, speak via TTS, then resume
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {
-          /* ok */
-        }
-      }
-
-      setCurrentSpeaker(agentId);
-      speakAsAgent(agentId, text).then(() => {
-        setCurrentSpeaker(null);
-        if (shouldListenRef.current && recognitionRef.current) {
-          try {
-            recognitionRef.current.start();
-          } catch {
-            /* ok */
-          }
-        }
-      });
+      // Queue for TTS playback
+      setSpeechQueue((prev) => [...prev, { id: `tts-${Date.now()}-${agentId}`, agentId, text }]);
     }, []),
   );
 
-  useWsEvent(
-    'voice:speaking',
-    useCallback((_envelope: WsEnvelope) => {
-      // Speaking state is now managed by TTS playback above
-    }, []),
-  );
-
+  // Session management
   const startSession = useCallback(async (agentIds: string[]) => {
     try {
       const newSession = await api.post<VoiceSession>('/api/voice/sessions', {
@@ -155,297 +131,69 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         agentIds,
       });
       setSession(newSession);
+      setSpeechQueue([]);
+      seenTranscriptsRef.current.clear();
+      seenResponsesRef.current.clear();
     } catch (err) {
       console.error('Failed to start voice session:', err);
     }
   }, []);
 
   const endSession = useCallback(async () => {
-    if (!session) return;
-    try {
-      await api.delete(`/api/voice/sessions/${session.id}`);
-    } catch {
-      /* best effort */
-    }
-
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    shouldListenRef.current = false;
-    if (recognitionRef.current) {
+    SpeechRecognition.stopListening();
+    if (session) {
       try {
-        recognitionRef.current.stop();
+        await api.delete(`/api/voice/sessions/${session.id}`);
       } catch {
-        /* ok */
+        /* best effort */
       }
-      recognitionRef.current = null;
     }
     setSession(null);
-    setIsRecording(false);
+    setSpeechQueue([]);
   }, [session]);
 
-  // Speech recognition refs
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
-  const shouldListenRef = useRef(false);
-
-  const startRecording = useCallback(async () => {
-    const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      console.warn('[Voice] Speech Recognition not supported in this browser. Try Chrome/Edge.');
-      return;
-    }
-
-    // Stop any existing recognition
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        /* ok */
-      }
-    }
-
-    shouldListenRef.current = true;
-    console.log('[Voice] Starting continuous listening...');
-
-    const recognition = new Recognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onspeechstart = () => {
-      console.log('[Voice] Speech detected');
-      setIsSpeaking(true);
-    };
-
-    recognition.onspeechend = () => {
-      console.log('[Voice] Speech ended');
-      setIsSpeaking(false);
-      setInterimTranscript('');
-    };
-
-    const sentTranscripts = new Set<string>();
-
-    recognition.onresult = (event: SpeechRecognitionEvent) => {
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (!result?.[0]) continue;
-
-        if (result.isFinal) {
-          const transcript = result[0].transcript.trim();
-          setIsSpeaking(false);
-          setInterimTranscript('');
-          if (transcript && !sentTranscripts.has(transcript)) {
-            sentTranscripts.add(transcript);
-            console.log('[Voice] Heard:', transcript);
-            const sid = sessionRef.current?.id;
-            if (sid) {
-              api
-                .post('/api/voice/speak', { sessionId: sid, text: transcript })
-                .catch((err: unknown) => console.error('Voice speak failed:', err));
-            } else {
-              console.warn('[Voice] No active session to send transcript to');
-            }
-          }
-        } else {
-          setIsSpeaking(true);
-          setInterimTranscript(result[0].transcript);
-        }
-      }
-    };
-
-    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-      console.warn('[Voice] Recognition error:', event.error);
-      if (event.error === 'not-allowed' || event.error === 'service-not-available') {
-        shouldListenRef.current = false;
-        setIsRecording(false);
-      }
-      // For no-speech/aborted, onend will fire and we restart there
-    };
-
-    recognition.onend = () => {
-      console.log('[Voice] Recognition ended, shouldListen:', shouldListenRef.current);
-      setIsSpeaking(false);
-      setInterimTranscript('');
-      if (shouldListenRef.current) {
-        // Restart the same instance after a pause
-        setTimeout(() => {
-          if (!shouldListenRef.current) return;
-          try {
-            recognition.start();
-            console.log('[Voice] Recognition restarted');
-          } catch {
-            // Already started or other error — ignore
-          }
-        }, 1000);
-      } else {
-        setIsRecording(false);
-      }
-    };
-
-    recognitionRef.current = recognition;
-    try {
-      recognition.start();
-      setIsRecording(true);
-      console.log('[Voice] Recognition started');
-    } catch (err) {
-      console.error('[Voice] Failed to start:', err);
-      setIsRecording(false);
-    }
+  const startListeningFn = useCallback(() => {
+    SpeechRecognition.startListening({ continuous: true, language: 'en-US' });
   }, []);
 
-  const stopRecording = useCallback(() => {
-    shouldListenRef.current = false;
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch {
-        /* ok */
-      }
-      recognitionRef.current = null;
-    }
-    setIsRecording(false);
+  const stopListeningFn = useCallback(() => {
+    SpeechRecognition.stopListening();
   }, []);
 
-  /** Use browser Speech Recognition to listen and return transcript text. */
-  const recordAndTranscribe = useCallback(async (): Promise<string | null> => {
-    const Recognition = getSpeechRecognition();
-    if (!Recognition) {
-      console.warn('Speech Recognition not supported in this browser');
-      return null;
-    }
+  const pauseListening = useCallback(() => {
+    SpeechRecognition.stopListening();
+  }, []);
 
-    return new Promise((resolve) => {
-      let resolved = false;
-      const done = (result: string | null) => {
-        if (resolved) return;
-        resolved = true;
-        setIsRecording(false);
-        resolve(result);
-      };
-
-      const recognition = new Recognition();
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-
-      setIsRecording(true);
-
-      recognition.onresult = (event: SpeechRecognitionEvent) => {
-        const transcript = event.results[0]?.[0]?.transcript ?? null;
-        done(transcript);
-      };
-
-      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        console.warn('Speech recognition error:', event.error);
-        done(null);
-      };
-
-      recognition.onend = () => {
-        // If onresult didn't fire, resolve with null
-        done(null);
-      };
-
-      try {
-        recognition.start();
-      } catch (err) {
-        console.error('Failed to start speech recognition:', err);
-        done(null);
-      }
-
-      // Safety timeout — 15 seconds max
-      setTimeout(() => {
-        if (!resolved) {
-          try {
-            recognition.stop();
-          } catch {
-            /* already stopped */
-          }
-          done(null);
-        }
-      }, 15_000);
-    });
+  const resumeListening = useCallback(() => {
+    SpeechRecognition.startListening({ continuous: true, language: 'en-US' });
   }, []);
 
   const toggleMute = useCallback(() => {
-    setIsMuted((prev) => !prev);
-    if (streamRef.current) {
-      streamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = isMuted;
-      });
-    }
-  }, [isMuted]);
-
-  const sendTextMessage = useCallback(
-    (content: string, _targetAgentId?: string) => {
-      if (!session || session.status !== 'active') return;
-
-      const userMsg: VoiceMessage = {
-        id: `msg-${Date.now()}`,
-        sessionId: session.id,
-        role: 'user',
-        agentId: null,
-        content,
-        timestamp: new Date().toISOString(),
-        durationMs: null,
-      };
-
-      setSession((prev) => (prev ? { ...prev, messages: [...prev.messages, userMsg] } : null));
-
-      // Send transcript to backend for agent responses via copilot-sdk
-      api
-        .post('/api/voice/speak', {
-          sessionId: session.id,
-          text: content,
-        })
-        .catch((err: unknown) => console.error('Voice text send failed:', err));
-    },
-    [session],
-  );
-
-  const playMessage = useCallback(
-    (messageId: string) => {
-      if (!session) return;
-      const message = session.messages.find((m) => m.id === messageId);
-      if (message?.agentId) {
-        setCurrentSpeaker(message.agentId);
-        setTimeout(() => setCurrentSpeaker(null), message.durationMs ?? 2000);
+    setIsMuted((prev) => {
+      if (prev) {
+        SpeechRecognition.startListening({ continuous: true, language: 'en-US' });
+      } else {
+        SpeechRecognition.stopListening();
       }
-    },
-    [session],
-  );
-
-  useEffect(() => {
-    return () => {
-      shouldListenRef.current = false;
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.stop();
-        } catch {
-          /* ok */
-        }
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
-    };
+      return !prev;
+    });
   }, []);
 
   return {
     session,
-    isRecording,
+    isListening: listening,
     isMuted,
-    isSpeaking,
-    interimTranscript,
+    transcript,
     currentSpeaker,
+    setCurrentSpeaker,
+    speechQueue,
     startSession,
     endSession,
-    startRecording,
-    stopRecording,
+    startListening: startListeningFn,
+    stopListening: stopListeningFn,
     toggleMute,
-    sendTextMessage,
-    playMessage,
-    recordAndTranscribe,
+    browserSupported: browserSupportsSpeechRecognition,
+    pauseListening,
+    resumeListening,
   };
 }

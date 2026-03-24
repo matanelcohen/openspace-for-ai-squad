@@ -1,11 +1,13 @@
 'use client';
 
 import { Mic, MicOff, PhoneOff } from 'lucide-react';
+import { useCallback, useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { UseVoiceSessionReturn } from '@/hooks/use-voice-session';
 
 import { AgentCircle } from './agent-circle';
+import { VoiceSpeaker } from './voice-speaker';
 import { VoiceTranscript } from './voice-transcript';
 
 interface VoiceRoomProps {
@@ -16,28 +18,81 @@ interface VoiceRoomProps {
 export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
   const {
     session,
-    isRecording,
+    isListening,
     isMuted,
-    isSpeaking,
-    interimTranscript,
+    transcript,
     currentSpeaker,
-    stopRecording,
+    setCurrentSpeaker,
+    speechQueue,
+    startListening,
+    stopListening,
     toggleMute,
     endSession,
+    pauseListening,
+    resumeListening,
+    browserSupported,
   } = voice;
 
+  // Auto-start listening when session becomes active
+  useEffect(() => {
+    if (session?.status === 'active' && !isListening) {
+      startListening();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.status]);
+
   const handleEndSession = () => {
-    stopRecording();
+    stopListening();
     endSession();
     onClose();
   };
+
+  const handleSpeakingStart = useCallback(
+    (agentId: string) => {
+      setCurrentSpeaker(agentId);
+      pauseListening();
+    },
+    [setCurrentSpeaker, pauseListening],
+  );
+
+  const handleSpeakingEnd = useCallback(
+    (agentId: string) => {
+      if (currentSpeaker === agentId) {
+        setCurrentSpeaker(null);
+      }
+    },
+    [currentSpeaker, setCurrentSpeaker],
+  );
+
+  const handleQueueEmpty = useCallback(() => {
+    setCurrentSpeaker(null);
+    if (!isMuted) {
+      resumeListening();
+    }
+  }, [setCurrentSpeaker, isMuted, resumeListening]);
 
   if (!session || session.status !== 'active') {
     return null;
   }
 
+  if (!browserSupported) {
+    return (
+      <div className="p-4 text-center text-sm text-muted-foreground">
+        Speech recognition is not supported in this browser. Please use Chrome.
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3 p-4" data-testid="voice-room">
+      {/* TTS player (invisible — plays speech queue) */}
+      <VoiceSpeaker
+        queue={speechQueue}
+        onSpeakingStart={handleSpeakingStart}
+        onSpeakingEnd={handleSpeakingEnd}
+        onQueueEmpty={handleQueueEmpty}
+      />
+
       {/* Agent circles row */}
       <div className="flex items-center justify-center gap-4">
         {session.participantAgentIds.map((agentId) => (
@@ -53,21 +108,19 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
         />
       )}
 
-      {/* Live speech indicator */}
-      {isSpeaking && interimTranscript && (
+      {/* Live user speech */}
+      {transcript && (
         <div className="mx-auto flex items-center gap-2 rounded-full bg-green-50 px-4 py-1.5 dark:bg-green-950">
           <span className="flex gap-0.5">
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-500 [animation-delay:0ms]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-500 [animation-delay:150ms]" />
             <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-green-500 [animation-delay:300ms]" />
           </span>
-          <span className="text-sm italic text-green-700 dark:text-green-300">
-            {interimTranscript}
-          </span>
+          <span className="text-sm italic text-green-700 dark:text-green-300">{transcript}</span>
         </div>
       )}
 
-      {/* Controls: mute + recording indicator + end */}
+      {/* Controls */}
       <div className="flex items-center justify-center gap-3">
         <Button
           variant={isMuted ? 'destructive' : 'outline'}
@@ -79,17 +132,17 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
           {isMuted ? 'Unmute' : 'Mute'}
         </Button>
 
-        {isRecording && !isMuted && !isSpeaking && (
+        {isListening && !transcript && (
           <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <span className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
             Listening...
           </span>
         )}
 
-        {isSpeaking && (
-          <span className="flex items-center gap-1.5 text-xs font-medium text-green-600">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            You&apos;re speaking
+        {currentSpeaker && (
+          <span className="flex items-center gap-1.5 text-xs font-medium text-blue-600">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" />
+            {currentSpeaker} is speaking
           </span>
         )}
 
