@@ -22,23 +22,30 @@ const AGENT_VOICE_PITCH: Record<string, { pitch: number; rate: number }> = {
   zoidberg: { pitch: 1.3, rate: 1.0 },
 };
 
-/** Speak text using browser SpeechSynthesis with agent-specific voice. */
-function speakAsAgent(agentId: string, text: string): void {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
+/** Speak text using browser SpeechSynthesis with agent-specific voice. Returns a promise that resolves when done. */
+function speakAsAgent(agentId: string, text: string): Promise<void> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      resolve();
+      return;
+    }
 
-  const utterance = new SpeechSynthesisUtterance(text);
-  const config = AGENT_VOICE_PITCH[agentId] ?? { pitch: 1, rate: 1 };
-  utterance.pitch = config.pitch;
-  utterance.rate = config.rate;
+    const utterance = new SpeechSynthesisUtterance(text);
+    const config = AGENT_VOICE_PITCH[agentId] ?? { pitch: 1, rate: 1 };
+    utterance.pitch = config.pitch;
+    utterance.rate = config.rate;
 
-  // Try to pick a distinct voice per agent
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length > 0) {
-    const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(agentId);
-    utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
-  }
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length > 0) {
+      const voiceIndex = Object.keys(AGENT_VOICE_PITCH).indexOf(agentId);
+      utterance.voice = voices[voiceIndex % voices.length] ?? voices[0] ?? null;
+    }
 
-  window.speechSynthesis.speak(utterance);
+    utterance.onend = () => resolve();
+    utterance.onerror = () => resolve();
+
+    window.speechSynthesis.speak(utterance);
+  });
 }
 
 export interface UseVoiceSessionReturn {
@@ -119,7 +126,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     }, []),
   );
 
-  // Also speak agent transcript responses via browser TTS
+  // Speak agent responses via browser TTS — pause mic while agent talks
   useWsEvent(
     'voice:transcript',
     useCallback((envelope: WsEnvelope) => {
@@ -128,9 +135,27 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         agentId: string;
         text: string;
       };
-      if (agentId && text) {
-        speakAsAgent(agentId, text);
+      if (!agentId || !text) return;
+
+      // Pause recognition so it doesn't hear the TTS output
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch {
+          /* ok */
+        }
       }
+
+      speakAsAgent(agentId, text).then(() => {
+        // Resume recognition after TTS finishes
+        if (shouldListenRef.current && recognitionRef.current) {
+          try {
+            recognitionRef.current.start();
+          } catch {
+            /* ok */
+          }
+        }
+      });
     }, []),
   );
 
