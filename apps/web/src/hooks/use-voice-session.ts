@@ -84,6 +84,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   }, [session]);
 
   // Listen for real-time voice events
+  // Handle agent transcript: add to messages, speak via TTS, pause mic
   useWsEvent(
     'voice:transcript',
     useCallback((envelope: WsEnvelope) => {
@@ -92,8 +93,13 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         agentId: string;
         text: string;
       };
+      if (!agentId || !text) return;
+
+      // Add message to session (deduplicate by checking last message)
       setSession((prev) => {
         if (!prev || prev.id !== sessionId) return prev;
+        const lastMsg = prev.messages[prev.messages.length - 1];
+        if (lastMsg?.agentId === agentId && lastMsg?.content === text) return prev;
         const msg: VoiceMessage = {
           id: `voice-${Date.now()}-${agentId}`,
           sessionId,
@@ -105,39 +111,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         };
         return { ...prev, messages: [...prev.messages, msg] };
       });
-    }, []),
-  );
 
-  useWsEvent(
-    'voice:speaking',
-    useCallback((envelope: WsEnvelope) => {
-      const { participantId, isSpeaking } = envelope.payload as {
-        participantId: string;
-        isSpeaking: boolean;
-      };
-      setCurrentSpeaker(isSpeaking ? participantId : null);
-    }, []),
-  );
-
-  useWsEvent(
-    'voice:audio',
-    useCallback((_envelope: WsEnvelope) => {
-      // Audio playback is handled by voice:transcript via browser TTS
-    }, []),
-  );
-
-  // Speak agent responses via browser TTS — pause mic while agent talks
-  useWsEvent(
-    'voice:transcript',
-    useCallback((envelope: WsEnvelope) => {
-      const { agentId, text } = envelope.payload as {
-        sessionId: string;
-        agentId: string;
-        text: string;
-      };
-      if (!agentId || !text) return;
-
-      // Pause recognition so it doesn't hear the TTS output
+      // Pause recognition, speak via TTS, then resume
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -146,8 +121,9 @@ export function useVoiceSession(): UseVoiceSessionReturn {
         }
       }
 
+      setCurrentSpeaker(agentId);
       speakAsAgent(agentId, text).then(() => {
-        // Resume recognition after TTS finishes
+        setCurrentSpeaker(null);
         if (shouldListenRef.current && recognitionRef.current) {
           try {
             recognitionRef.current.start();
@@ -156,6 +132,13 @@ export function useVoiceSession(): UseVoiceSessionReturn {
           }
         }
       });
+    }, []),
+  );
+
+  useWsEvent(
+    'voice:speaking',
+    useCallback((_envelope: WsEnvelope) => {
+      // Speaking state is now managed by TTS playback above
     }, []),
   );
 
