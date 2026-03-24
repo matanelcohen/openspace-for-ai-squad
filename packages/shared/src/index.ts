@@ -23,6 +23,9 @@ export type {
   TaskCounts,
   TaskPriority,
   TaskStatus,
+  TeamMember,
+  TeamMemberRank,
+  TeamMemberStatus,
   VoiceMessage,
   VoiceParticipantRole,
   VoiceProfile,
@@ -31,7 +34,7 @@ export type {
 } from './types/index.js';
 
 // ── Constants ──────────────────────────────────────────────────────
-export type { AgentRole } from './constants/index.js';
+export type { AgentRole, Department } from './constants/index.js';
 export {
   ACTIVITY_EVENT_TYPE_LABELS,
   ACTIVITY_EVENT_TYPES,
@@ -39,8 +42,13 @@ export {
   AGENT_STATUS_LABELS,
   AGENT_STATUSES,
   CHAT_TEAM_RECIPIENT,
+  DEPARTMENTS,
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   TASK_STATUSES,
+  TEAM_MEMBER_RANK_LABELS,
+  TEAM_MEMBER_RANKS,
+  TEAM_MEMBER_STATUS_LABELS,
+  TEAM_MEMBER_STATUSES,
 } from './constants/index.js';

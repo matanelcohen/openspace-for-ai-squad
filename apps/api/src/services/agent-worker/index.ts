@@ -129,11 +129,29 @@ export class AgentWorkerService {
             const queue = this.queues.get(task.assignee);
             const isAlreadyQueued = queue?.includes(task.id);
             const isActive = this.activeTask.get(task.assignee) === task.id;
+
+            // Check retry count from description
+            const retryCount = (task.description.match(/🚀.*started working/g) ?? []).length;
+            if (retryCount >= 3) {
+              // Too many retries — mark as blocked permanently
+              await updateTask(this.config.tasksDir, taskId, {
+                status: 'blocked',
+                description:
+                  task.description +
+                  `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Permanently blocked after ${retryCount} failed attempts.`,
+              });
+              console.log(
+                `[AgentWorker] Task ${taskId} permanently blocked after ${retryCount} retries`,
+              );
+              continue;
+            }
+
             if (!isAlreadyQueued && !isActive) {
-              // Reset to backlog and re-enqueue
               await updateTask(this.config.tasksDir, taskId, { status: 'backlog' });
               queue?.push(task.id);
-              console.log(`[AgentWorker] Recovered orphaned task ${taskId} for ${task.assignee}`);
+              console.log(
+                `[AgentWorker] Recovered orphaned task ${taskId} for ${task.assignee} (attempt ${retryCount + 1})`,
+              );
               this.emitActivity(task.assignee, 'spawned', `Recovered after restart: ${task.title}`);
             }
           }
@@ -291,7 +309,8 @@ export class AgentWorkerService {
     } finally {
       this.activeTask.delete(agentId);
       this.persistQueue();
-      this.processNext(agentId);
+      // Wait before picking next task to let resources settle
+      setTimeout(() => this.processNext(agentId), 3000);
     }
   }
 

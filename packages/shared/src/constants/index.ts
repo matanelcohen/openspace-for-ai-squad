@@ -3,7 +3,14 @@
  * used by both frontend and backend.
  */
 
-import type { ActivityEventType, AgentStatus, TaskPriority, TaskStatus } from '../types/index.js';
+import type {
+  ActivityEventType,
+  AgentStatus,
+  TaskPriority,
+  TaskStatus,
+  TeamMemberRank,
+  TeamMemberStatus,
+} from '../types/index.js';
 
 // ---------------------------------------------------------------------------
 // Task statuses
@@ -94,3 +101,55 @@ export type AgentRole = (typeof AGENT_ROLES)[number];
 
 /** Special recipient value meaning "send to the whole team". */
 export const CHAT_TEAM_RECIPIENT = 'team' as const;
+
+// ---------------------------------------------------------------------------
+// Team member statuses
+// ---------------------------------------------------------------------------
+
+export const TEAM_MEMBER_STATUSES = [
+  'active',
+  'inactive',
+  'on-leave',
+] as const satisfies readonly TeamMemberStatus[];
+
+export const TEAM_MEMBER_STATUS_LABELS: Record<TeamMemberStatus, string> = {
+  active: 'Active',
+  inactive: 'Inactive',
+  'on-leave': 'On Leave',
+};
+
+// ---------------------------------------------------------------------------
+// Team member ranks
+// ---------------------------------------------------------------------------
+
+export const TEAM_MEMBER_RANKS = [
+  'junior',
+  'mid',
+  'senior',
+  'lead',
+  'principal',
+] as const satisfies readonly TeamMemberRank[];
+
+export const TEAM_MEMBER_RANK_LABELS: Record<TeamMemberRank, string> = {
+  junior: 'Junior',
+  mid: 'Mid-Level',
+  senior: 'Senior',
+  lead: 'Lead',
+  principal: 'Principal',
+};
+
+// ---------------------------------------------------------------------------
+// Common departments
+// ---------------------------------------------------------------------------
+
+export const DEPARTMENTS = [
+  'Engineering',
+  'Design',
+  'Product',
+  'QA',
+  'DevOps',
+  'Data',
+  'Management',
+] as const;
+
+export type Department = (typeof DEPARTMENTS)[number];
