@@ -42,9 +42,15 @@ export function ChatClient() {
   };
 
   const toggleVoiceRoom = () => {
-    if (!showVoiceRoom && !voice.session) {
-      const agentIds = agents.map((a) => a.id).filter((id) => !['scribe', 'ralph'].includes(id));
-      voice.startSession(agentIds.length > 0 ? agentIds : ['leela', 'fry', 'bender', 'zoidberg']);
+    if (!showVoiceRoom) {
+      // Start session + recording from the user click (gesture required for mic)
+      if (!voice.session) {
+        const agentIds = agents.map((a) => a.id).filter((id) => !['scribe', 'ralph'].includes(id));
+        voice.startSession(agentIds.length > 0 ? agentIds : ['leela', 'fry', 'bender', 'zoidberg']);
+      }
+      voice.startRecording();
+    } else {
+      voice.stopRecording();
     }
     setShowVoiceRoom((prev) => !prev);
   };

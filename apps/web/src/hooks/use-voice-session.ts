@@ -176,12 +176,9 @@ export function useVoiceSession(): UseVoiceSessionReturn {
   const shouldListenRef = useRef(false);
 
   const startRecording = useCallback(async () => {
-    const currentSession = sessionRef.current;
-    if (!currentSession || currentSession.status !== 'active') return;
-
     const Recognition = getSpeechRecognition();
     if (!Recognition) {
-      console.warn('Speech Recognition not supported in this browser. Try Chrome.');
+      console.warn('[Voice] Speech Recognition not supported in this browser. Try Chrome/Edge.');
       return;
     }
 
@@ -195,6 +192,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     }
 
     shouldListenRef.current = true;
+    console.log('[Voice] Starting continuous listening...');
 
     const startListening = () => {
       if (!shouldListenRef.current) return;
@@ -205,13 +203,23 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       recognition.continuous = true;
       recognition.maxAlternatives = 1;
 
+      recognition.onspeechstart = () => {
+        console.log('[Voice] Speech detected');
+        setIsSpeaking(true);
+      };
+
+      recognition.onspeechend = () => {
+        console.log('[Voice] Speech ended');
+        setIsSpeaking(false);
+        setInterimTranscript('');
+      };
+
       recognition.onresult = (event: SpeechRecognitionEvent) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
           if (!result?.[0]) continue;
 
           if (result.isFinal) {
-            // User stopped speaking — send final transcript
             const transcript = result[0].transcript.trim();
             setIsSpeaking(false);
             setInterimTranscript('');
@@ -227,7 +235,6 @@ export function useVoiceSession(): UseVoiceSessionReturn {
               }
             }
           } else {
-            // User is speaking — show interim transcript
             setIsSpeaking(true);
             setInterimTranscript(result[0].transcript);
           }
@@ -236,11 +243,9 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.warn('[Voice] Recognition error:', event.error);
-        // "no-speech" and "aborted" are normal — restart
         if (event.error === 'no-speech' || event.error === 'aborted') {
-          return; // onend will fire and restart
+          return;
         }
-        // For "not-allowed" or "service-not-available", stop trying
         if (event.error === 'not-allowed') {
           shouldListenRef.current = false;
           setIsRecording(false);
@@ -248,7 +253,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       };
 
       recognition.onend = () => {
-        // Auto-restart if we should still be listening
+        setIsSpeaking(false);
+        setInterimTranscript('');
         if (shouldListenRef.current) {
           setTimeout(startListening, 300);
         } else {
@@ -260,6 +266,7 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       try {
         recognition.start();
         setIsRecording(true);
+        console.log('[Voice] Recognition started');
       } catch (err) {
         console.error('[Voice] Failed to start:', err);
         setIsRecording(false);

@@ -1,7 +1,6 @@
 'use client';
 
 import { Mic, MicOff, PhoneOff } from 'lucide-react';
-import { useEffect } from 'react';
 
 import { Button } from '@/components/ui/button';
 import type { UseVoiceSessionReturn } from '@/hooks/use-voice-session';
@@ -22,19 +21,10 @@ export function VoiceRoom({ voice, onClose }: VoiceRoomProps) {
     isSpeaking,
     interimTranscript,
     currentSpeaker,
-    startRecording,
     stopRecording,
     toggleMute,
     endSession,
   } = voice;
-
-  // Auto-start continuous recording when session becomes active
-  useEffect(() => {
-    if (session?.status === 'active' && !isRecording) {
-      startRecording();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session?.status]);
 
   const handleEndSession = () => {
     stopRecording();
