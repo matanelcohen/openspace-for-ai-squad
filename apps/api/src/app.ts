@@ -4,6 +4,7 @@ import cors from '@fastify/cors';
 import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
+import a2aRoute from './routes/a2a.js';
 import activityRoute from './routes/activity.js';
 import agentsRoute from './routes/agents.js';
 import chatRoute from './routes/chat.js';
@@ -13,6 +14,8 @@ import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import teamMembersRoute from './routes/team-members.js';
 import voiceRoute from './routes/voice.js';
+import type { A2AService } from './services/a2a/index.js';
+import { createA2AService } from './services/a2a/index.js';
 import { ActivityFeed } from './services/activity/index.js';
 import { AgentWorkerService } from './services/agent-worker/index.js';
 import type { AIProvider } from './services/ai/copilot-provider.js';
@@ -128,6 +131,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.addHook('onReady', async () => {
     activityFeed.setWebSocketManager(app.wsManager);
     chatService.setWebSocketManager(app.wsManager);
+    chatService.setActivityFeed(activityFeed);
 
     // Initialize AI provider and connect to chat + voice + worker services
     if (!opts.aiProvider) {
@@ -138,16 +142,37 @@ export function buildApp(opts: AppOptions = {}) {
       voiceServices.aiProvider = provider;
       voiceServices.router = new VoiceRouter({ llmRouter: provider });
 
-      // Start agent worker service
+      // Compute A2A base URL (shared by worker delegation + A2A service)
+      const port = Number(process.env.PORT) || 3001;
+      const host = process.env.HOST || 'localhost';
+      const a2aBaseUrl = process.env.A2A_BASE_URL || `http://${host}:${port}`;
+
+      // Start agent worker service with A2A delegation capability
       const workerService = new AgentWorkerService({
         tasksDir: resolve(squadDir, 'tasks'),
         aiProvider: provider,
         activityFeed,
         wsManager: app.wsManager ?? null,
         agents: AGENT_PROFILES,
+        a2aBaseUrl,
       });
       await workerService.start();
       app.decorate('agentWorker', workerService);
+
+      // Initialize A2A service with bridge to chat + activity + tasks
+      const a2aService = createA2AService({
+        agents: AGENT_PROFILES,
+        aiProvider: provider,
+        baseUrl: a2aBaseUrl,
+        db,
+        bridge: {
+          chatService,
+          wsManager: app.wsManager ?? null,
+          activityFeed,
+          tasksDir: resolve(squadDir, 'tasks'),
+        },
+      });
+      app.decorate('a2aService', a2aService);
 
       // Shut down worker on close
       app.addHook('onClose', async () => {
@@ -192,6 +217,7 @@ export function buildApp(opts: AppOptions = {}) {
 
   // Routes
   app.register(healthRoute);
+  app.register(a2aRoute);
   app.register(agentsRoute, { prefix: '/api' });
   app.register(tasksRoute, { prefix: '/api' });
   app.register(decisionsRoute, { prefix: '/api' });
@@ -218,5 +244,6 @@ declare module 'fastify' {
   interface FastifyInstance {
     squadParser: SquadParser;
     agentWorker?: AgentWorkerService;
+    a2aService?: A2AService;
   }
 }

@@ -34,6 +34,11 @@ interface AgentWorkerConfig {
   wsManager: WebSocketManager | null;
   agents: AgentProfile[];
   pollIntervalMs?: number;
+  /**
+   * Base URL for the A2A service (e.g. http://localhost:3001).
+   * When set, enables inter-agent delegation via A2A protocol.
+   */
+  a2aBaseUrl?: string | null;
 }
 
 interface QueueState {
@@ -379,5 +384,74 @@ export class AgentWorkerService {
       timestamp: new Date().toISOString(),
       relatedEntityId: null,
     });
+  }
+
+  // ── A2A Delegation (Tasks → A2A bridge) ───────────────────────
+
+  /**
+   * Delegate a message to another agent via the A2A protocol.
+   *
+   * This enables inter-agent communication: one agent can ask another
+   * to perform work by sending an A2A message. The recipient agent
+   * processes it through its SquadAgentExecutor, which also bridges
+   * back to chat and activity.
+   *
+   * Returns the agent response text, or null if delegation is unavailable.
+   */
+  async delegateToAgent(
+    targetAgentId: string,
+    message: string,
+    contextId?: string,
+  ): Promise<string | null> {
+    const baseUrl = this.config.a2aBaseUrl;
+    if (!baseUrl) {
+      console.warn('[AgentWorker] A2A delegation unavailable — no a2aBaseUrl configured');
+      return null;
+    }
+
+    try {
+      // Dynamically import the A2A client to avoid bundling it when unused
+      const { A2AClient } = await import('@a2a-js/sdk/client');
+
+      const agentCardUrl = `${baseUrl}/a2a/${targetAgentId}`;
+      const client = new A2AClient(agentCardUrl);
+
+      const result = await client.sendMessage({
+        message: {
+          kind: 'message',
+          messageId: `delegate-${Date.now()}`,
+          role: 'user',
+          parts: [{ kind: 'text', text: message }],
+          contextId: contextId ?? `delegation-${Date.now()}`,
+        },
+      });
+
+      // Extract text from the response
+      const responseResult = result as {
+        result?: { status?: { message?: { parts?: Array<{ kind: string; text?: string }> } } };
+      };
+      const parts = responseResult?.result?.status?.message?.parts ?? [];
+      const responseText = parts
+        .filter((p: { kind: string; text?: string }) => p.kind === 'text' && p.text)
+        .map((p: { kind: string; text?: string }) => p.text)
+        .join('\n');
+
+      this.emitActivity(
+        targetAgentId,
+        'completed',
+        `Received delegated work via A2A: ${message.substring(0, 80)}`,
+      );
+
+      return responseText || null;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error(`[AgentWorker] A2A delegation to ${targetAgentId} failed:`, errorMsg);
+      this.emitActivity(
+        targetAgentId,
+        'failed',
+        `A2A delegation failed: ${errorMsg.substring(0, 80)}`,
+      );
+      return null;
+    }
   }
 }

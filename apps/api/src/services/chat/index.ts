@@ -17,6 +17,7 @@ import { CHAT_TEAM_RECIPIENT } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 
+import type { ActivityFeed } from '../activity/index.js';
 import type { AIProvider } from '../ai/copilot-provider.js';
 import type { WebSocketManager, WsEnvelope } from '../websocket/index.js';
 
@@ -45,6 +46,7 @@ export class ChatService {
   private readonly sessionsDir: string | null;
   private wsManager: WebSocketManager | null = null;
   private aiProvider: AIProvider | null = null;
+  private activityFeed: ActivityFeed | null = null;
 
   constructor(opts: {
     db?: Database.Database | null;
@@ -70,6 +72,11 @@ export class ChatService {
   /** Set the AI provider for generating agent responses. */
   setAIProvider(provider: AIProvider): void {
     this.aiProvider = provider;
+  }
+
+  /** Connect to the activity feed for cross-system event publishing. */
+  setActivityFeed(feed: ActivityFeed): void {
+    this.activityFeed = feed;
   }
 
   // ── Send message ────────────────────────────────────────────
@@ -270,6 +277,24 @@ export class ChatService {
     });
   }
 
+  /** Emit an activity event when an agent responds in chat (Chat→Activity bridge). */
+  private emitChatActivity(agentId: string, description: string): void {
+    if (!this.activityFeed) return;
+
+    try {
+      this.activityFeed.push({
+        id: `act-chat-${Date.now()}-${agentId}`,
+        type: 'completed',
+        agentId,
+        description,
+        timestamp: new Date().toISOString(),
+        relatedEntityId: null,
+      });
+    } catch {
+      // Best-effort — don't break chat if activity feed fails
+    }
+  }
+
   // ── Private: Agent responses ──────────────────────────────────
 
   /** Agent definitions for routing and personality. */
@@ -321,6 +346,7 @@ export class ChatService {
             this.persistToSqlite(response);
             await this.persistToMarkdown(response);
             this.emitChatMessage(response);
+            this.emitChatActivity(agent.id, `${agent.name} responded in chat`);
             responses.push(response);
           } catch (err) {
             this.emitTypingStop(agent.id);
@@ -447,6 +473,7 @@ export class ChatService {
       this.persistToSqlite(response);
       await this.persistToMarkdown(response);
       this.emitChatMessage(response);
+      this.emitChatActivity(agent.id, `${agent.name} responded to direct message`);
     } catch (err) {
       this.emitTypingStop(agent.id);
       console.error(`[Chat] ${agent.name} direct message failed:`, err);
