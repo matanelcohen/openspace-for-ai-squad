@@ -83,6 +83,9 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     sessionRef.current = session;
   }, [session]);
 
+  // Track seen transcripts to prevent duplicates
+  const seenTranscriptsRef = useRef<Set<string>>(new Set());
+
   // Listen for real-time voice events
   // Handle agent transcript: add to messages, speak via TTS, pause mic
   useWsEvent(
@@ -95,11 +98,16 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       };
       if (!agentId || !text) return;
 
-      // Add message to session (deduplicate by checking last message)
+      // Deduplicate by agent+text combo
+      const dedupeKey = `${agentId}:${text}`;
+      if (seenTranscriptsRef.current.has(dedupeKey)) return;
+      seenTranscriptsRef.current.add(dedupeKey);
+      // Clean up old keys after 30s
+      setTimeout(() => seenTranscriptsRef.current.delete(dedupeKey), 30_000);
+
+      // Add message to session
       setSession((prev) => {
         if (!prev || prev.id !== sessionId) return prev;
-        const lastMsg = prev.messages[prev.messages.length - 1];
-        if (lastMsg?.agentId === agentId && lastMsg?.content === text) return prev;
         const msg: VoiceMessage = {
           id: `voice-${Date.now()}-${agentId}`,
           sessionId,
@@ -219,6 +227,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
       setInterimTranscript('');
     };
 
+    const sentTranscripts = new Set<string>();
+
     recognition.onresult = (event: SpeechRecognitionEvent) => {
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const result = event.results[i];
@@ -228,7 +238,8 @@ export function useVoiceSession(): UseVoiceSessionReturn {
           const transcript = result[0].transcript.trim();
           setIsSpeaking(false);
           setInterimTranscript('');
-          if (transcript) {
+          if (transcript && !sentTranscripts.has(transcript)) {
+            sentTranscripts.add(transcript);
             console.log('[Voice] Heard:', transcript);
             const sid = sessionRef.current?.id;
             if (sid) {
