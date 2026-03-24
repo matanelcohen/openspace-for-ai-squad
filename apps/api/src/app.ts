@@ -13,6 +13,7 @@ import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import voiceRoute from './routes/voice.js';
 import { ActivityFeed } from './services/activity/index.js';
+import { AgentWorkerService } from './services/agent-worker/index.js';
 import type { AIProvider } from './services/ai/copilot-provider.js';
 import { createAIProvider } from './services/ai/copilot-provider.js';
 import { ChatService } from './services/chat/index.js';
@@ -126,7 +127,7 @@ export function buildApp(opts: AppOptions = {}) {
     activityFeed.setWebSocketManager(app.wsManager);
     chatService.setWebSocketManager(app.wsManager);
 
-    // Initialize AI provider and connect to chat + voice services
+    // Initialize AI provider and connect to chat + voice + worker services
     if (!opts.aiProvider) {
       const provider = await createAIProvider(undefined, {
         workingDirectory: resolve(squadDir, '..'),
@@ -134,6 +135,22 @@ export function buildApp(opts: AppOptions = {}) {
       chatService.setAIProvider(provider);
       voiceServices.aiProvider = provider;
       voiceServices.router = new VoiceRouter({ llmRouter: provider });
+
+      // Start agent worker service
+      const workerService = new AgentWorkerService({
+        tasksDir: resolve(squadDir, 'tasks'),
+        aiProvider: provider,
+        activityFeed,
+        wsManager: app.wsManager ?? null,
+        agents: AGENT_PROFILES,
+      });
+      workerService.start();
+      app.decorate('agentWorker', workerService);
+
+      // Shut down worker on close
+      app.addHook('onClose', async () => {
+        workerService.stop();
+      });
     }
 
     // Bridge voice session events to WebSocket
@@ -194,5 +211,6 @@ export function buildApp(opts: AppOptions = {}) {
 declare module 'fastify' {
   interface FastifyInstance {
     squadParser: SquadParser;
+    agentWorker?: AgentWorkerService;
   }
 }

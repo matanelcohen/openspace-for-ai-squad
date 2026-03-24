@@ -194,7 +194,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // PATCH /api/tasks/:id/approve — move pending-approval → backlog
+  // PATCH /api/tasks/:id/approve — move pending-approval → backlog, enqueue for agent
   app.patch<{ Params: { id: string } }>('/tasks/:id/approve', async (request, reply) => {
     try {
       const existing = await getTask(tasksDir(), request.params.id);
@@ -202,6 +202,12 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
         return reply.status(400).send({ error: 'Task is not pending approval' });
       }
       const task = await updateTask(tasksDir(), request.params.id, { status: 'backlog' });
+
+      // Enqueue for the assigned agent to pick up
+      if (app.agentWorker && task.assignee) {
+        app.agentWorker.enqueue(task);
+      }
+
       return reply.send(task);
     } catch {
       return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
