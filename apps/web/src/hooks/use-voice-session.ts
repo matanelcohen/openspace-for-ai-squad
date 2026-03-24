@@ -209,6 +209,14 @@ export function useVoiceSession(): UseVoiceSessionReturn {
     }
 
     return new Promise((resolve) => {
+      let resolved = false;
+      const done = (result: string | null) => {
+        if (resolved) return;
+        resolved = true;
+        setIsRecording(false);
+        resolve(result);
+      };
+
       const recognition = new Recognition();
       recognition.lang = 'en-US';
       recognition.interimResults = false;
@@ -218,20 +226,37 @@ export function useVoiceSession(): UseVoiceSessionReturn {
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
         const transcript = event.results[0]?.[0]?.transcript ?? null;
-        setIsRecording(false);
-        resolve(transcript);
+        done(transcript);
       };
 
-      recognition.onerror = () => {
-        setIsRecording(false);
-        resolve(null);
+      recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.warn('Speech recognition error:', event.error);
+        done(null);
       };
 
       recognition.onend = () => {
-        setIsRecording(false);
+        // If onresult didn't fire, resolve with null
+        done(null);
       };
 
-      recognition.start();
+      try {
+        recognition.start();
+      } catch (err) {
+        console.error('Failed to start speech recognition:', err);
+        done(null);
+      }
+
+      // Safety timeout — 15 seconds max
+      setTimeout(() => {
+        if (!resolved) {
+          try {
+            recognition.stop();
+          } catch {
+            /* already stopped */
+          }
+          done(null);
+        }
+      }, 15_000);
     });
   }, []);
 
