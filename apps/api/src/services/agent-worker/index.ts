@@ -225,7 +225,14 @@ export class AgentWorkerService {
         return;
       }
 
-      await updateTask(this.config.tasksDir, taskId, { status: 'in-progress' });
+      const now = () => new Date().toISOString().replace('T', ' ').substring(0, 19);
+
+      await updateTask(this.config.tasksDir, taskId, {
+        status: 'in-progress',
+        description:
+          task.description +
+          `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.`,
+      });
       this.broadcastTaskUpdate(taskId, 'in-progress');
       this.emitActivity(agentId, 'started', `Started working on: ${task.title}`);
       this.persistQueue();
@@ -247,7 +254,13 @@ export class AgentWorkerService {
         ],
       });
 
-      await updateTask(this.config.tasksDir, taskId, { status: 'done' });
+      await updateTask(this.config.tasksDir, taskId, {
+        status: 'done',
+        description:
+          task.description +
+          `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.` +
+          `\n\n**[${now()}]** ✅ ${agent.name} completed this task.\n\n**Result:**\n${result.content}`,
+      });
       this.broadcastTaskUpdate(taskId, 'done');
       this.emitActivity(
         agentId,
@@ -258,10 +271,18 @@ export class AgentWorkerService {
       console.log(`[AgentWorker] ${agent.name} completed: ${task.title}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const stack = err instanceof Error ? err.stack?.substring(0, 300) : '';
       console.error(`[AgentWorker] ${agentId} failed on ${taskId}:`, message);
 
       try {
-        await updateTask(this.config.tasksDir, taskId, { status: 'blocked' });
+        const currentTask = await getTask(this.config.tasksDir, taskId).catch(() => null);
+        const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        await updateTask(this.config.tasksDir, taskId, {
+          status: 'blocked',
+          description:
+            (currentTask?.description ?? '') +
+            `\n\n---\n**[${now}]** ❌ **BLOCKED** — ${agentId} failed.\n\n**Error:** ${message}\n\n**Stack:** \`\`\`\n${stack}\n\`\`\``,
+        });
         this.broadcastTaskUpdate(taskId, 'blocked');
       } catch {
         /* best effort */
