@@ -72,7 +72,7 @@ describe('useWebSocket — Reconnection + Resilience', () => {
   it('connects to WebSocket on mount', () => {
     renderHook(() => useWebSocket('ws://test:3001/ws'));
     expect(mockInstances.length).toBe(1);
-    expect(mockInstances[0].url).toBe('ws://test:3001/ws');
+    expect(mockInstances[0]!.url).toBe('ws://test:3001/ws');
   });
 
   it('sets isConnected to true on open', () => {
@@ -80,7 +80,7 @@ describe('useWebSocket — Reconnection + Resilience', () => {
     expect(result.current.isConnected).toBe(false);
 
     act(() => {
-      mockInstances[0].simulateOpen();
+      mockInstances[0]!.simulateOpen();
     });
 
     expect(result.current.isConnected).toBe(true);
@@ -88,12 +88,12 @@ describe('useWebSocket — Reconnection + Resilience', () => {
 
   it('auto-reconnects on close with exponential backoff', () => {
     renderHook(() => useWebSocket('ws://test:3001/ws'));
-    const ws1 = mockInstances[0];
+    const ws1 = mockInstances[0]!;
 
     // Open and then close
     act(() => {
-      ws1.simulateOpen();
-      ws1.simulateClose();
+      ws1!.simulateOpen();
+      ws1!.simulateClose();
     });
 
     expect(mockInstances.length).toBe(1); // Not reconnected yet
@@ -107,7 +107,7 @@ describe('useWebSocket — Reconnection + Resilience', () => {
 
     // Close again — next delay should be 2s
     act(() => {
-      mockInstances[1].simulateClose();
+      mockInstances[1]!.simulateClose();
     });
 
     act(() => {
@@ -126,8 +126,8 @@ describe('useWebSocket — Reconnection + Resilience', () => {
 
     // First connection + close
     act(() => {
-      mockInstances[0].simulateOpen();
-      mockInstances[0].simulateClose();
+      mockInstances[0]!.simulateOpen();
+      mockInstances[0]!.simulateClose();
     });
 
     // Wait 1s for first reconnect
@@ -138,8 +138,8 @@ describe('useWebSocket — Reconnection + Resilience', () => {
 
     // Second connection opens successfully, then closes
     act(() => {
-      mockInstances[1].simulateOpen(); // This resets the delay
-      mockInstances[1].simulateClose();
+      mockInstances[1]!.simulateOpen(); // This resets the delay
+      mockInstances[1]!.simulateClose();
     });
 
     // Should reconnect after 1s again (reset), not 2s
@@ -151,21 +151,21 @@ describe('useWebSocket — Reconnection + Resilience', () => {
 
   it('handles error by closing the WebSocket', () => {
     renderHook(() => useWebSocket('ws://test:3001/ws'));
-    const ws = mockInstances[0];
+    const ws = mockInstances[0]!;
 
     act(() => {
-      ws.simulateOpen();
-      ws.simulateError();
+      ws!.simulateOpen();
+      ws!.simulateError();
     });
 
-    expect(ws.closeCalled).toBe(true);
+    expect(ws!.closeCalled).toBe(true);
   });
 
   it('parses JSON messages and sets lastEvent', () => {
     const { result } = renderHook(() => useWebSocket('ws://test:3001/ws'));
 
     act(() => {
-      mockInstances[0].simulateOpen();
+      mockInstances[0]!.simulateOpen();
     });
 
     const event = {
@@ -175,7 +175,7 @@ describe('useWebSocket — Reconnection + Resilience', () => {
     };
 
     act(() => {
-      mockInstances[0].simulateMessage(JSON.stringify(event));
+      mockInstances[0]!.simulateMessage(JSON.stringify(event));
     });
 
     expect(result.current.lastEvent).toEqual(event);
@@ -185,27 +185,27 @@ describe('useWebSocket — Reconnection + Resilience', () => {
     renderHook(() => useWebSocket('ws://test:3001/ws'));
 
     act(() => {
-      mockInstances[0].simulateOpen();
+      mockInstances[0]!.simulateOpen();
     });
 
     act(() => {
-      mockInstances[0].simulateMessage('ping');
+      mockInstances[0]!.simulateMessage('ping');
     });
 
     // Should have sent a pong
-    expect(mockInstances[0].sentMessages).toContainEqual(JSON.stringify({ action: 'pong' }));
+    expect(mockInstances[0]!.sentMessages).toContainEqual(JSON.stringify({ action: 'pong' }));
   });
 
   it('ignores malformed JSON messages without crashing', () => {
     const { result } = renderHook(() => useWebSocket('ws://test:3001/ws'));
 
     act(() => {
-      mockInstances[0].simulateOpen();
+      mockInstances[0]!.simulateOpen();
     });
 
     // Should not throw
     act(() => {
-      mockInstances[0].simulateMessage('this is not json');
+      mockInstances[0]!.simulateMessage('this is not json');
     });
 
     expect(result.current.lastEvent).toBeNull();
@@ -215,19 +215,19 @@ describe('useWebSocket — Reconnection + Resilience', () => {
     const { unmount } = renderHook(() => useWebSocket('ws://test:3001/ws'));
 
     act(() => {
-      mockInstances[0].simulateOpen();
+      mockInstances[0]!.simulateOpen();
     });
 
     unmount();
 
-    expect(mockInstances[0].closeCalled).toBe(true);
+    expect(mockInstances[0]!.closeCalled).toBe(true);
   });
 
   it('does not reconnect after unmount', () => {
     const { unmount } = renderHook(() => useWebSocket('ws://test:3001/ws'));
 
     act(() => {
-      mockInstances[0].simulateOpen();
+      mockInstances[0]!.simulateOpen();
     });
 
     unmount();
@@ -245,7 +245,7 @@ describe('useWebSocket — Reconnection + Resilience', () => {
 
     // Simulate many consecutive failures: 1s, 2s, 4s, 8s, 16s, 30s (capped)
     for (let i = 0; i < 6; i++) {
-      const current = mockInstances[mockInstances.length - 1];
+      const current = mockInstances[mockInstances.length - 1]!;
       act(() => {
         current.simulateClose();
       });
@@ -256,7 +256,7 @@ describe('useWebSocket — Reconnection + Resilience', () => {
     }
 
     // After 6 failures, delay should be capped at 30s
-    const current = mockInstances[mockInstances.length - 1];
+    const current = mockInstances[mockInstances.length - 1]!;
     act(() => {
       current.simulateClose();
     });
@@ -269,7 +269,7 @@ describe('useWebSocket — Reconnection + Resilience', () => {
     const count = mockInstances.length;
 
     // Another failure — still 30s cap
-    const latest = mockInstances[mockInstances.length - 1];
+    const latest = mockInstances[mockInstances.length - 1]!;
     act(() => {
       latest.simulateClose();
     });

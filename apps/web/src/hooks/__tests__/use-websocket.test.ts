@@ -54,10 +54,10 @@ describe('useWebSocket', () => {
     MockWebSocket.instances = [];
     vi.stubGlobal('WebSocket', MockWebSocket);
     // Expose OPEN/CLOSED on the global so the hook can reference WebSocket.OPEN
-    (globalThis as Record<string, unknown>).WebSocket = Object.assign(
-      MockWebSocket,
-      { OPEN: 1, CLOSED: 3 },
-    );
+    (globalThis as Record<string, unknown>).WebSocket = Object.assign(MockWebSocket, {
+      OPEN: 1,
+      CLOSED: 3,
+    });
   });
 
   afterEach(() => {
@@ -69,7 +69,7 @@ describe('useWebSocket', () => {
     renderHook(() => useWebSocket('ws://test:1234/ws'));
 
     expect(MockWebSocket.instances).toHaveLength(1);
-    expect(MockWebSocket.instances[0].url).toBe('ws://test:1234/ws');
+    expect(MockWebSocket.instances[0]!.url).toBe('ws://test:1234/ws');
   });
 
   it('sets isConnected to true after open', async () => {
@@ -98,7 +98,7 @@ describe('useWebSocket', () => {
     };
 
     act(() => {
-      MockWebSocket.instances[0].simulateMessage(JSON.stringify(envelope));
+      MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(envelope));
     });
 
     expect(result.current.lastEvent).toEqual(envelope);
@@ -115,10 +115,10 @@ describe('useWebSocket', () => {
     expect(result.current.isConnected).toBe(true);
 
     act(() => {
-      MockWebSocket.instances[0].simulateMessage('ping');
+      MockWebSocket.instances[0]!.simulateMessage('ping');
     });
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     expect(ws.sent).toContainEqual(JSON.stringify({ action: 'pong' }));
   });
 
@@ -130,7 +130,7 @@ describe('useWebSocket', () => {
     });
 
     act(() => {
-      MockWebSocket.instances[0].simulateMessage('ping');
+      MockWebSocket.instances[0]!.simulateMessage('ping');
     });
 
     expect(result.current.lastEvent).toBeNull();
@@ -147,7 +147,7 @@ describe('useWebSocket', () => {
 
     // First close → reconnect after 1s
     act(() => {
-      MockWebSocket.instances[0].simulateClose();
+      MockWebSocket.instances[0]!.simulateClose();
     });
 
     await act(async () => {
@@ -158,7 +158,7 @@ describe('useWebSocket', () => {
 
     // Second close → reconnect after 2s
     act(() => {
-      MockWebSocket.instances[1].simulateClose();
+      MockWebSocket.instances[1]!.simulateClose();
     });
 
     await act(async () => {
@@ -181,12 +181,12 @@ describe('useWebSocket', () => {
       vi.advanceTimersByTime(1);
     });
 
-    const ws = MockWebSocket.instances[0];
-    expect(ws.readyState).toBe(MockWebSocket.OPEN);
+    const ws = MockWebSocket.instances[0]!;
+    expect(ws!.readyState).toBe(MockWebSocket.OPEN);
 
     unmount();
 
-    expect(ws.readyState).toBe(MockWebSocket.CLOSED);
+    expect(ws!.readyState).toBe(MockWebSocket.CLOSED);
   });
 
   it('sends subscribe message via subscribe helper', async () => {
@@ -200,7 +200,7 @@ describe('useWebSocket', () => {
       result.current.subscribe(['activity:new', 'task:updated']);
     });
 
-    const ws = MockWebSocket.instances[0];
+    const ws = MockWebSocket.instances[0]!;
     expect(ws.sent).toContainEqual(
       JSON.stringify({
         action: 'subscribe',
