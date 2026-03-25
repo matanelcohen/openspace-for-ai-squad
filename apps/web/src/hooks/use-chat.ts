@@ -2,7 +2,7 @@ import type { ChatMessage } from '@openspace/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
-import { useWsEvent } from '@/components/providers/websocket-provider';
+import { useWsEvent, useWsSend } from '@/components/providers/websocket-provider';
 import type { WsEnvelope } from '@/hooks/use-websocket';
 import { api } from '@/lib/api-client';
 
@@ -29,8 +29,25 @@ export function useChatMessages(recipient: string) {
       queryClient.setQueryData<ChatMessage[]>(['chat', recipient], (old = []) => {
         // Avoid duplicates (from optimistic update or refetch)
         if (old.some((m) => m.id === msg.id)) return old;
-        return [...old, msg];
+        // Remove optimistic messages that this real message supersedes
+        const cleaned = old.filter(
+          (m) =>
+            !(
+              m.id.startsWith('optimistic-') &&
+              m.content === msg.content &&
+              m.sender === msg.sender
+            ),
+        );
+        return [...cleaned, msg];
       });
+    }
+  });
+
+  // Listen for chat:cleared events from other clients so every tab stays in sync
+  useWsEvent('chat:cleared', (envelope: WsEnvelope) => {
+    const { agent } = envelope.payload as { agent?: string };
+    if (!agent || agent === recipient) {
+      queryClient.setQueryData<ChatMessage[]>(['chat', recipient], []);
     }
   });
 
@@ -76,15 +93,35 @@ export function useSendMessage() {
 
       return { previous };
     },
-    onSuccess: (_data, variables) => {
-      // Refetch to get the real messages (user's + AI response)
-      queryClient.invalidateQueries({ queryKey: ['chat', variables.recipient] });
+    onSuccess: () => {
+      // Don't refetch — WebSocket handler adds the real message
+      // and removes the optimistic one automatically.
     },
     onError: (_err, variables, context) => {
       // Rollback on error
       if (context?.previous) {
         queryClient.setQueryData(['chat', variables.recipient], context.previous);
       }
+    },
+  });
+}
+
+/** Clear all messages for a given channel (agent or team). */
+export function useClearChat() {
+  const queryClient = useQueryClient();
+  const wsSend = useWsSend();
+
+  return useMutation({
+    mutationFn: async (agent: string) => {
+      const res = await api.delete<{ deleted: number }>(
+        `/api/chat/messages?agent=${encodeURIComponent(agent)}`,
+      );
+      return res;
+    },
+    onSuccess: (_data, agent) => {
+      queryClient.setQueryData<ChatMessage[]>(['chat', agent], []);
+      // Notify other tabs/clients via WebSocket
+      wsSend({ type: 'chat:cleared', payload: { agent } });
     },
   });
 }
