@@ -255,7 +255,11 @@ describe('P3-9: Real-time integration tests', () => {
     it('broadcasts to multiple clients simultaneously', () => {
       const clients = Array.from({ length: 5 }, () => createClient(manager));
 
-      manager.broadcast({ type: 'task:updated', payload: { id: 'x' }, timestamp: new Date().toISOString() });
+      manager.broadcast({
+        type: 'task:updated',
+        payload: { id: 'x' },
+        timestamp: new Date().toISOString(),
+      });
 
       for (const { ws } of clients) {
         expect(ws.sentMessages).toHaveLength(1);
@@ -353,7 +357,10 @@ describe('P3-9: Real-time integration tests', () => {
       });
 
       // SQLite
-      const row = db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(msg.id) as Record<string, unknown>;
+      const row = db.prepare('SELECT * FROM chat_messages WHERE id = ?').get(msg.id) as Record<
+        string,
+        unknown
+      >;
       expect(row).toBeTruthy();
       expect(row.content).toBe('Persist me');
 
@@ -373,9 +380,11 @@ describe('P3-9: Real-time integration tests', () => {
         content: 'Team round-trip test',
       });
 
-      // Should have 2 broadcasts: original + coordinator echo
-      const chatEvents = ws.getEvents().filter((e) => e.type === 'chat:message');
-      expect(chatEvents).toHaveLength(2);
+      // coordinatorEcho is fire-and-forget; wait for the async echo broadcast
+      await vi.waitFor(() => {
+        const chatEvents = ws.getEvents().filter((e) => e.type === 'chat:message');
+        expect(chatEvents).toHaveLength(2);
+      });
     });
 
     it('broadcasts to all connected clients on chat', async () => {
@@ -720,7 +729,11 @@ describe('P3-9: Real-time integration tests', () => {
 
       // This should not throw
       expect(() => {
-        manager.broadcast({ type: 'task:updated', payload: {}, timestamp: new Date().toISOString() });
+        manager.broadcast({
+          type: 'task:updated',
+          payload: {},
+          timestamp: new Date().toISOString(),
+        });
       }).not.toThrow();
     });
 
@@ -731,7 +744,9 @@ describe('P3-9: Real-time integration tests', () => {
       manager.addClient(ws2 as unknown as WebSocket);
 
       // Make ws1 throw on send
-      ws1.send = () => { throw new Error('Connection reset by peer'); };
+      ws1.send = () => {
+        throw new Error('Connection reset by peer');
+      };
 
       manager.broadcast({ type: 'task:updated', payload: {}, timestamp: new Date().toISOString() });
 
