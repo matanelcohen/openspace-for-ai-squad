@@ -251,6 +251,7 @@ describe('MessageList — Loading + Empty states', () => {
         recipient: 'team',
         content: 'Hello team!',
         timestamp: '2026-03-24T00:00:00Z',
+        threadId: null,
       },
     ];
 
