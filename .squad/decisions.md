@@ -106,6 +106,12 @@
 **Why:** The same automation stack can support visual progress reporting today and end-to-end testing infrastructure later.
 **Impact:** Screenshot tooling and future E2E automation should converge on one browser automation implementation.
 
+### 2026-03-25T21:22:00Z: Channel storage schema & CRUD API contract documented
+**By:** Leela (Lead)
+**What:** Created `docs/channel-storage-schema.md` — the authoritative design document for channel persistence. Covers the dual-write architecture (SQLite cache + `.squad/channels/*.md` source of truth), the `ChatChannel` data model, CRUD method signatures on `ChatService`, file naming conventions (`{id}.md`), validation rules, conflict handling (files win), membership security model, and the per-workspace scoping decision.
+**Why:** The channel system was implemented across multiple files (chat service, channel writer/parser, routes, schemas) but lacked a single reference document capturing the design rationale and API contract.
+**Impact:** New contributors and agents can read `docs/channel-storage-schema.md` for the complete channel storage design without reverse-engineering the implementation.
+
 ## Governance
 
 - All meaningful changes require team consensus
