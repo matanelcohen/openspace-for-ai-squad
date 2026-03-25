@@ -71,6 +71,9 @@ export function ChatClient() {
             agents={agents}
             selectedChannel={selectedChannel}
             onSelectChannel={handleSelectChannel}
+            onClearChat={(channel) => clearChat.mutate(channel)}
+            onClearAllChats={() => clearChat.mutate(undefined)}
+            isClearingChat={clearChat.isPending}
           />
         </div>
 

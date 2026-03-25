@@ -1,10 +1,38 @@
 import type { Agent, ChatMessage } from '@openspace/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { ChatSidebar } from '@/components/chat/chat-sidebar';
 import { MessageInput } from '@/components/chat/message-input';
 import { MessageList } from '@/components/chat/message-list';
+
+// Polyfills required for Radix UI in jsdom
+beforeAll(() => {
+  window.PointerEvent = class PointerEvent extends MouseEvent {
+    readonly pointerId: number;
+    readonly pointerType: string;
+    constructor(type: string, props: PointerEventInit = {}) {
+      super(type, props);
+      this.pointerId = props.pointerId ?? 0;
+      this.pointerType = props.pointerType ?? '';
+    }
+  } as unknown as typeof PointerEvent;
+
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  window.HTMLElement.prototype.hasPointerCapture = vi.fn(() => false);
+  window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+  window.HTMLElement.prototype.setPointerCapture = vi.fn();
+
+  global.ResizeObserver = class ResizeObserver {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  };
+});
+
+afterEach(() => {
+  cleanup();
+});
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -61,17 +89,13 @@ const mockMessages: ChatMessage[] = [
 
 describe('ChatSidebar', () => {
   it('renders team channel', () => {
-    render(
-      <ChatSidebar agents={mockAgents} selectedChannel="team" onSelectChannel={vi.fn()} />,
-    );
+    render(<ChatSidebar agents={mockAgents} selectedChannel="team" onSelectChannel={vi.fn()} />);
     expect(screen.getByText('Team')).toBeInTheDocument();
     expect(screen.getByTestId('channel-team')).toBeInTheDocument();
   });
 
   it('renders agent list with names and roles', () => {
-    render(
-      <ChatSidebar agents={mockAgents} selectedChannel="team" onSelectChannel={vi.fn()} />,
-    );
+    render(<ChatSidebar agents={mockAgents} selectedChannel="team" onSelectChannel={vi.fn()} />);
     expect(screen.getByText('Leela')).toBeInTheDocument();
     expect(screen.getByText('Lead')).toBeInTheDocument();
     expect(screen.getByText('Bender')).toBeInTheDocument();
@@ -80,28 +104,136 @@ describe('ChatSidebar', () => {
 
   it('calls onSelectChannel when an agent is clicked', () => {
     const onSelect = vi.fn();
-    render(
-      <ChatSidebar agents={mockAgents} selectedChannel="team" onSelectChannel={onSelect} />,
-    );
+    render(<ChatSidebar agents={mockAgents} selectedChannel="team" onSelectChannel={onSelect} />);
     fireEvent.click(screen.getByTestId('channel-leela'));
     expect(onSelect).toHaveBeenCalledWith('leela');
   });
 
   it('calls onSelectChannel when team channel is clicked', () => {
     const onSelect = vi.fn();
-    render(
-      <ChatSidebar agents={mockAgents} selectedChannel="leela" onSelectChannel={onSelect} />,
-    );
+    render(<ChatSidebar agents={mockAgents} selectedChannel="leela" onSelectChannel={onSelect} />);
     fireEvent.click(screen.getByTestId('channel-team'));
     expect(onSelect).toHaveBeenCalledWith('team');
   });
 
   it('highlights selected channel', () => {
-    render(
-      <ChatSidebar agents={mockAgents} selectedChannel="leela" onSelectChannel={vi.fn()} />,
-    );
+    render(<ChatSidebar agents={mockAgents} selectedChannel="leela" onSelectChannel={vi.fn()} />);
     const leelaChannel = screen.getByTestId('channel-leela');
     expect(leelaChannel.className).toContain('bg-accent');
+  });
+
+  it('renders clear chat trigger when callbacks are provided', () => {
+    render(
+      <ChatSidebar
+        agents={mockAgents}
+        selectedChannel="team"
+        onSelectChannel={vi.fn()}
+        onClearChat={vi.fn()}
+        onClearAllChats={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('clear-chat-trigger')).toBeTruthy();
+  });
+
+  it('does not render clear chat trigger when no callbacks provided', () => {
+    render(<ChatSidebar agents={mockAgents} selectedChannel="team" onSelectChannel={vi.fn()} />);
+    expect(screen.queryByTestId('clear-chat-trigger')).toBeNull();
+  });
+
+  it('opens dropdown menu with clear options on trigger click', async () => {
+    render(
+      <ChatSidebar
+        agents={mockAgents}
+        selectedChannel="team"
+        onSelectChannel={vi.fn()}
+        onClearChat={vi.fn()}
+        onClearAllChats={vi.fn()}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('clear-chat-trigger'), {
+      button: 0,
+      pointerType: 'mouse',
+    });
+    expect(await screen.findByTestId('clear-current-chat')).toBeTruthy();
+    expect(screen.getByTestId('clear-all-chats')).toBeTruthy();
+  });
+
+  it('shows confirmation dialog when clear current chat is clicked', async () => {
+    render(
+      <ChatSidebar
+        agents={mockAgents}
+        selectedChannel="team"
+        onSelectChannel={vi.fn()}
+        onClearChat={vi.fn()}
+        onClearAllChats={vi.fn()}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('clear-chat-trigger'), {
+      button: 0,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByTestId('clear-current-chat'));
+    expect(await screen.findByTestId('clear-chat-dialog')).toBeTruthy();
+    expect(screen.getByText(/permanently delete all messages/)).toBeTruthy();
+  });
+
+  it('calls onClearChat with selected channel on confirm', async () => {
+    const onClearChat = vi.fn();
+    render(
+      <ChatSidebar
+        agents={mockAgents}
+        selectedChannel="leela"
+        onSelectChannel={vi.fn()}
+        onClearChat={onClearChat}
+        onClearAllChats={vi.fn()}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('clear-chat-trigger'), {
+      button: 0,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByTestId('clear-current-chat'));
+    fireEvent.click(await screen.findByTestId('clear-chat-confirm'));
+    expect(onClearChat).toHaveBeenCalledWith('leela');
+  });
+
+  it('calls onClearAllChats on confirm for clear all', async () => {
+    const onClearAll = vi.fn();
+    render(
+      <ChatSidebar
+        agents={mockAgents}
+        selectedChannel="team"
+        onSelectChannel={vi.fn()}
+        onClearChat={vi.fn()}
+        onClearAllChats={onClearAll}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('clear-chat-trigger'), {
+      button: 0,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByTestId('clear-all-chats'));
+    fireEvent.click(await screen.findByTestId('clear-chat-confirm'));
+    expect(onClearAll).toHaveBeenCalled();
+  });
+
+  it('closes dialog on cancel without calling callbacks', async () => {
+    const onClearChat = vi.fn();
+    render(
+      <ChatSidebar
+        agents={mockAgents}
+        selectedChannel="team"
+        onSelectChannel={vi.fn()}
+        onClearChat={onClearChat}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('clear-chat-trigger'), {
+      button: 0,
+      pointerType: 'mouse',
+    });
+    fireEvent.click(await screen.findByTestId('clear-current-chat'));
+    fireEvent.click(await screen.findByTestId('clear-chat-cancel'));
+    expect(onClearChat).not.toHaveBeenCalled();
   });
 });
 

@@ -106,22 +106,27 @@ export function useSendMessage() {
   });
 }
 
-/** Clear all messages for a given channel (agent or team). */
+/**
+ * Clear messages for a specific channel (agent or team).
+ * Pass `undefined` to the mutation to clear **all** channels.
+ */
 export function useClearChat() {
   const queryClient = useQueryClient();
   const wsSend = useWsSend();
 
   return useMutation({
-    mutationFn: async (agent: string) => {
-      const res = await api.delete<{ deleted: number }>(
-        `/api/chat/messages?agent=${encodeURIComponent(agent)}`,
-      );
+    mutationFn: async (agent?: string) => {
+      const params = agent ? `?agent=${encodeURIComponent(agent)}` : '';
+      const res = await api.delete<{ deleted: number }>(`/api/chat/messages${params}`);
       return res;
     },
     onSuccess: (_data, agent) => {
-      queryClient.setQueryData<ChatMessage[]>(['chat', agent], []);
-      // Notify other tabs/clients via WebSocket
-      wsSend({ type: 'chat:cleared', payload: { agent } });
+      if (agent) {
+        queryClient.setQueryData<ChatMessage[]>(['chat', agent], []);
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['chat'] });
+      }
+      wsSend({ type: 'chat:cleared', payload: { agent: agent ?? undefined } });
     },
   });
 }
