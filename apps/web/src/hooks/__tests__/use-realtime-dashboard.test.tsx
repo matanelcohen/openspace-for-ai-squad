@@ -1,7 +1,7 @@
 import type { Agent, Task } from '@openspace/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act,renderHook } from '@testing-library/react';
-import { beforeEach,describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useRealtimeDashboard } from '@/hooks/use-realtime-dashboard';
 import type { WsEnvelope } from '@/hooks/use-websocket';
@@ -62,7 +62,7 @@ describe('useRealtimeDashboard', () => {
     });
 
     const updated = queryClient.getQueryData<Agent[]>(['agents']);
-    expect(updated?.[0].status).toBe('active');
+    expect(updated?.[0]?.status).toBe('active');
   });
 
   it('patches task cache on task:updated event', () => {
@@ -75,6 +75,7 @@ describe('useRealtimeDashboard', () => {
         status: 'backlog',
         priority: 'P2',
         assignee: null,
+        assigneeType: 'agent',
         labels: [],
         createdAt: '',
         updatedAt: '',
@@ -96,7 +97,7 @@ describe('useRealtimeDashboard', () => {
     });
 
     const updated = queryClient.getQueryData<Task[]>(['tasks']);
-    expect(updated?.[0].status).toBe('in-progress');
+    expect(updated?.[0]?.status).toBe('in-progress');
   });
 
   it('adds new task to cache on task:created event', () => {
@@ -130,25 +131,29 @@ describe('useRealtimeDashboard', () => {
 
     const updated = queryClient.getQueryData<Task[]>(['tasks']);
     expect(updated).toHaveLength(1);
-    expect(updated?.[0].id).toBe('new-task');
+    expect(updated?.[0]?.id).toBe('new-task');
   });
 
   it('does not duplicate tasks on repeated task:created', () => {
     const { queryClient, wrapper } = createWrapper();
-    queryClient.setQueryData<Task[]>(['tasks'], [
-      {
-        id: 'existing',
-        title: 'Existing',
-        description: '',
-        status: 'backlog',
-        priority: 'P2',
-        assignee: null,
-        labels: [],
-        createdAt: '',
-        updatedAt: '',
-        sortIndex: 0,
-      },
-    ]);
+    queryClient.setQueryData<Task[]>(
+      ['tasks'],
+      [
+        {
+          id: 'existing',
+          title: 'Existing',
+          description: '',
+          status: 'backlog',
+          priority: 'P2',
+          assignee: null,
+          assigneeType: 'agent',
+          labels: [],
+          createdAt: '',
+          updatedAt: '',
+          sortIndex: 0,
+        },
+      ],
+    );
 
     let capturedCb: ((e: WsEnvelope) => void) | null = null;
     const addWsListener = vi.fn((type: string, cb: (e: WsEnvelope) => void) => {
@@ -181,17 +186,20 @@ describe('useRealtimeDashboard', () => {
 
   it('triggers pulse animation on updates', () => {
     const { queryClient, wrapper } = createWrapper();
-    queryClient.setQueryData<Agent[]>(['agents'], [
-      {
-        id: 'fry',
-        name: 'Fry',
-        role: 'Frontend',
-        status: 'idle',
-        currentTask: null,
-        expertise: [],
-        voiceProfile: { agentId: 'fry', displayName: 'Fry', voiceId: '', personality: '' },
-      },
-    ]);
+    queryClient.setQueryData<Agent[]>(
+      ['agents'],
+      [
+        {
+          id: 'fry',
+          name: 'Fry',
+          role: 'Frontend',
+          status: 'idle',
+          currentTask: null,
+          expertise: [],
+          voiceProfile: { agentId: 'fry', displayName: 'Fry', voiceId: '', personality: '' },
+        },
+      ],
+    );
 
     let capturedCb: ((e: WsEnvelope) => void) | null = null;
     const addWsListener = vi.fn((type: string, cb: (e: WsEnvelope) => void) => {
