@@ -9,7 +9,7 @@
 | Feature | Description |
 |---------|-------------|
 | **Squad Dashboard** | Visual overview of all agents — status, current tasks, expertise, and recent activity at a glance. Auto-refreshes via WebSocket. |
-| **Task Management** | Kanban board and list views for creating, assigning, prioritizing, and tracking tasks. Drag-and-drop reordering, filters by agent/status/priority, and full sync with `.squad/` task files. |
+| **Task Management** | Kanban board and list views for creating, assigning, prioritizing, and tracking tasks. Drag-and-drop reordering, filters by agent/status/priority, [pending-approval workflow](docs/pending-approval-workflow.md) for AI-generated sub-tasks, and full sync with `.squad/` task files. |
 | **Real-time Activity Feed** | Live chronological stream of agent events — task starts, completions, decisions, errors — pushed to the browser within seconds via WebSocket. |
 | **Voice Interface** | Real-time, multi-party group voice chat with your AI squad. Continuous listening, multi-agent responses with distinct voices, shared conversation context, and voice-triggered actions (create tasks, assign work, query status — all by speaking naturally). |
 | **Chat Interface** | Text-based conversation with individual agents or the whole team. Markdown support, message history, and real-time delivery. Like Slack for your AI squad. |
@@ -156,7 +156,8 @@ openspace.ai/
 │       └── src/              # Agent, Task, Decision, Chat, Voice, Activity types
 ├── docs/
 │   ├── prd.md                # Product Requirements Document
-│   └── execution-plan.md     # Phased execution plan
+│   ├── execution-plan.md     # Phased execution plan
+│   └── pending-approval-workflow.md  # Pending-approval task lifecycle & API
 ├── e2e/                      # Playwright end-to-end tests
 ├── .squad/                   # Squad file system (source of truth)
 │   ├── agents/               # Agent charters and history
@@ -187,6 +188,8 @@ All endpoints are prefixed with `/api`. The API runs on port `3001` by default.
 | `PATCH` | `/api/tasks/:id/status` | Update task status |
 | `PATCH` | `/api/tasks/:id/priority` | Reorder task priority (sortIndex) |
 | `DELETE` | `/api/tasks/:id` | Delete a task |
+| `PATCH` | `/api/tasks/:id/approve` | Approve a pending-approval task → moves to backlog |
+| `PATCH` | `/api/tasks/:id/reject` | Reject a pending-approval task → deletes it |
 | `GET` | `/api/decisions` | List all decisions (newest first) |
 | `GET` | `/api/decisions/search` | Full-text search decisions (`?q=query`) |
 | `GET` | `/api/decisions/:id` | Get decision detail |
