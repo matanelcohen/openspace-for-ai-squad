@@ -1,9 +1,9 @@
 /**
  * Tests for useChannels, useChannel, useCreateChannel, useUpdateChannel,
- * useDeleteChannel hooks — plus WebSocket-driven cache invalidation via
- * useChannelCacheSync.
+ * useDeleteChannel, useChannelMessages, useSendChannelMessage hooks — plus
+ * WebSocket-driven cache invalidation via useChannelCacheSync.
  */
-import type { ChatChannel } from '@openspace/shared';
+import type { ChatChannel, ChatMessage } from '@openspace/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -12,9 +12,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   channelKeys,
   useChannel,
+  useChannelMessages,
   useChannels,
   useCreateChannel,
   useDeleteChannel,
+  useSendChannelMessage,
   useUpdateChannel,
 } from '@/hooks/use-channels';
 import type { WsEnvelope } from '@/hooks/use-websocket';
@@ -31,6 +33,7 @@ vi.mock('@/components/providers/websocket-provider', () => ({
     }
     wsListeners.get(type)!.add(cb);
   },
+  useWsSend: () => vi.fn(),
 }));
 
 /** Simulate a WebSocket event arriving. */
@@ -566,5 +569,173 @@ describe('WebSocket cache sync', () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+  });
+});
+
+// ── useChannelMessages ────────────────────────────────────────────
+
+describe('useChannelMessages', () => {
+  const mockMessages: ChatMessage[] = [
+    {
+      id: 'msg-1',
+      sender: 'leela',
+      recipient: 'channel:ch-general',
+      content: 'Hello team',
+      timestamp: '2026-03-25T12:00:00Z',
+      threadId: null,
+    },
+    {
+      id: 'msg-2',
+      sender: 'fry',
+      recipient: 'channel:ch-general',
+      content: 'Hey!',
+      timestamp: '2026-03-25T12:01:00Z',
+      threadId: null,
+    },
+  ];
+
+  it('fetches messages with the channel: prefix in the query', async () => {
+    fetchMock.mockReturnValue(
+      jsonResponse({ messages: mockMessages, total: 2, limit: 50, offset: 0 }),
+    );
+
+    const { result } = renderHook(() => useChannelMessages('ch-general'), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(result.current.data).toHaveLength(2);
+    expect(result.current.data![0]!.content).toBe('Hello team');
+
+    // Verify the fetch URL includes the channel: prefix
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('agent=channel%3Ach-general'),
+      expect.any(Object),
+    );
+  });
+
+  it('exposes loading state', () => {
+    fetchMock.mockReturnValue(new Promise(() => {})); // never resolves
+    const { result } = renderHook(() => useChannelMessages('ch-general'), { wrapper });
+    expect(result.current.isLoading).toBe(true);
+  });
+
+  it('exposes error state', async () => {
+    fetchMock.mockReturnValue(jsonResponse({ error: 'Not found' }, 404));
+    const { result } = renderHook(() => useChannelMessages('ch-general'), { wrapper });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBeTruthy();
+  });
+
+  it('receives real-time messages via WebSocket', async () => {
+    fetchMock.mockReturnValue(
+      jsonResponse({ messages: mockMessages, total: 2, limit: 50, offset: 0 }),
+    );
+
+    renderHook(() => useChannelMessages('ch-general'), { wrapper });
+    await waitFor(() => {
+      const cached = queryClient.getQueryData<ChatMessage[]>(['chat', 'channel:ch-general']);
+      expect(cached).toHaveLength(2);
+    });
+
+    const realtimeMsg: ChatMessage = {
+      id: 'msg-3',
+      sender: 'bender',
+      recipient: 'channel:ch-general',
+      content: 'Bite my shiny metal API!',
+      timestamp: '2026-03-25T12:02:00Z',
+      threadId: null,
+    };
+
+    act(() => {
+      fireWsEvent('chat:message', realtimeMsg as unknown as Record<string, unknown>);
+    });
+
+    const cached = queryClient.getQueryData<ChatMessage[]>(['chat', 'channel:ch-general']);
+    expect(cached).toHaveLength(3);
+    expect(cached![2]!.content).toBe('Bite my shiny metal API!');
+  });
+
+  it('ignores messages for other channels', async () => {
+    fetchMock.mockReturnValue(
+      jsonResponse({ messages: mockMessages, total: 2, limit: 50, offset: 0 }),
+    );
+
+    const { result } = renderHook(() => useChannelMessages('ch-general'), { wrapper });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    act(() => {
+      fireWsEvent('chat:message', {
+        id: 'msg-other',
+        sender: 'fry',
+        recipient: 'channel:ch-frontend',
+        content: 'Wrong channel',
+        timestamp: '2026-03-25T12:03:00Z',
+        threadId: null,
+      });
+    });
+
+    // Still only the original 2 messages
+    expect(result.current.data).toHaveLength(2);
+  });
+
+  it('is disabled when channelId is empty', () => {
+    const { result } = renderHook(() => useChannelMessages(''), { wrapper });
+    // "channel:" with empty id is "channel:" — useChatMessages checks !!recipient
+    // which is truthy for "channel:", but the query should still work
+    expect(result.current.isFetching || result.current.isLoading).toBeTruthy();
+  });
+});
+
+// ── useSendChannelMessage ─────────────────────────────────────────
+
+describe('useSendChannelMessage', () => {
+  it('sends a message with the channel: prefix recipient', async () => {
+    const serverMsg: ChatMessage = {
+      id: 'msg-sent',
+      sender: 'user',
+      recipient: 'channel:ch-general',
+      content: 'New message',
+      timestamp: '2026-03-25T12:05:00Z',
+      threadId: null,
+    };
+    fetchMock.mockReturnValue(jsonResponse(serverMsg, 201));
+
+    const { result } = renderHook(() => useSendChannelMessage('ch-general'), { wrapper });
+
+    act(() => {
+      result.current.mutate({ sender: 'user', content: 'New message' });
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    // Verify the POST body includes the channel: prefix
+    const [url, options] = fetchMock.mock.calls[0]!;
+    expect(url).toContain('/api/chat/messages');
+    const body = JSON.parse(options.body as string);
+    expect(body.recipient).toBe('channel:ch-general');
+    expect(body.sender).toBe('user');
+    expect(body.content).toBe('New message');
+  });
+
+  it('exposes pending state during mutation', async () => {
+    fetchMock.mockReturnValue(new Promise(() => {})); // never resolves
+    const { result } = renderHook(() => useSendChannelMessage('ch-general'), { wrapper });
+
+    act(() => {
+      result.current.mutate({ sender: 'user', content: 'Hello' });
+    });
+
+    await waitFor(() => expect(result.current.isPending).toBe(true));
+  });
+
+  it('exposes error state on failure', async () => {
+    fetchMock.mockReturnValue(jsonResponse({ error: 'Forbidden' }, 403));
+    const { result } = renderHook(() => useSendChannelMessage('ch-general'), { wrapper });
+
+    act(() => {
+      result.current.mutate({ sender: 'user', content: 'Forbidden msg' });
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
   });
 });

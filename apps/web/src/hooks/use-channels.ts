@@ -1,7 +1,9 @@
 import type { ChatChannel } from '@openspace/shared';
+import { CHAT_CHANNEL_PREFIX } from '@openspace/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useChannelCacheSync } from '@/hooks/use-channel-cache-sync';
+import { useChatMessages, useSendMessage } from '@/hooks/use-chat';
 import { api } from '@/lib/api-client';
 
 // Re-export Channel types for consumers
@@ -143,4 +145,44 @@ export function useDeleteChannel() {
       queryClient.removeQueries({ queryKey: channelKeys.detail(id) });
     },
   });
+}
+
+// ── Channel-scoped message hooks ────────────────────────────────
+
+/** Build the recipient string from a plain channel ID. */
+function channelRecipient(channelId: string): string {
+  return `${CHAT_CHANNEL_PREFIX}${channelId}`;
+}
+
+/**
+ * Fetch messages for a channel and subscribe to real-time updates.
+ *
+ * Wraps `useChatMessages` so callers pass only the channel ID
+ * without needing to know the `"channel:"` prefix convention.
+ *
+ * Returns the standard TanStack Query result with `data`, `isLoading`,
+ * `isError`, `error`, and `isSuccess` fields.
+ */
+export function useChannelMessages(channelId: string) {
+  return useChatMessages(channelRecipient(channelId));
+}
+
+/**
+ * Send a message to a channel.
+ *
+ * Returns a mutation whose `mutate` / `mutateAsync` accepts
+ * `{ sender, content }` — the channel recipient is injected automatically.
+ */
+export function useSendChannelMessage(channelId: string) {
+  const send = useSendMessage();
+
+  return {
+    ...send,
+    mutate: (
+      input: { sender: string; content: string },
+      options?: Parameters<typeof send.mutate>[1],
+    ) => send.mutate({ ...input, recipient: channelRecipient(channelId) }, options),
+    mutateAsync: (input: { sender: string; content: string }) =>
+      send.mutateAsync({ ...input, recipient: channelRecipient(channelId) }),
+  };
 }
