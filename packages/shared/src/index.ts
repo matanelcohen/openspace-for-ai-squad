@@ -115,7 +115,9 @@ export type {
   SerializedContext,
   SkillConfigSchema,
   SkillContext,
+  SkillCircuitBreakerState,
   SkillDependency,
+  SkillHealthStatus,
   SkillLifecycleHooks,
   SkillManifest,
   SkillMatchResult,
@@ -124,6 +126,7 @@ export type {
   SkillPromptTemplate,
   SkillRegistry,
   SkillRegistryEntry,
+  SkillRetryPolicy,
   SkillToolDeclaration,
   SkillTrigger,
   SkillValidationResult,
@@ -225,3 +228,6 @@ export {
   TEAM_MEMBER_STATUS_LABELS,
   TEAM_MEMBER_STATUSES,
 } from './constants/index.js';
+
+// ── Skills ─────────────────────────────────────────────────────
+export * from './types/skill.js';
