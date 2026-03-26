@@ -297,14 +297,20 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     }
 
     let session: CopilotSessionLike | null = null;
+    const sessionCreateStart = Date.now();
     try {
       session = await this.createSessionWithRetry(sessionConfig);
+      const sessionCreateEnd = Date.now();
 
       // Record sub-spans for AI events (thinking, tool calls, etc.)
       if (this.traceService?.addSubSpan && traceIds) {
         const addSub = this.traceService.addSubSpan.bind(this.traceService);
         const tId = traceIds.traceId;
         const sId = traceIds.spanId;
+
+        // Always record session creation
+        addSub(tId, sId, { name: '🔌 Session created', kind: 'internal', startTime: sessionCreateStart, endTime: sessionCreateEnd });
+
         const eventListener = (event: { type: string; data?: Record<string, unknown> }) => {
           try {
             const now = Date.now();
@@ -321,6 +327,10 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
               case 'info':
                 addSub(tId, sId, { name: `ℹ️ ${event.data?.message ?? ''}`, kind: 'internal', startTime: now, attributes: event.data });
                 break;
+              case 'progress':
+                // First delta = response started
+                addSub(tId, sId, { name: '📝 Generating response', kind: 'llm', startTime: now });
+                break;
             }
           } catch { /* best effort */ }
         };
@@ -328,6 +338,11 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
         session.on('assistant.reasoning', (e: unknown) => eventListener({ type: 'thinking', data: (e as { data?: Record<string, unknown> }).data }));
         session.on('tool.execution_start', (e: unknown) => eventListener({ type: 'tool_start', data: (e as { data?: Record<string, unknown> }).data }));
         session.on('session.info', (e: unknown) => eventListener({ type: 'info', data: (e as { data?: Record<string, unknown> }).data }));
+        // Capture first message delta as "generating response"
+        let firstDelta = true;
+        session.on('assistant.message_delta', () => {
+          if (firstDelta) { firstDelta = false; eventListener({ type: 'progress' }); }
+        });
       }
 
       if (options.onEvent) {
