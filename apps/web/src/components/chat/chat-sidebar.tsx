@@ -170,9 +170,7 @@ export function ChatSidebar({
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-medium">Team</span>
               {(unreadCounts?.get('team') ?? 0) > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                  {unreadCounts!.get('team')}
-                </span>
+                <span className="h-2.5 w-2.5 rounded-full bg-primary" />
               )}
             </div>
             {(() => {
@@ -319,9 +317,7 @@ export function ChatSidebar({
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{agent.name}</span>
                   {(unreadCounts?.get(agent.id) ?? 0) > 0 && (
-                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
-                      {unreadCounts!.get(agent.id)}
-                    </span>
+                    <span className="h-2.5 w-2.5 rounded-full bg-primary" />
                   )}
                 </div>
                 {typingAgents?.has(agent.id) && typingAgents.get(agent.id)?.recipient === agent.id ? (
