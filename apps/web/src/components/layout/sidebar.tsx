@@ -1,6 +1,16 @@
 'use client';
 
-import { Brain, LayoutDashboard, ListTodo, MessageSquare, Scale, Scan, Users } from 'lucide-react';
+import {
+  BookOpen,
+  Brain,
+  LayoutDashboard,
+  ListTodo,
+  MessageSquare,
+  Puzzle,
+  Scale,
+  Scan,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -14,7 +24,9 @@ const navItems = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/decisions', label: 'Decisions', icon: Scale },
   { href: '/team-members', label: 'Team', icon: Users },
+  { href: '/skills', label: 'Skills', icon: Puzzle },
   { href: '/memories', label: 'Memories', icon: Brain },
+  { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
 ];
 
 interface SidebarProps {
