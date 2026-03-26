@@ -1,6 +1,7 @@
 'use client';
 
 import { AlertTriangle, Ban, Bell, BotOff, CheckCircle2, Lightbulb, MessageSquare, Rocket, Trash2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -50,8 +51,27 @@ function formatRelativeTime(timestamp: string): string {
   return `${diffDay}d ago`;
 }
 
+function getNotificationLink(notification: Notification): string | null {
+  switch (notification.type) {
+    case 'task_failure':
+    case 'task_blocked':
+    case 'task_completed':
+    case 'task_started':
+      return notification.relatedEntityId ? `/tasks/${notification.relatedEntityId}` : '/tasks';
+    case 'agent_failed':
+      return '/';
+    case 'decision_added':
+      return '/decisions';
+    case 'chat_message':
+      return '/chat';
+    default:
+      return null;
+  }
+}
+
 export function NotificationBell() {
   const { notifications, unreadCount, markAsRead, markAllAsRead, clearAll } = useNotifications();
+  const router = useRouter();
 
   const displayed = notifications.slice(0, MAX_DISPLAYED);
 
@@ -95,8 +115,12 @@ export function NotificationBell() {
             {displayed.map((notification) => (
               <DropdownMenuItem
                 key={notification.id}
-                className="flex items-start gap-3 px-3 py-2"
-                onClick={() => markAsRead(notification.id)}
+                className="flex cursor-pointer items-start gap-3 px-3 py-2"
+                onClick={() => {
+                  markAsRead(notification.id);
+                  const link = getNotificationLink(notification);
+                  if (link) router.push(link);
+                }}
                 data-testid={`notification-${notification.id}`}
               >
                 <span className="mt-0.5 shrink-0">{getNotificationIcon(notification.type)}</span>
