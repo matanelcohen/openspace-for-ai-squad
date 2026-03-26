@@ -65,8 +65,9 @@ export function useNotifications() {
   }, []);
 
   const clearAll = useCallback(() => {
-    persist([]);
-  }, [persist]);
+    setNotifications([]);
+    storeNotifications([]);
+  }, []);
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
