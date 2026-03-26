@@ -86,10 +86,18 @@ export function Terminal() {
     };
 
     ws.onmessage = (event) => {
-      if (typeof event.data === 'string') {
-        term.write(event.data);
-      } else if (event.data instanceof Blob) {
-        event.data.text().then((text) => term.write(text));
+      try {
+        const msg = JSON.parse(event.data as string) as { type: string; data: string };
+        if (msg.type === 'output') {
+          term.write(msg.data);
+        } else if (msg.type === 'error') {
+          term.write(`\r\n\x1b[31m${msg.data}\x1b[0m`);
+        }
+      } catch {
+        // Fallback: write raw data if not JSON
+        if (typeof event.data === 'string') {
+          term.write(event.data);
+        }
       }
     };
 
