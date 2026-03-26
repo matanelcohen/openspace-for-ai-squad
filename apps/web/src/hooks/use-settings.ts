@@ -37,7 +37,7 @@ export function useHealthCheck() {
     queryKey: ['health'],
     queryFn: async () => {
       try {
-        const res = await api.get<HealthResult>('/api/health');
+        const res = await api.get<HealthResult>('/health');
         return res;
       } catch {
         return {
