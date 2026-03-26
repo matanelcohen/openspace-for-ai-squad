@@ -51,7 +51,9 @@ export function useChatMessages(recipient: string) {
               m.sender === msg.sender
             ),
         );
-        return [...cleaned, msg];
+        const updated = [...cleaned, msg];
+        updated.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        return updated;
       });
     }
   });

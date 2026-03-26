@@ -40,7 +40,13 @@ export function useAssistantRuntime(channel: string) {
   const channelRef = useRef(channel);
   channelRef.current = channel;
 
-  const threadMessages = useMemo(() => messages.map(toThreadMessage), [messages]);
+  const threadMessages = useMemo(
+    () =>
+      [...messages]
+        .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .map(toThreadMessage),
+    [messages],
+  );
 
   const dictationAdapter = useMemo(
     () =>
