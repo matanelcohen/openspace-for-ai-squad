@@ -17,7 +17,10 @@ function mockFetch(status: number, body: unknown, statusText = 'OK') {
 
 async function createConnectedPair() {
   const server = createServer();
-  const client = new Client({ name: 'test-client', version: '1.0.0' });
+  const client = new Client(
+    { name: 'test-client', version: '1.0.0' },
+    { capabilities: { resources: { subscribe: true } } },
+  );
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   return { server, client };
@@ -319,5 +322,224 @@ describe('MCP Server — tool execution', () => {
 
     await client.close();
     await server.close();
+  });
+});
+
+// ── Resource registration ─────────────────────────────────────────
+
+describe('MCP Server — resource registration', () => {
+  let client: Client;
+  let server: ReturnType<typeof createServer>;
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(async () => {
+    // Mock fetch so resource reads don't fail
+    globalThis.fetch = mockFetch(200, []);
+    ({ client, server } = await createConnectedPair());
+  });
+
+  afterEach(async () => {
+    globalThis.fetch = originalFetch;
+    await client.close();
+    await server.close();
+  });
+
+  it('lists all static squad:// resources', async () => {
+    const { resources } = await client.listResources();
+    const uris = resources.map((r) => r.uri);
+
+    expect(uris).toContain('squad://agents');
+    expect(uris).toContain('squad://tasks');
+    expect(uris).toContain('squad://activity');
+    expect(uris).toContain('squad://decisions');
+  });
+
+  it('lists openspace:// resources for backward compatibility', async () => {
+    const { resources } = await client.listResources();
+    const uris = resources.map((r) => r.uri);
+
+    expect(uris).toContain('openspace://squad');
+    expect(uris).toContain('openspace://agents');
+    expect(uris).toContain('openspace://tasks');
+    expect(uris).toContain('openspace://decisions');
+  });
+
+  it('lists resource templates for squad://agents/{id} and squad://tasks/{id}', async () => {
+    const { resourceTemplates } = await client.listResourceTemplates();
+    const patterns = resourceTemplates.map((t) => t.uriTemplate);
+
+    expect(patterns).toContain('squad://agents/{id}');
+    expect(patterns).toContain('squad://tasks/{id}');
+  });
+
+  it('reads squad://agents resource', async () => {
+    const agents = [{ id: 'bender', role: 'backend' }];
+    globalThis.fetch = mockFetch(200, agents);
+
+    const result = await client.readResource({ uri: 'squad://agents' });
+    const text = (result.contents[0] as { text: string }).text;
+    expect(JSON.parse(text)).toEqual(agents);
+  });
+
+  it('reads squad://agents/{id} template resource', async () => {
+    const agent = { id: 'bender', role: 'backend', expertise: ['TypeScript'] };
+    globalThis.fetch = mockFetch(200, agent);
+
+    const result = await client.readResource({ uri: 'squad://agents/bender' });
+    const text = (result.contents[0] as { text: string }).text;
+    expect(JSON.parse(text)).toEqual(agent);
+  });
+
+  it('reads squad://tasks resource', async () => {
+    const tasks = [{ id: 'task-1', title: 'Test', status: 'backlog' }];
+    globalThis.fetch = mockFetch(200, tasks);
+
+    const result = await client.readResource({ uri: 'squad://tasks' });
+    const text = (result.contents[0] as { text: string }).text;
+    expect(JSON.parse(text)).toEqual(tasks);
+  });
+
+  it('reads squad://tasks/{id} template resource', async () => {
+    const task = { id: 'task-1', title: 'Test', status: 'in-progress', subTasks: [] };
+    globalThis.fetch = mockFetch(200, task);
+
+    const result = await client.readResource({ uri: 'squad://tasks/task-1' });
+    const text = (result.contents[0] as { text: string }).text;
+    expect(JSON.parse(text)).toEqual(task);
+  });
+
+  it('reads squad://activity resource', async () => {
+    const activity = { events: [{ type: 'task:created' }], total: 1 };
+    globalThis.fetch = mockFetch(200, activity);
+
+    const result = await client.readResource({ uri: 'squad://activity' });
+    const text = (result.contents[0] as { text: string }).text;
+    expect(JSON.parse(text)).toEqual(activity);
+  });
+
+  it('reads squad://decisions resource', async () => {
+    const decisions = [{ id: 'd1', title: 'Use TypeScript' }];
+    globalThis.fetch = mockFetch(200, decisions);
+
+    const result = await client.readResource({ uri: 'squad://decisions' });
+    const text = (result.contents[0] as { text: string }).text;
+    expect(JSON.parse(text)).toEqual(decisions);
+  });
+});
+
+// ── Prompt registration ──────────────────────────────────────────
+
+describe('MCP Server — prompt registration', () => {
+  let client: Client;
+  let server: ReturnType<typeof createServer>;
+  const originalFetch = globalThis.fetch;
+
+  beforeEach(async () => {
+    globalThis.fetch = mockFetch(200, []);
+    ({ client, server } = await createConnectedPair());
+  });
+
+  afterEach(async () => {
+    globalThis.fetch = originalFetch;
+    await client.close();
+    await server.close();
+  });
+
+  it('lists squad-status-summary and plan-feature prompts', async () => {
+    const { prompts } = await client.listPrompts();
+    const names = prompts.map((p) => p.name).sort();
+
+    expect(names).toContain('squad-status-summary');
+    expect(names).toContain('plan-feature');
+  });
+
+  it('squad-status-summary has no required arguments', async () => {
+    const { prompts } = await client.listPrompts();
+    const prompt = prompts.find((p) => p.name === 'squad-status-summary');
+    expect(prompt).toBeDefined();
+    // Zero-arg prompt — arguments should be absent or empty
+    expect(prompt!.arguments ?? []).toHaveLength(0);
+  });
+
+  it('plan-feature has a required "feature" argument', async () => {
+    const { prompts } = await client.listPrompts();
+    const prompt = prompts.find((p) => p.name === 'plan-feature');
+    expect(prompt).toBeDefined();
+    const featureArg = (prompt!.arguments ?? []).find(
+      (a: { name: string }) => a.name === 'feature',
+    );
+    expect(featureArg).toBeDefined();
+    expect(featureArg!.required).toBe(true);
+  });
+
+  it('squad-status-summary returns prompt messages with squad context', async () => {
+    const squad = { agents: [], tasks: [] };
+    const activity = { events: [], total: 0 };
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(squad),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(activity),
+      });
+
+    const result = await client.getPrompt({ name: 'squad-status-summary' });
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0].role).toBe('user');
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+    expect(text).toContain('squad');
+    expect(text).toContain('status summary');
+  });
+
+  it('plan-feature returns prompt messages with feature context', async () => {
+    const agents = [{ id: 'bender' }];
+    const tasks = [{ id: 'task-1' }];
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(agents),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(tasks),
+      });
+
+    const result = await client.getPrompt({
+      name: 'plan-feature',
+      arguments: { feature: 'Add WebSocket support' },
+    });
+    expect(result.messages).toHaveLength(1);
+    const text = (result.messages[0].content as { type: string; text: string }).text;
+    expect(text).toContain('Add WebSocket support');
+    expect(text).toContain('Available Agents');
+  });
+});
+
+// ── Resource subscriptions ──────────────────────────────────────
+
+describe('MCP Server — resource subscriptions', () => {
+  it('notifyResourceUpdated does not throw when connected', async () => {
+    const { client, server } = await createConnectedPair();
+
+    // Should not throw
+    server.notifyResourceUpdated('squad://tasks');
+    server.notifyResourceUpdated('squad://activity');
+
+    await client.close();
+    await server.close();
+  });
+
+  it('notifyResourceUpdated does not throw when no client connected', () => {
+    const server = createServer();
+    // No transport connected — should silently swallow
+    expect(() => server.notifyResourceUpdated('squad://tasks')).not.toThrow();
   });
 });

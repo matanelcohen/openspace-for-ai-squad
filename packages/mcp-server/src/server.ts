@@ -1,16 +1,38 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 
 const PACKAGE_VERSION = '0.0.1';
 
+export interface SquadMcpServer extends McpServer {
+  /**
+   * Notify connected clients that a resource has been updated.
+   * Call this when tasks or activity change to trigger re-reads for subscribed clients.
+   */
+  notifyResourceUpdated(uri: string): void;
+}
+
 /**
  * Create and configure the openspace MCP server with all tools and resources.
  */
-export function createServer(): McpServer {
-  const server = new McpServer({
-    name: 'openspace-mcp',
-    version: PACKAGE_VERSION,
-  });
+export function createServer(): SquadMcpServer {
+  const server = new McpServer(
+    {
+      name: 'openspace-mcp',
+      version: PACKAGE_VERSION,
+    },
+    {
+      capabilities: {
+        resources: { subscribe: true },
+      },
+    },
+  ) as SquadMcpServer;
+
+  // Expose a helper for resource subscription notifications
+  server.notifyResourceUpdated = (uri: string) => {
+    server.server.sendResourceUpdated({ uri }).catch(() => {
+      // Swallow — no client connected or subscription inactive
+    });
+  };
 
   // ── Tools ─────────────────────────────────────────────────────────────
 
@@ -398,6 +420,247 @@ export function createServer(): McpServer {
             uri: 'openspace://decisions',
             text: JSON.stringify(decisions, null, 2),
             mimeType: 'application/json',
+          },
+        ],
+      };
+    },
+  );
+
+  // ── Squad Resources (squad:// scheme) ────────────────────────────────
+
+  server.resource(
+    'squad-agents',
+    'squad://agents',
+    { description: 'List of all agents with roles, expertise, and status' },
+    async () => {
+      const res = await fetch(`${getApiBase()}/api/agents`);
+      const agents = await res.json();
+      return {
+        contents: [
+          {
+            uri: 'squad://agents',
+            text: JSON.stringify(agents, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
+      };
+    },
+  );
+
+  server.resource(
+    'squad-agent-detail',
+    new ResourceTemplate('squad://agents/{id}', {
+      list: async () => {
+        const res = await fetch(`${getApiBase()}/api/agents`);
+        const agents = (await res.json()) as Array<{ id: string }>;
+        return {
+          resources: agents.map((a) => ({
+            uri: `squad://agents/${a.id}`,
+            name: a.id,
+          })),
+        };
+      },
+      complete: {
+        id: async () => {
+          const res = await fetch(`${getApiBase()}/api/agents`);
+          const agents = (await res.json()) as Array<{ id: string }>;
+          return agents.map((a) => a.id);
+        },
+      },
+    }),
+    { description: 'Detailed info for a single agent — charter, expertise, history' },
+    async (uri, { id }) => {
+      const res = await fetch(`${getApiBase()}/api/agents/${id}`);
+      const agent = await res.json();
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(agent, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
+      };
+    },
+  );
+
+  server.resource(
+    'squad-tasks',
+    'squad://tasks',
+    { description: 'Current task board — all tasks with statuses, assignees, and priorities' },
+    async () => {
+      const res = await fetch(`${getApiBase()}/api/tasks`);
+      const tasks = await res.json();
+      return {
+        contents: [
+          {
+            uri: 'squad://tasks',
+            text: JSON.stringify(tasks, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
+      };
+    },
+  );
+
+  server.resource(
+    'squad-task-detail',
+    new ResourceTemplate('squad://tasks/{id}', {
+      list: async () => {
+        const res = await fetch(`${getApiBase()}/api/tasks`);
+        const tasks = (await res.json()) as Array<{ id: string; title?: string }>;
+        return {
+          resources: tasks.map((t) => ({
+            uri: `squad://tasks/${t.id}`,
+            name: t.title ?? t.id,
+          })),
+        };
+      },
+      complete: {
+        id: async () => {
+          const res = await fetch(`${getApiBase()}/api/tasks`);
+          const tasks = (await res.json()) as Array<{ id: string }>;
+          return tasks.map((t) => t.id);
+        },
+      },
+    }),
+    { description: 'Single task detail with sub-tasks, status, and history' },
+    async (uri, { id }) => {
+      const res = await fetch(`${getApiBase()}/api/tasks/${id}`);
+      const task = await res.json();
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            text: JSON.stringify(task, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
+      };
+    },
+  );
+
+  server.resource(
+    'squad-activity',
+    'squad://activity',
+    { description: 'Recent activity feed — agent actions, task changes, decisions (newest first)' },
+    async () => {
+      const res = await fetch(`${getApiBase()}/api/activity?limit=50`);
+      const activity = await res.json();
+      return {
+        contents: [
+          {
+            uri: 'squad://activity',
+            text: JSON.stringify(activity, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
+      };
+    },
+  );
+
+  server.resource(
+    'squad-decisions',
+    'squad://decisions',
+    { description: 'Squad decision log — architectural and process decisions' },
+    async () => {
+      const res = await fetch(`${getApiBase()}/api/decisions`);
+      const decisions = await res.json();
+      return {
+        contents: [
+          {
+            uri: 'squad://decisions',
+            text: JSON.stringify(decisions, null, 2),
+            mimeType: 'application/json',
+          },
+        ],
+      };
+    },
+  );
+
+  // ── Prompts ──────────────────────────────────────────────────────────
+
+  server.prompt(
+    'squad-status-summary',
+    'Generate a concise status summary of the squad — who is doing what, blockers, and next steps',
+    async () => {
+      const [squadRes, activityRes] = await Promise.all([
+        fetch(`${getApiBase()}/api/squad`),
+        fetch(`${getApiBase()}/api/activity?limit=10`),
+      ]);
+      const squad = await squadRes.json();
+      const activity = await activityRes.json();
+
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: [
+                'Based on the following squad state and recent activity, provide a concise status summary.',
+                'Include: who is working on what, any blockers, and recommended next steps.',
+                '',
+                '## Current Squad State',
+                '```json',
+                JSON.stringify(squad, null, 2),
+                '```',
+                '',
+                '## Recent Activity',
+                '```json',
+                JSON.stringify(activity, null, 2),
+                '```',
+              ].join('\n'),
+            },
+          },
+        ],
+      };
+    },
+  );
+
+  server.prompt(
+    'plan-feature',
+    'Generate a feature implementation plan broken into squad tasks',
+    {
+      feature: z.string().describe('Short description of the feature to plan'),
+      scope: z
+        .string()
+        .optional()
+        .describe('Scope constraints — e.g. "backend only", "API + UI", "infra"'),
+    },
+    async ({ feature, scope }) => {
+      const [agentsRes, tasksRes] = await Promise.all([
+        fetch(`${getApiBase()}/api/agents`),
+        fetch(`${getApiBase()}/api/tasks`),
+      ]);
+      const agents = await agentsRes.json();
+      const tasks = await tasksRes.json();
+
+      const scopeClause = scope ? `\nScope: ${scope}` : '';
+
+      return {
+        messages: [
+          {
+            role: 'user' as const,
+            content: {
+              type: 'text' as const,
+              text: [
+                `Plan the implementation of this feature: "${feature}"${scopeClause}`,
+                '',
+                'Break it down into concrete tasks that can be assigned to squad agents.',
+                'For each task include: title, description, suggested assignee, priority (P0-P3), and dependencies.',
+                '',
+                '## Available Agents',
+                '```json',
+                JSON.stringify(agents, null, 2),
+                '```',
+                '',
+                '## Current Task Board (for context / avoiding conflicts)',
+                '```json',
+                JSON.stringify(tasks, null, 2),
+                '```',
+              ].join('\n'),
+            },
           },
         ],
       };
