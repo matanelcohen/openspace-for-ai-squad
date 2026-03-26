@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 
 import cors from '@fastify/cors';
+import { mcpPlugin } from '@openspace/mcp-server';
 import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
@@ -143,6 +144,9 @@ export function buildApp(opts: AppOptions = {}) {
 
   // WebSocket plugin
   app.register(wsPlugin, { manager: opts.wsManager });
+
+  // MCP server — SSE transport at /mcp/sse, messages at /mcp/messages
+  app.register(mcpPlugin, { prefix: '/mcp' });
 
   // Wire up activity feed + chat to wsManager after registration
   app.addHook('onReady', async () => {
