@@ -1,13 +1,29 @@
 'use client';
 
-import { Clock, History, Play, RefreshCw } from 'lucide-react';
+import { Clock, History, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Input } from '@/components/ui/input';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import {
   Table,
@@ -18,14 +34,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Textarea } from '@/components/ui/textarea';
 import {
   type CronExecution,
   type CronJob,
+  useCreateCronJob,
   useCronExecutions,
   useCronJobs,
+  useDeleteCronJob,
   useRunCronJob,
   useToggleCronJob,
 } from '@/hooks/use-cron';
+import { useAgents } from '@/hooks/use-agents';
 
 function StatusBadge({ status }: { status: string }) {
   const variant =
@@ -162,18 +182,27 @@ function ExecutionHistory({ executions }: { executions?: CronExecution[] }) {
 export default function CronPage() {
   const { data: jobs, isLoading: jobsLoading } = useCronJobs();
   const { data: executions, isLoading: execLoading } = useCronExecutions();
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-          <Clock className="h-8 w-8" />
-          Scheduled Jobs
-        </h1>
-        <p className="text-muted-foreground">
-          Manage and monitor automated cron jobs for your squad.
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            <Clock className="h-8 w-8" />
+            Scheduled Jobs
+          </h1>
+          <p className="text-muted-foreground">
+            Manage and monitor automated cron jobs for your squad.
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="mr-1 h-4 w-4" />
+          New Job
+        </Button>
       </div>
+
+      <CreateCronJobDialog open={createOpen} onOpenChange={setCreateOpen} />
 
       <Tabs defaultValue="jobs">
         <TabsList>
@@ -235,5 +264,103 @@ export default function CronPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { data: agents = [] } = useAgents();
+  const createJob = useCreateCronJob();
+  const [action, setAction] = useState<'chat' | 'task'>('chat');
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const id = (form.get('id') as string).trim().toLowerCase().replace(/\s+/g, '-');
+
+    createJob.mutate(
+      {
+        id,
+        schedule: form.get('schedule') as string,
+        agent: form.get('agent') as string,
+        action,
+        message: action === 'chat' ? (form.get('message') as string) : undefined,
+        channel: action === 'chat' ? (form.get('channel') as string) || 'team' : undefined,
+        title: action === 'task' ? (form.get('title') as string) : undefined,
+        description: action === 'task' ? (form.get('description') as string) : undefined,
+      },
+      { onSuccess: () => onOpenChange(false) },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Create Scheduled Job</DialogTitle>
+          <DialogDescription>Set up a recurring task or message for an agent.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Job Name</label>
+            <Input name="id" placeholder="daily-standup" required />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Schedule (cron)</label>
+            <Input name="schedule" placeholder="0 9 * * 1-5" required />
+            <p className="text-xs text-muted-foreground">e.g., &quot;0 9 * * 1-5&quot; = weekdays at 9am</p>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Agent</label>
+            <Select name="agent" defaultValue="leela">
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {agents.filter(a => !['scribe', 'ralph'].includes(a.id)).map(a => (
+                  <SelectItem key={a.id} value={a.id}>{a.name} ({a.role})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Action</label>
+            <Select value={action} onValueChange={(v) => setAction(v as 'chat' | 'task')}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="chat">Send Chat Message</SelectItem>
+                <SelectItem value="task">Create Task</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {action === 'chat' ? (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Channel</label>
+                <Input name="channel" placeholder="team" defaultValue="team" />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Message</label>
+                <Textarea name="message" placeholder="Good morning team! Status update please." required rows={3} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Task Title</label>
+                <Input name="title" placeholder="Run nightly test suite" required />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Description</label>
+                <Textarea name="description" placeholder="Run all tests and report results" rows={3} />
+              </div>
+            </>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={createJob.isPending}>
+              {createJob.isPending ? 'Creating...' : 'Create Job'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

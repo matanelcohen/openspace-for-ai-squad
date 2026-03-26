@@ -277,6 +277,25 @@ export class CronService {
     return this.executions.slice(-limit);
   }
 
+  /** Add a new cron job and persist. */
+  addJob(job: CronJob): CronJob {
+    if (this.jobs.some((j) => j.id === job.id)) {
+      throw new Error(`Job "${job.id}" already exists`);
+    }
+    this.jobs.push(job);
+    this.persistConfig();
+    return job;
+  }
+
+  /** Delete a cron job by ID. */
+  deleteJob(id: string): boolean {
+    const idx = this.jobs.findIndex((j) => j.id === id);
+    if (idx < 0) return false;
+    this.jobs.splice(idx, 1);
+    this.persistConfig();
+    return true;
+  }
+
   /** Persist current job config back to cron.json. */
   private persistConfig(): void {
     try {

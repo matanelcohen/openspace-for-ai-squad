@@ -75,3 +75,32 @@ export function useRunCronJob() {
     },
   });
 }
+
+export function useCreateCronJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      id: string;
+      schedule: string;
+      agent: string;
+      action: 'chat' | 'task';
+      message?: string;
+      channel?: string;
+      title?: string;
+      description?: string;
+    }) => api.post<{ job: CronJob }>('/api/cron', input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cron-jobs'] });
+    },
+  });
+}
+
+export function useDeleteCronJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/api/cron/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cron-jobs'] });
+    },
+  });
+}

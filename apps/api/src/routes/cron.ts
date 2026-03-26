@@ -56,6 +56,46 @@ const cronRoute: FastifyPluginAsync = async (app) => {
     const executions = app.cronService.getExecutions(limit);
     return reply.send({ executions });
   });
+
+  // POST /api/cron — create a new job
+  app.post<{ Body: Record<string, unknown> }>('/cron', async (request, reply) => {
+    const body = request.body;
+    if (!body || typeof body !== 'object') {
+      return reply.status(400).send({ error: 'Request body is required' });
+    }
+
+    const { id, schedule, agent, action, message, channel, title, description, enabled } = body as Record<string, string | boolean | undefined>;
+
+    if (!id || typeof id !== 'string') return reply.status(400).send({ error: '"id" is required' });
+    if (!schedule || typeof schedule !== 'string') return reply.status(400).send({ error: '"schedule" is required (cron expression)' });
+    if (!agent || typeof agent !== 'string') return reply.status(400).send({ error: '"agent" is required' });
+    if (action !== 'chat' && action !== 'task') return reply.status(400).send({ error: '"action" must be "chat" or "task"' });
+
+    try {
+      const job = app.cronService.addJob({
+        id: id as string,
+        schedule: schedule as string,
+        agent: agent as string,
+        action: action as 'chat' | 'task',
+        message: (message as string) || undefined,
+        channel: (channel as string) || 'team',
+        title: (title as string) || undefined,
+        description: (description as string) || undefined,
+        enabled: enabled !== false,
+      });
+      return reply.status(201).send({ job });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.status(409).send({ error: msg });
+    }
+  });
+
+  // DELETE /api/cron/:id — delete a job
+  app.delete<{ Params: { id: string } }>('/cron/:id', async (request, reply) => {
+    const deleted = app.cronService.deleteJob(request.params.id);
+    if (!deleted) return reply.status(404).send({ error: `Job "${request.params.id}" not found` });
+    return reply.status(204).send();
+  });
 };
 
 export default cronRoute;
