@@ -4,12 +4,15 @@ import cors from '@fastify/cors';
 import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
+import { ErrorCodes, sendError } from './lib/api-errors.js';
 import a2aRoute from './routes/a2a.js';
 import activityRoute from './routes/activity.js';
 import agentsRoute from './routes/agents.js';
+import channelsRoute from './routes/channels.js';
 import chatRoute from './routes/chat.js';
 import decisionsRoute from './routes/decisions.js';
 import healthRoute from './routes/health.js';
+import knowledgeRoute from './routes/knowledge.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import teamMembersRoute from './routes/team-members.js';
@@ -20,8 +23,11 @@ import { ActivityFeed } from './services/activity/index.js';
 import { AgentWorkerService } from './services/agent-worker/index.js';
 import type { AIProvider } from './services/ai/copilot-provider.js';
 import { createAIProvider } from './services/ai/copilot-provider.js';
+import { AuthService } from './services/auth/index.js';
 import { ChatService } from './services/chat/index.js';
 import { openDatabase } from './services/db/index.js';
+import { seedTeamMembers } from './services/db/seed-team.js';
+import { KnowledgeSearchService } from './services/search/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import {
   ConversationContextManager,
@@ -63,6 +69,9 @@ export function buildApp(opts: AppOptions = {}) {
   const squadDir = opts.squadDir ?? resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
   const db = opts.db ?? openDatabase({ squadDir });
 
+  // Seed team members from .squad/team.md (no-op if already populated)
+  seedTeamMembers(db, squadDir);
+
   // Decorate with a SquadParser instance
   const parser = new SquadParser(squadDir);
   app.decorate('squadParser', parser);
@@ -78,6 +87,14 @@ export function buildApp(opts: AppOptions = {}) {
     aiProvider: opts.aiProvider ?? null,
   });
   app.decorate('chatService', chatService);
+
+  // Auth service
+  const authService = new AuthService({ db });
+  app.decorate('authService', authService);
+
+  // Knowledge search service
+  const knowledgeSearch = new KnowledgeSearchService({ db });
+  app.decorate('knowledgeSearch', knowledgeSearch);
 
   // Voice services
   const AGENT_PROFILES = [
@@ -132,6 +149,12 @@ export function buildApp(opts: AppOptions = {}) {
     activityFeed.setWebSocketManager(app.wsManager);
     chatService.setWebSocketManager(app.wsManager);
     chatService.setActivityFeed(activityFeed);
+
+    // Wire WebSocket chat:send messages through ChatService.send()
+    // which validates channel membership before persisting or broadcasting.
+    app.wsManager.setChatSendHandler(async (input) => {
+      await chatService.send(input);
+    });
 
     // Initialize AI provider and connect to chat + voice + worker services
     if (!opts.aiProvider) {
@@ -225,15 +248,17 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(activityRoute, { prefix: '/api' });
   app.register(chatRoute, { prefix: '/api' });
   app.register(voiceRoute, { prefix: '/api' });
+  app.register(channelsRoute, { prefix: '/api' });
+  app.register(knowledgeRoute, { prefix: '/api' });
   app.register(teamMembersRoute, { prefix: '/api' });
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
-    const code = statusCode >= 500 ? 'INTERNAL_ERROR' : 'VALIDATION_ERROR';
-    reply.status(statusCode).send({
-      error: (error as Error).message || 'Internal Server Error',
-      code,
-    });
+    const code = statusCode >= 500 ? ErrorCodes.INTERNAL_ERROR : ErrorCodes.VALIDATION_ERROR;
+    if (statusCode >= 500) {
+      request.log.error(error, 'Unhandled error');
+    }
+    return sendError(reply, statusCode, code, (error as Error).message || 'Internal Server Error');
   });
 
   return app;
@@ -243,6 +268,7 @@ export function buildApp(opts: AppOptions = {}) {
 declare module 'fastify' {
   interface FastifyInstance {
     squadParser: SquadParser;
+    knowledgeSearch: KnowledgeSearchService;
     agentWorker?: AgentWorkerService;
     a2aService?: A2AService;
   }
