@@ -26,6 +26,7 @@ import voiceRoute from './routes/voice.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
 import { SkillRegistryImpl } from './services/skill-registry/index.js';
+import { seedBuiltinSkills } from './services/seed-skills.js';
 import { ActivityFeed } from './services/activity/index.js';
 import { AgentWorkerService } from './services/agent-worker/index.js';
 import type { AIProvider } from './services/ai/copilot-provider.js';
@@ -103,6 +104,7 @@ export function buildApp(opts: AppOptions = {}) {
 
   // Skill registry
   const skillRegistry = new SkillRegistryImpl();
+  seedBuiltinSkills(skillRegistry);
   app.decorate('skillRegistry', skillRegistry);
 
   // Knowledge search service
