@@ -1,10 +1,6 @@
 'use client';
 
-import type {
-  SkillManifest,
-  SkillPhase,
-  SkillRegistryEntry,
-} from '@openspace/shared';
+import type { SkillManifest, SkillPhase, SkillRegistryEntry } from '@openspace/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';
@@ -129,11 +125,69 @@ export function useAllSkillTags() {
   return Array.from(tags).sort();
 }
 
+export function useBulkToggleAgentSkills(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ skillIds, enabled }: { skillIds: string[]; enabled: boolean }) =>
+      api.put(`/api/agents/${agentId}/skills/bulk-toggle`, { skillIds, enabled }),
+    onMutate: async ({ skillIds, enabled }) => {
+      await queryClient.cancelQueries({ queryKey: ['agent-skills', agentId] });
+      const previous = queryClient.getQueryData<AgentSkillsConfig>(['agent-skills', agentId]);
+      if (previous) {
+        const idSet = new Set(skillIds);
+        queryClient.setQueryData(['agent-skills', agentId], {
+          ...previous,
+          assignments: previous.assignments.map((a) =>
+            idSet.has(a.skillId) ? { ...a, enabled } : a,
+          ),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['agent-skills', agentId], context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agent-skills', agentId] });
+    },
+  });
+}
+
+export function useUpdateAgentSkillConfig(agentId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ skillId, config }: { skillId: string; config: Record<string, unknown> }) =>
+      api.put(`/api/agents/${agentId}/skills/${skillId}/config`, { config }),
+    onMutate: async ({ skillId, config }) => {
+      await queryClient.cancelQueries({ queryKey: ['agent-skills', agentId] });
+      const previous = queryClient.getQueryData<AgentSkillsConfig>(['agent-skills', agentId]);
+      if (previous) {
+        queryClient.setQueryData(['agent-skills', agentId], {
+          ...previous,
+          assignments: previous.assignments.map((a) =>
+            a.skillId === skillId ? { ...a, config } : a,
+          ),
+        });
+      }
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['agent-skills', agentId], context.previous);
+      }
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: ['agent-skills', agentId] });
+    },
+  });
+}
+
 export function useCreateSkill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (manifest: SkillManifest) =>
-      api.post<SkillSummary>('/api/skills', manifest),
+    mutationFn: (manifest: SkillManifest) => api.post<SkillSummary>('/api/skills', manifest),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['skills'] });
     },
