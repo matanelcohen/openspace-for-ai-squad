@@ -36,9 +36,9 @@ function serialiseEntry(entry: ReturnType<SkillRegistryImpl['get']>) {
     activeAgents: [...entry.activeAgents],
     lastTransition: entry.lastTransition,
     error: entry.error ?? null,
-    tools: entry.manifest.tools,
-    triggers: entry.manifest.triggers,
-    prompts: entry.manifest.prompts.map((p: { id: string; name: string; role: string }) => ({
+    tools: entry.manifest.tools ?? [],
+    triggers: entry.manifest.triggers ?? [],
+    prompts: (entry.manifest.prompts ?? []).map((p: { id: string; name: string; role: string }) => ({
       id: p.id,
       name: p.name,
       role: p.role,
