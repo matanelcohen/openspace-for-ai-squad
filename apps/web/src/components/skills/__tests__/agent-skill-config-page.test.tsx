@@ -1,6 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/hooks/use-skills');
@@ -15,18 +14,55 @@ vi.mock('next/navigation', () => ({
   useParams: () => ({ agentId: 'agent-1' }),
 }));
 
+// Mock dnd-kit since jsdom doesn't support DnD
+vi.mock('@dnd-kit/core', () => ({
+  DndContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  closestCenter: vi.fn(),
+  KeyboardSensor: vi.fn(),
+  PointerSensor: vi.fn(),
+  useSensor: vi.fn(() => ({})),
+  useSensors: vi.fn(() => []),
+}));
+vi.mock('@dnd-kit/sortable', () => ({
+  SortableContext: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  sortableKeyboardCoordinates: vi.fn(),
+  useSortable: () => ({
+    attributes: {},
+    listeners: {},
+    setNodeRef: vi.fn(),
+    transform: null,
+    transition: null,
+    isDragging: false,
+  }),
+  verticalListSortingStrategy: vi.fn(),
+  arrayMove: <T,>(arr: T[], from: number, to: number) => {
+    const result = [...arr];
+    const [item] = result.splice(from, 1);
+    result.splice(to, 0, item);
+    return result;
+  },
+}));
+vi.mock('@dnd-kit/utilities', () => ({
+  CSS: { Transform: { toString: () => undefined } },
+}));
+
+// Mock the dependency graph (uses @xyflow/react)
+vi.mock('@/components/skills/skill-dependency-graph', () => ({
+  SkillDependencyGraph: ({ skillIds }: { skillIds: string[] }) => (
+    <div data-testid="skill-dependency-graph">Graph: {skillIds.join(', ')}</div>
+  ),
+}));
+
+import type { AgentSkillsConfig, SkillSummary } from '@/hooks/use-skills';
 import {
   useAgentSkills,
-  useAttachAgentSkill,
   useBulkToggleAgentSkills,
-  useDetachAgentSkill,
   useReorderAgentSkills,
   useSkillDetail,
   useSkills,
   useToggleAgentSkill,
   useUpdateAgentSkillConfig,
 } from '@/hooks/use-skills';
-import type { AgentSkillsConfig, SkillSummary } from '@/hooks/use-skills';
 
 import AgentSkillConfigPage from '../../../../app/skills/agents/[agentId]/page';
 
@@ -59,15 +95,6 @@ const mockAllSkills: SkillSummary[] = [
     phase: 'loaded',
     activeAgentCount: 0,
     tags: ['testing'],
-  },
-  {
-    id: 'security-scanner',
-    name: 'Security Scanner',
-    version: '1.3.0',
-    description: 'Scans for vulnerabilities.',
-    phase: 'validated',
-    activeAgentCount: 0,
-    tags: ['security'],
   },
 ];
 
@@ -115,8 +142,6 @@ beforeEach(() => {
   vi.mocked(useBulkToggleAgentSkills).mockReturnValue({ ...mockMutation });
   vi.mocked(useReorderAgentSkills).mockReturnValue({ ...mockMutation });
   vi.mocked(useUpdateAgentSkillConfig).mockReturnValue({ ...mockMutation });
-  vi.mocked(useDetachAgentSkill).mockReturnValue({ ...mockMutation });
-  vi.mocked(useAttachAgentSkill).mockReturnValue({ ...mockMutation });
   vi.mocked(useSkillDetail).mockReturnValue({
     data: undefined,
     isLoading: false,
@@ -145,29 +170,6 @@ describe('AgentSkillConfigPage', () => {
     render(<AgentSkillConfigPage />, { wrapper });
     const backButton = screen.getByText('Back to Skill Store');
     expect(backButton.closest('a')).toHaveAttribute('href', '/skills');
-  });
-
-  it('renders the Add Skills button', () => {
-    render(<AgentSkillConfigPage />, { wrapper });
-    expect(screen.getByTestId('toggle-available-skills')).toBeInTheDocument();
-    expect(screen.getByText('Add Skills')).toBeInTheDocument();
-  });
-
-  it('shows available skills panel when Add Skills is clicked', async () => {
-    render(<AgentSkillConfigPage />, { wrapper });
-    const addButton = screen.getByTestId('toggle-available-skills');
-    await userEvent.click(addButton);
-    expect(screen.getByTestId('available-skills-heading')).toBeInTheDocument();
-    expect(screen.getByTestId('available-skills-panel')).toBeInTheDocument();
-  });
-
-  it('hides available skills panel when clicked again', async () => {
-    render(<AgentSkillConfigPage />, { wrapper });
-    const addButton = screen.getByTestId('toggle-available-skills');
-    await userEvent.click(addButton);
-    expect(screen.getByTestId('available-skills-panel')).toBeInTheDocument();
-    await userEvent.click(addButton);
-    expect(screen.queryByTestId('available-skills-panel')).not.toBeInTheDocument();
   });
 
   it('renders assigned skills in the list', () => {
@@ -199,28 +201,6 @@ describe('AgentSkillConfigPage', () => {
     expect(screen.getByTestId('skill-toggle-test-runner')).toBeInTheDocument();
   });
 
-  it('renders detach button for each assigned skill', () => {
-    render(<AgentSkillConfigPage />, { wrapper });
-    expect(screen.getByTestId('skill-detach-code-review')).toBeInTheDocument();
-    expect(screen.getByTestId('skill-detach-test-runner')).toBeInTheDocument();
-  });
-
-  it('only shows unassigned skills in the available panel', async () => {
-    render(<AgentSkillConfigPage />, { wrapper });
-    await userEvent.click(screen.getByTestId('toggle-available-skills'));
-    // Security Scanner is not assigned, so it should appear
-    expect(screen.getByTestId('available-skill-security-scanner')).toBeInTheDocument();
-    // Code Review and Test Runner are assigned, so they should NOT appear in available
-    expect(screen.queryByTestId('available-skill-code-review')).not.toBeInTheDocument();
-    expect(screen.queryByTestId('available-skill-test-runner')).not.toBeInTheDocument();
-  });
-
-  it('shows assign button for available skills', async () => {
-    render(<AgentSkillConfigPage />, { wrapper });
-    await userEvent.click(screen.getByTestId('toggle-available-skills'));
-    expect(screen.getByTestId('assign-skill-security-scanner')).toBeInTheDocument();
-  });
-
   it('renders drag handles for reordering', () => {
     render(<AgentSkillConfigPage />, { wrapper });
     const handles = screen.getAllByLabelText('Drag to reorder');
@@ -233,31 +213,25 @@ describe('AgentSkillConfigPage', () => {
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
-  it('shows "all skills assigned" message when no available skills', async () => {
-    vi.mocked(useSkills).mockReturnValue({
-      data: mockAllSkills.filter((s) => s.id === 'code-review' || s.id === 'test-runner'),
-      isLoading: false,
-      error: null,
-    } as ReturnType<typeof useSkills>);
+  it('shows dependency graph toggle button', () => {
     render(<AgentSkillConfigPage />, { wrapper });
-    await userEvent.click(screen.getByTestId('toggle-available-skills'));
-    expect(screen.getByTestId('no-available-skills')).toBeInTheDocument();
-    expect(screen.getByText('All skills are already assigned to this agent.')).toBeInTheDocument();
+    expect(screen.getByTestId('toggle-dependency-graph')).toBeInTheDocument();
   });
 
-  it('filters available skills by search', async () => {
+  it('shows select-all button', () => {
     render(<AgentSkillConfigPage />, { wrapper });
-    await userEvent.click(screen.getByTestId('toggle-available-skills'));
-    const searchInput = screen.getByTestId('available-skills-search');
-    await userEvent.type(searchInput, 'security');
-    expect(screen.getByTestId('available-skill-security-scanner')).toBeInTheDocument();
+    expect(screen.getByTestId('select-all-skills')).toBeInTheDocument();
   });
 
-  it('shows no match message when search yields nothing', async () => {
+  it('shows active on task indicator', () => {
     render(<AgentSkillConfigPage />, { wrapper });
-    await userEvent.click(screen.getByTestId('toggle-available-skills'));
-    const searchInput = screen.getByTestId('available-skills-search');
-    await userEvent.type(searchInput, 'zzzznonexistent');
-    expect(screen.getByText('No matching skills found.')).toBeInTheDocument();
+    expect(screen.getByText('Active on task')).toBeInTheDocument();
+  });
+
+  it('renders hint text about green ring and drag ordering', () => {
+    render(<AgentSkillConfigPage />, { wrapper });
+    expect(
+      screen.getByText(/Skills highlighted with a green ring are currently active/),
+    ).toBeInTheDocument();
   });
 });

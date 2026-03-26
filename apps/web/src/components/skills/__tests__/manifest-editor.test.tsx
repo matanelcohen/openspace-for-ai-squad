@@ -23,25 +23,19 @@ const validJson = JSON.stringify(
 
 describe('ManifestEditor', () => {
   it('renders the editor with filename', () => {
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
     expect(screen.getByTestId('manifest-editor')).toBeInTheDocument();
     expect(screen.getByText('skill.manifest.json')).toBeInTheDocument();
   });
 
   it('renders the JSON content in textarea', () => {
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
     const textarea = screen.getByTestId('manifest-json-textarea') as HTMLTextAreaElement;
     expect(textarea.value).toBe(validJson);
   });
 
   it('shows valid message when no errors', () => {
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
     expect(screen.getByText('Manifest is valid')).toBeInTheDocument();
   });
 
@@ -60,9 +54,7 @@ describe('ManifestEditor', () => {
 
   it('shows Modified indicator when content is changed', async () => {
     const user = userEvent.setup();
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
 
     const textarea = screen.getByTestId('manifest-json-textarea');
     await user.click(textarea);
@@ -73,9 +65,7 @@ describe('ManifestEditor', () => {
 
   it('shows Apply and Discard buttons when dirty', async () => {
     const user = userEvent.setup();
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
 
     const textarea = screen.getByTestId('manifest-json-textarea');
     await user.click(textarea);
@@ -88,9 +78,7 @@ describe('ManifestEditor', () => {
   it('calls onApplyJson when Apply is clicked', async () => {
     const user = userEvent.setup();
     const onApplyJson = vi.fn(() => [] as ValidationError[]);
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={onApplyJson} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={onApplyJson} />);
 
     const textarea = screen.getByTestId('manifest-json-textarea');
     await user.click(textarea);
@@ -102,9 +90,7 @@ describe('ManifestEditor', () => {
 
   it('resets to original content when Discard is clicked', async () => {
     const user = userEvent.setup();
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
 
     const textarea = screen.getByTestId('manifest-json-textarea') as HTMLTextAreaElement;
     await user.click(textarea);
@@ -118,26 +104,25 @@ describe('ManifestEditor', () => {
 
   it('shows JSON syntax error for invalid JSON', async () => {
     const user = userEvent.setup();
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
 
     const textarea = screen.getByTestId('manifest-json-textarea');
     await user.clear(textarea);
-    await user.type(textarea, '{invalid json');
+    // Use keyboard() to avoid userEvent interpreting `{` as a special key
+    await user.click(textarea);
+    await user.keyboard('invalid json');
 
     expect(screen.getByText('1 issue')).toBeInTheDocument();
   });
 
   it('disables Apply button when JSON has syntax errors', async () => {
     const user = userEvent.setup();
-    render(
-      <ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />,
-    );
+    render(<ManifestEditor manifestJson={validJson} errors={[]} onApplyJson={vi.fn(() => [])} />);
 
     const textarea = screen.getByTestId('manifest-json-textarea');
     await user.clear(textarea);
-    await user.type(textarea, '{bad');
+    await user.click(textarea);
+    await user.keyboard('bad json');
 
     const applyBtn = screen.getByText('Apply to Form');
     expect(applyBtn).toBeDisabled();

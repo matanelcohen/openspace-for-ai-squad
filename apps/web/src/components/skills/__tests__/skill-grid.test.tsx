@@ -1,9 +1,21 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { SkillSummary } from '@/hooks/use-skills';
 
-import { SkillGrid } from '../skill-grid';
+// Mock hooks that SkillGrid calls internally
+vi.mock('@/hooks/use-agents', () => ({
+  useAgents: () => ({ data: [], isLoading: false }),
+}));
+
+vi.mock('@/hooks/use-skills', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    useAgentSkillsManagement: () => ({ data: undefined, isLoading: false }),
+  };
+});
 
 // Mock SkillCard to isolate SkillGrid tests
 vi.mock('../skill-card', () => ({
@@ -11,6 +23,13 @@ vi.mock('../skill-card', () => ({
     <div data-testid={`skill-card-${skill.id}`}>{skill.name}</div>
   ),
 }));
+
+import { SkillGrid } from '../skill-grid';
+
+function wrapper({ children }: { children: React.ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+}
 
 const mockSkills: SkillSummary[] = [
   {
@@ -47,18 +66,18 @@ const mockSkills: SkillSummary[] = [
 
 describe('SkillGrid', () => {
   it('renders loading skeleton cards when isLoading is true', () => {
-    render(<SkillGrid skills={undefined} isLoading={true} />);
+    render(<SkillGrid skills={undefined} isLoading={true} />, { wrapper });
     expect(screen.getByTestId('skill-grid-loading')).toBeInTheDocument();
   });
 
   it('renders 6 skeleton cards during loading', () => {
-    const { container } = render(<SkillGrid skills={undefined} isLoading={true} />);
+    const { container } = render(<SkillGrid skills={undefined} isLoading={true} />, { wrapper });
     const skeletons = container.querySelectorAll('[data-testid="skill-grid-loading"] > *');
     expect(skeletons).toHaveLength(6);
   });
 
   it('renders empty state when skills array is empty', () => {
-    render(<SkillGrid skills={[]} isLoading={false} />);
+    render(<SkillGrid skills={[]} isLoading={false} />, { wrapper });
     expect(screen.getByText('No skills found')).toBeInTheDocument();
     expect(
       screen.getByText(
@@ -68,12 +87,12 @@ describe('SkillGrid', () => {
   });
 
   it('renders empty state when skills is undefined and not loading', () => {
-    render(<SkillGrid skills={undefined} isLoading={false} />);
+    render(<SkillGrid skills={undefined} isLoading={false} />, { wrapper });
     expect(screen.getByText('No skills found')).toBeInTheDocument();
   });
 
   it('renders skill cards for each skill', () => {
-    render(<SkillGrid skills={mockSkills} isLoading={false} />);
+    render(<SkillGrid skills={mockSkills} isLoading={false} />, { wrapper });
     expect(screen.getByTestId('skill-grid')).toBeInTheDocument();
     expect(screen.getByText('Code Review')).toBeInTheDocument();
     expect(screen.getByText('Testing')).toBeInTheDocument();
@@ -81,14 +100,14 @@ describe('SkillGrid', () => {
   });
 
   it('renders correct number of cards', () => {
-    render(<SkillGrid skills={mockSkills} isLoading={false} />);
+    render(<SkillGrid skills={mockSkills} isLoading={false} />, { wrapper });
     expect(screen.getByTestId('skill-card-code-review')).toBeInTheDocument();
     expect(screen.getByTestId('skill-card-testing')).toBeInTheDocument();
     expect(screen.getByTestId('skill-card-deploy')).toBeInTheDocument();
   });
 
   it('uses responsive grid layout', () => {
-    render(<SkillGrid skills={mockSkills} isLoading={false} />);
+    render(<SkillGrid skills={mockSkills} isLoading={false} />, { wrapper });
     const grid = screen.getByTestId('skill-grid');
     expect(grid).toHaveClass('grid', 'gap-4', 'sm:grid-cols-2', 'lg:grid-cols-3');
   });

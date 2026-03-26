@@ -5,11 +5,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/hooks/use-skills');
 
-import { useAllSkillTags, useSkills } from '@/hooks/use-skills';
+// Mock components that use unmocked hooks internally
+vi.mock('@/components/skills/skill-import-dialog', () => ({
+  SkillImportDialog: () => <button data-testid="import-dialog-btn">Import</button>,
+}));
+vi.mock('@/components/skills/skill-form-dialog', () => ({
+  SkillFormDialog: () => <button data-testid="create-skill-btn">Create Skill</button>,
+}));
+vi.mock('@/hooks/use-agents', () => ({
+  useAgents: () => ({ data: [], isLoading: false }),
+}));
+vi.mock('next/link', () => ({
+  default: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 import type { SkillSummary } from '@/hooks/use-skills';
+import { useAgentSkillsManagement, useAllSkillTags, useSkills } from '@/hooks/use-skills';
 
 const mockedUseSkills = vi.mocked(useSkills);
 const mockedUseAllSkillTags = vi.mocked(useAllSkillTags);
+const mockedUseAgentSkillsManagement = vi.mocked(useAgentSkillsManagement);
 
 import SkillStorePage from '../../../../app/skills/page';
 
@@ -59,6 +78,11 @@ beforeEach(() => {
     error: null,
   } as ReturnType<typeof useSkills>);
   mockedUseAllSkillTags.mockReturnValue(['ci', 'code', 'review', 'security', 'testing']);
+  mockedUseAgentSkillsManagement.mockReturnValue({
+    data: undefined,
+    isLoading: false,
+    error: null,
+  } as ReturnType<typeof useAgentSkillsManagement>);
 });
 
 afterEach(() => {
@@ -128,9 +152,7 @@ describe('SkillStorePage', () => {
     const searchInput = screen.getByTestId('skill-search-input');
     await userEvent.type(searchInput, 'code');
     // useSkills should be called with updated search param
-    expect(mockedUseSkills).toHaveBeenCalledWith(
-      expect.objectContaining({ search: 'code' }),
-    );
+    expect(mockedUseSkills).toHaveBeenCalledWith(expect.objectContaining({ search: 'code' }));
   });
 
   it('displays skill descriptions', () => {
