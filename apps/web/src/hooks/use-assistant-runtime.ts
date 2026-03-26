@@ -100,20 +100,18 @@ export function useAssistantRuntime(channel: string) {
     [messages, sendMessage],
   );
 
-  // Build typing indicator messages — only for agents relevant to this channel
+  // Build typing indicator messages — only for agents typing in THIS channel
   const typingMessages: ThreadMessageLike[] = useMemo(() => {
     if (typingAgents.size === 0) return [];
     return Array.from(typingAgents.entries())
-      .filter(([agentId]) => {
-        // Team channel: show all typing agents
-        if (channel === 'team') return true;
-        // DM channel: only show the agent you're chatting with
-        return agentId === channel;
+      .filter(([, info]) => {
+        // Show typing only if the agent is typing in this channel
+        return info.recipient === channel;
       })
-      .map(([agentId, agentName]) => ({
+      .map(([agentId, info]) => ({
         id: `typing-${agentId}`,
         role: 'assistant' as const,
-        content: [{ type: 'text' as const, text: `${agentName} is thinking...` }],
+        content: [{ type: 'text' as const, text: `${info.name} is thinking...` }],
         createdAt: new Date(),
         metadata: { custom: { agentId } },
       }));

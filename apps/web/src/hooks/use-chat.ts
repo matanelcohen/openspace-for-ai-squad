@@ -158,7 +158,8 @@ export function useClearChat() {
 
 /** Track which agents are currently typing via WebSocket events. */
 export function useTypingIndicator() {
-  const [typingAgents, setTypingAgents] = useState<Map<string, string>>(new Map());
+  // Map<agentId, { name, recipient }>
+  const [typingAgents, setTypingAgents] = useState<Map<string, { name: string; recipient: string }>>(new Map());
 
   // Clear typing when agent's message arrives
   useWsEvent(
@@ -178,17 +179,18 @@ export function useTypingIndicator() {
   useWsEvent(
     'chat:typing',
     useCallback((envelope: WsEnvelope) => {
-      const { agentId, agentName, isTyping } = envelope.payload as {
+      const { agentId, agentName, isTyping, recipient } = envelope.payload as {
         agentId: string;
         agentName?: string;
         isTyping: boolean;
+        recipient?: string;
       };
       if (!agentId) return;
 
       setTypingAgents((prev) => {
         const next = new Map(prev);
         if (isTyping) {
-          next.set(agentId, agentName ?? agentId);
+          next.set(agentId, { name: agentName ?? agentId, recipient: recipient ?? 'team' });
         } else {
           next.delete(agentId);
         }

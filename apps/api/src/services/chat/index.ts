@@ -726,22 +726,22 @@ export class ChatService {
     }
   }
 
-  private emitTyping(agentId: string, agentName: string): void {
+  private emitTyping(agentId: string, agentName: string, recipient: string): void {
     if (!this.wsManager) return;
 
     this.wsManager.broadcast({
       type: 'chat:typing',
-      payload: { agentId, agentName, isTyping: true },
+      payload: { agentId, agentName, isTyping: true, recipient },
       timestamp: new Date().toISOString(),
     });
   }
 
-  private emitTypingStop(agentId: string): void {
+  private emitTypingStop(agentId: string, recipient: string): void {
     if (!this.wsManager) return;
 
     this.wsManager.broadcast({
       type: 'chat:typing',
-      payload: { agentId, isTyping: false },
+      payload: { agentId, isTyping: false, recipient },
       timestamp: new Date().toISOString(),
     });
   }
@@ -834,16 +834,16 @@ export class ChatService {
         const responses: ChatMessage[] = [];
         for (const agent of respondingAgents) {
           try {
-            this.emitTyping(agent.id, agent.name);
+            this.emitTyping(agent.id, agent.name, CHAT_TEAM_RECIPIENT);
             const response = await this.generateAgentResponse(agent, original);
-            this.emitTypingStop(agent.id);
+            this.emitTypingStop(agent.id, CHAT_TEAM_RECIPIENT);
             this.persistToSqlite(response);
             await this.persistToMarkdown(response);
             this.emitChatMessage(response);
             this.emitChatActivity(agent.id, `${agent.name} responded in chat`);
             responses.push(response);
           } catch (err) {
-            this.emitTypingStop(agent.id);
+            this.emitTypingStop(agent.id, CHAT_TEAM_RECIPIENT);
             console.error(`[Chat] ${agent.name} failed to respond:`, err);
           }
         }
@@ -956,7 +956,7 @@ export class ChatService {
     original: ChatMessage,
   ): Promise<void> {
     try {
-      this.emitTyping(agent.id, agent.name);
+      this.emitTyping(agent.id, agent.name, agent.id);
 
       const history = this.getRecentHistory(agent.id);
       const messages = [...history, { role: 'user' as const, content: original.content }];
@@ -972,7 +972,7 @@ export class ChatService {
         messages,
       });
 
-      this.emitTypingStop(agent.id);
+      this.emitTypingStop(agent.id, agent.id);
 
       const response: ChatMessage = {
         id: nanoid(12),
@@ -988,7 +988,7 @@ export class ChatService {
       this.emitChatMessage(response);
       this.emitChatActivity(agent.id, `${agent.name} responded to direct message`);
     } catch (err) {
-      this.emitTypingStop(agent.id);
+      this.emitTypingStop(agent.id, agent.id);
       console.error(`[Chat] ${agent.name} direct message failed:`, err);
     }
   }
@@ -1009,14 +1009,14 @@ export class ChatService {
 
         for (const agent of respondingAgents) {
           try {
-            this.emitTyping(agent.id, agent.name);
+            this.emitTyping(agent.id, agent.name, CHAT_TEAM_RECIPIENT);
             const response = await this.generateAgentResponseStream(
               agent,
               original,
               CHAT_TEAM_RECIPIENT,
               (chunk) => onStreamEvent({ agentId: agent.id, chunk, done: false }),
             );
-            this.emitTypingStop(agent.id);
+            this.emitTypingStop(agent.id, CHAT_TEAM_RECIPIENT);
             this.persistToSqlite(response);
             await this.persistToMarkdown(response);
             this.emitChatMessage(response);
@@ -1028,7 +1028,7 @@ export class ChatService {
               fullContent: response.content,
             });
           } catch (err) {
-            this.emitTypingStop(agent.id);
+            this.emitTypingStop(agent.id, CHAT_TEAM_RECIPIENT);
             console.error(`[Chat] ${agent.name} stream failed:`, err);
           }
         }
@@ -1063,11 +1063,11 @@ export class ChatService {
     onStreamEvent: (data: StreamEvent) => void,
   ): Promise<void> {
     try {
-      this.emitTyping(agent.id, agent.name);
+      this.emitTyping(agent.id, agent.name, agent.id);
       const response = await this.generateAgentResponseStream(agent, original, agent.id, (chunk) =>
         onStreamEvent({ agentId: agent.id, chunk, done: false }),
       );
-      this.emitTypingStop(agent.id);
+      this.emitTypingStop(agent.id, agent.id);
       this.persistToSqlite(response);
       await this.persistToMarkdown(response);
       this.emitChatMessage(response);
@@ -1079,7 +1079,7 @@ export class ChatService {
         fullContent: response.content,
       });
     } catch (err) {
-      this.emitTypingStop(agent.id);
+      this.emitTypingStop(agent.id, agent.id);
       console.error(`[Chat] ${agent.name} direct message stream failed:`, err);
     }
   }

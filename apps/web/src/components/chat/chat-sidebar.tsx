@@ -35,7 +35,7 @@ interface ChatSidebarProps {
   onClearAllChats?: () => void;
   isClearingChat?: boolean;
   /** Which agents are currently typing */
-  typingAgents?: Map<string, string>;
+  typingAgents?: Map<string, { name: string; recipient: string }>;
   /** Custom channels */
   channels?: ChatChannel[];
   onCreateChannel?: () => void;
@@ -165,18 +165,21 @@ export function ChatSidebar({
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">Team</div>
-            {typingAgents && typingAgents.size > 0 ? (
-              <div className="flex items-center gap-1 text-xs text-primary">
-                <span>{Array.from(typingAgents.values()).join(', ')}</span>
-                <span className="inline-flex gap-0.5">
-                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
-                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
-                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:300ms]" />
-                </span>
-              </div>
-            ) : (
-              <div className="truncate text-xs text-muted-foreground">All agents</div>
-            )}
+            {(() => {
+              const teamTyping = typingAgents ? Array.from(typingAgents.entries()).filter(([, info]) => info.recipient === 'team') : [];
+              return teamTyping.length > 0 ? (
+                <div className="flex items-center gap-1 text-xs text-primary">
+                  <span>{teamTyping.map(([, info]) => info.name).join(', ')}</span>
+                  <span className="inline-flex gap-0.5">
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:300ms]" />
+                  </span>
+                </div>
+              ) : (
+                <div className="truncate text-xs text-muted-foreground">All agents</div>
+              );
+            })()}
           </div>
         </button>
 
@@ -304,7 +307,7 @@ export function ChatSidebar({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{agent.name}</div>
-                {typingAgents?.has(agent.id) ? (
+                {typingAgents?.has(agent.id) && typingAgents.get(agent.id)?.recipient === agent.id ? (
                   <div className="flex items-center gap-1 text-xs text-primary">
                     <span>typing</span>
                     <span className="inline-flex gap-0.5">
