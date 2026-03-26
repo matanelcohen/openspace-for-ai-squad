@@ -127,20 +127,20 @@ export function SkillCreationWizard({ trigger, onCreated }: SkillCreationWizardP
         )}
       </DialogTrigger>
       <DialogContent
-        className="max-w-6xl h-[85vh] flex flex-col p-0 gap-0"
+        className="max-w-6xl h-[85vh] md:h-[85vh] h-[95vh] flex flex-col p-0 gap-0 w-[95vw] md:w-auto"
         data-testid="skill-creation-wizard"
       >
-        <DialogHeader className="px-6 pt-6 pb-4 border-b">
+        <DialogHeader className="px-4 md:px-6 pt-4 md:pt-6 pb-3 md:pb-4 border-b">
           <DialogTitle>Create New Skill</DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="hidden md:block">
             Build a skill manifest that defines capabilities, triggers, and prompts for your agents.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-1 min-h-0">
-          {/* Left sidebar: Step navigation */}
-          <nav className="w-56 shrink-0 border-r bg-muted/20 py-4" aria-label="Wizard steps">
-            <ul className="space-y-1 px-2">
+        <div className="flex flex-1 min-h-0 flex-col md:flex-row">
+          {/* Step navigation — horizontal on mobile, sidebar on desktop */}
+          <nav className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r bg-muted/20 py-2 md:py-4 overflow-x-auto md:overflow-x-visible" aria-label="Wizard steps">
+            <ul className="flex md:flex-col gap-1 px-2 md:space-y-1">
               {STEPS.map((step, index) => {
                 const Icon = step.icon;
                 const errors = form.getStepErrors(index);
@@ -178,12 +178,13 @@ export function SkillCreationWizard({ trigger, onCreated }: SkillCreationWizardP
                           <Icon className="h-3.5 w-3.5" />
                         )}
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 hidden md:block">
                         <div className="truncate">{step.label}</div>
                         <div className="text-xs text-muted-foreground truncate">
                           {step.description}
                         </div>
                       </div>
+                      <span className="md:hidden text-xs whitespace-nowrap">{step.label}</span>
                     </button>
                   </li>
                 );
@@ -268,7 +269,7 @@ export function SkillCreationWizard({ trigger, onCreated }: SkillCreationWizardP
         </div>
 
         {/* Footer navigation */}
-        <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/20">
+        <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-t bg-muted/20">
           <Button
             type="button"
             variant="outline"
