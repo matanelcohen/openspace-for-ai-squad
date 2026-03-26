@@ -50,13 +50,13 @@ export default function SkillDetailPage() {
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="tools">
-            Tools ({skill.manifest.tools.length})
+            Tools ({skill.manifest?.tools?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="prompts">
-            Prompts ({skill.manifest.prompts.length})
+            Prompts ({skill.manifest?.prompts?.length ?? 0})
           </TabsTrigger>
           <TabsTrigger value="dependencies">
-            Dependencies ({skill.manifest.dependencies?.length ?? 0})
+            Dependencies ({skill.manifest?.dependencies?.length ?? 0})
           </TabsTrigger>
         </TabsList>
 
