@@ -17,6 +17,7 @@ import knowledgeRoute from './routes/knowledge.js';
 import otlpCollectorRoute from './routes/otlp-collector.js';
 import sandboxesRoute from './routes/sandboxes.js';
 import squadRoute from './routes/squad.js';
+import terminalRoute from './routes/terminal.js';
 import tasksRoute from './routes/tasks.js';
 import teamMembersRoute from './routes/team-members.js';
 import tracesRoute from './routes/traces.js';
@@ -277,6 +278,8 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(teamMembersRoute, { prefix: '/api' });
   app.register(sandboxesRoute, { prefix: '/api' });
   app.register(tracesRoute, { prefix: '/api' });
+  // Terminal route disabled — node-pty native build broken on this Node version
+  // app.register(terminalRoute, { prefix: '/api' });
 
   app.setErrorHandler((error, request, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
