@@ -66,7 +66,7 @@ function HealthCheckSection() {
               )}
             </div>
             <div className="space-y-2">
-              {health.checks.map((check) => (
+              {(health.checks ?? []).map((check) => (
                 <div
                   key={check.name}
                   className="flex items-center gap-2 rounded-md border px-3 py-2"
