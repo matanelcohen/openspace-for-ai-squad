@@ -97,7 +97,8 @@
 
 /* Wave animation for voice indicator */
 @keyframes wave {
-  0%, 100% {
+  0%,
+  100% {
     height: 8px;
   }
   50% {
@@ -107,4 +108,142 @@
 
 .animate-wave {
   animation: wave 0.8s ease-in-out infinite;
+}
+
+/* ── ANSI Terminal Colours ────────────────────────────────────────── */
+
+/* Text decorations */
+.ansi-bold {
+  font-weight: 700;
+}
+.ansi-dim {
+  opacity: 0.6;
+}
+.ansi-italic {
+  font-style: italic;
+}
+.ansi-underline {
+  text-decoration: underline;
+}
+.ansi-strikethrough {
+  text-decoration: line-through;
+}
+
+/* Standard foreground */
+.ansi-black {
+  color: #282c34;
+}
+.ansi-red {
+  color: #e06c75;
+}
+.ansi-green {
+  color: #98c379;
+}
+.ansi-yellow {
+  color: #e5c07b;
+}
+.ansi-blue {
+  color: #61afef;
+}
+.ansi-magenta {
+  color: #c678dd;
+}
+.ansi-cyan {
+  color: #56b6c2;
+}
+.ansi-white {
+  color: #dcdfe4;
+}
+
+/* Bright foreground */
+.ansi-bright-black {
+  color: #5c6370;
+}
+.ansi-bright-red {
+  color: #e06c75;
+}
+.ansi-bright-green {
+  color: #98c379;
+}
+.ansi-bright-yellow {
+  color: #d19a66;
+}
+.ansi-bright-blue {
+  color: #61afef;
+}
+.ansi-bright-magenta {
+  color: #c678dd;
+}
+.ansi-bright-cyan {
+  color: #56b6c2;
+}
+.ansi-bright-white {
+  color: #ffffff;
+}
+
+/* Standard background */
+.ansi-bg-black {
+  background-color: #282c34;
+}
+.ansi-bg-red {
+  background-color: #e06c75;
+}
+.ansi-bg-green {
+  background-color: #98c379;
+}
+.ansi-bg-yellow {
+  background-color: #e5c07b;
+}
+.ansi-bg-blue {
+  background-color: #61afef;
+}
+.ansi-bg-magenta {
+  background-color: #c678dd;
+}
+.ansi-bg-cyan {
+  background-color: #56b6c2;
+}
+.ansi-bg-white {
+  background-color: #dcdfe4;
+}
+
+/* Bright background */
+.ansi-bg-bright-black {
+  background-color: #5c6370;
+}
+.ansi-bg-bright-red {
+  background-color: #e06c75;
+}
+.ansi-bg-bright-green {
+  background-color: #98c379;
+}
+.ansi-bg-bright-yellow {
+  background-color: #d19a66;
+}
+.ansi-bg-bright-blue {
+  background-color: #61afef;
+}
+.ansi-bg-bright-magenta {
+  background-color: #c678dd;
+}
+.ansi-bg-bright-cyan {
+  background-color: #56b6c2;
+}
+.ansi-bg-bright-white {
+  background-color: #ffffff;
+}
+
+/* Blinking cursor for terminal */
+@keyframes terminal-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-terminal-blink {
+  animation: terminal-blink 1s step-end infinite;
 }
