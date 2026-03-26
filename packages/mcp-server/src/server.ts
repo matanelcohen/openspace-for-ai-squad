@@ -88,8 +88,39 @@ export function createServer(): McpServer {
   );
 
   server.tool(
+    'update_task',
+    'Update an existing task (full update — title, description, assignee, priority, status, labels)',
+    {
+      taskId: z.string().describe('Task identifier'),
+      title: z.string().optional().describe('New task title'),
+      description: z.string().optional().describe('New task description (markdown)'),
+      assignee: z.string().optional().describe('Agent to reassign the task to'),
+      priority: z.enum(['P0', 'P1', 'P2', 'P3']).optional().describe('New priority level'),
+      status: z
+        .enum(['pending-approval', 'backlog', 'in-progress', 'in-review', 'done', 'blocked'])
+        .optional()
+        .describe('New task status'),
+      labels: z.array(z.string()).optional().describe('Labels to set on the task'),
+    },
+    async ({ taskId, ...fields }) => {
+      const res = await fetch(`${getApiBase()}/api/tasks/${taskId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      });
+      const result = await res.json();
+      if (!res.ok)
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
     'update_task_status',
-    'Update the status of a task',
+    'Update only the status of a task (shortcut for status-only changes)',
     {
       taskId: z.string().describe('Task identifier'),
       status: z.string().describe('New status: backlog, in-progress, done, blocked'),
@@ -101,6 +132,75 @@ export function createServer(): McpServer {
         body: JSON.stringify({ status }),
       });
       const result = await res.json();
+      if (!res.ok)
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'delete_task',
+    'Delete a task by ID',
+    {
+      taskId: z.string().describe('Task identifier'),
+    },
+    async ({ taskId }) => {
+      const res = await fetch(`${getApiBase()}/api/tasks/${taskId}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({ error: res.statusText }));
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
+      }
+      return { content: [{ type: 'text', text: `Task ${taskId} deleted successfully.` }] };
+    },
+  );
+
+  server.tool(
+    'approve_task',
+    'Approve a pending-approval task — moves it to backlog and enqueues for the assigned agent',
+    {
+      taskId: z.string().describe('Task identifier (must be in pending-approval status)'),
+    },
+    async ({ taskId }) => {
+      const res = await fetch(`${getApiBase()}/api/tasks/${taskId}/approve`, {
+        method: 'PATCH',
+      });
+      const result = await res.json();
+      if (!res.ok)
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'reject_task',
+    'Reject a pending-approval task — deletes it from the task board',
+    {
+      taskId: z.string().describe('Task identifier (must be in pending-approval status)'),
+    },
+    async ({ taskId }) => {
+      const res = await fetch(`${getApiBase()}/api/tasks/${taskId}/reject`, {
+        method: 'PATCH',
+      });
+      if (res.status === 204) {
+        return { content: [{ type: 'text', text: `Task ${taskId} rejected and removed.` }] };
+      }
+      const result = await res.json().catch(() => ({ error: res.statusText }));
+      if (!res.ok)
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
@@ -135,6 +235,82 @@ export function createServer(): McpServer {
         body: JSON.stringify({ content: message, agent }),
       });
       const result = await res.json();
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'get_chat_history',
+    'Retrieve chat message history with optional filtering by agent or thread',
+    {
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe('Max messages to return (default 50, max 200)'),
+      offset: z.number().int().min(0).optional().describe('Number of messages to skip'),
+      agent: z.string().optional().describe('Filter messages involving this agent'),
+      threadId: z.string().optional().describe('Filter by thread ID'),
+    },
+    async ({ limit, offset, agent, threadId }) => {
+      const params = new URLSearchParams();
+      if (limit !== undefined) params.set('limit', String(limit));
+      if (offset !== undefined) params.set('offset', String(offset));
+      if (agent) params.set('agent', agent);
+      if (threadId) params.set('threadId', threadId);
+      const res = await fetch(`${getApiBase()}/api/chat/messages?${params}`);
+      const result = await res.json();
+      if (!res.ok)
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'get_agent_status',
+    'Get real-time agent work status — active tasks, queue lengths, and queued task details',
+    {},
+    async () => {
+      const res = await fetch(`${getApiBase()}/api/agents/status`);
+      const result = await res.json();
+      if (!res.ok)
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.tool(
+    'get_activity_feed',
+    'Get recent activity events (agent actions, task changes, decisions) — newest first',
+    {
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(200)
+        .optional()
+        .describe('Max events to return (default 50, max 200)'),
+      offset: z.number().int().min(0).optional().describe('Number of events to skip'),
+    },
+    async ({ limit, offset }) => {
+      const params = new URLSearchParams();
+      if (limit !== undefined) params.set('limit', String(limit));
+      if (offset !== undefined) params.set('offset', String(offset));
+      const res = await fetch(`${getApiBase()}/api/activity?${params}`);
+      const result = await res.json();
+      if (!res.ok)
+        return {
+          content: [{ type: 'text', text: `Error: ${JSON.stringify(result)}` }],
+          isError: true,
+        };
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
