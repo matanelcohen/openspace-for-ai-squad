@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -201,15 +201,14 @@ vi.mock('@/hooks/use-skills', () => ({
 }));
 
 // Need to import after mocks
-const { SkillCreationWizard } = await import(
-  '@/components/skills/skill-creation-wizard'
-);
+const { SkillCreationWizard } = await import('@/components/skills/skill-creation-wizard');
 const { SkillCardPreview } = await import('@/components/skills/skill-card-preview');
 const { WizardStepBasics } = await import('@/components/skills/wizard-step-basics');
 
 // Wrap with providers for react-query
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+
 function TestWrapper({ children }: { children: React.ReactNode }) {
-  const { QueryClient, QueryClientProvider } = require('@tanstack/react-query');
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
 }
@@ -390,11 +389,7 @@ describe('WizardStepBasics', () => {
     const getFieldError = vi.fn().mockReturnValue(undefined);
 
     render(
-      <WizardStepBasics
-        state={INITIAL_STATE}
-        setField={setField}
-        getFieldError={getFieldError}
-      />,
+      <WizardStepBasics state={INITIAL_STATE} setField={setField} getFieldError={getFieldError} />,
     );
 
     expect(screen.getByLabelText(/Skill Name/)).toBeInTheDocument();
@@ -409,11 +404,7 @@ describe('WizardStepBasics', () => {
     const getFieldError = vi.fn().mockReturnValue(undefined);
 
     render(
-      <WizardStepBasics
-        state={INITIAL_STATE}
-        setField={setField}
-        getFieldError={getFieldError}
-      />,
+      <WizardStepBasics state={INITIAL_STATE} setField={setField} getFieldError={getFieldError} />,
     );
 
     const nameInput = screen.getByLabelText(/Skill Name/);
@@ -429,11 +420,7 @@ describe('WizardStepBasics', () => {
     });
 
     render(
-      <WizardStepBasics
-        state={INITIAL_STATE}
-        setField={setField}
-        getFieldError={getFieldError}
-      />,
+      <WizardStepBasics state={INITIAL_STATE} setField={setField} getFieldError={getFieldError} />,
     );
 
     expect(screen.getByText('Skill name is required')).toBeInTheDocument();
@@ -444,11 +431,7 @@ describe('WizardStepBasics', () => {
     const getFieldError = vi.fn().mockReturnValue(undefined);
 
     render(
-      <WizardStepBasics
-        state={INITIAL_STATE}
-        setField={setField}
-        getFieldError={getFieldError}
-      />,
+      <WizardStepBasics state={INITIAL_STATE} setField={setField} getFieldError={getFieldError} />,
     );
 
     expect(screen.getByTestId('tag-testing')).toBeInTheDocument();

@@ -1,7 +1,6 @@
 'use client';
 
 import type {
-  PromptRole,
   SkillConfigSchema,
   SkillManifest,
   SkillPermission,
@@ -295,10 +294,7 @@ export function useSkillManifestForm(initial?: Partial<WizardFormState>) {
   const manifest = useMemo(() => formStateToManifest(state), [state]);
   const manifestJson = useMemo(() => JSON.stringify(manifest, null, 2), [manifest]);
 
-  const getStepErrors = useCallback(
-    (step: number) => validateStep(state, step),
-    [state],
-  );
+  const getStepErrors = useCallback((step: number) => validateStep(state, step), [state]);
 
   const hasFieldError = useCallback(
     (field: string) => errors.some((e) => e.field === field || e.field.startsWith(`${field}[`)),
