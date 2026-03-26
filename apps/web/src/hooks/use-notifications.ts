@@ -44,6 +44,7 @@ export function useNotifications() {
   useWsEvent('task:created', handleEvent);
   useWsEvent('activity:new', handleEvent);
   useWsEvent('agent:status', handleEvent);
+  useWsEvent('chat:message', handleEvent);
 
   const markAsRead = useCallback(
     (id: string) => {
