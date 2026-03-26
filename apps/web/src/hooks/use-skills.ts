@@ -85,7 +85,14 @@ export function useSkills(filters?: { search?: string; tag?: string; phase?: Ski
 export function useSkillDetail(skillId: string) {
   return useQuery<SkillDetail>({
     queryKey: ['skills', skillId],
-    queryFn: () => api.get<SkillDetail>(`/api/skills/${skillId}`),
+    queryFn: async () => {
+      const res = await api.get<Record<string, unknown>>(`/api/skills/${skillId}`);
+      // API returns flat — wrap in manifest if needed
+      if (res && !res.manifest) {
+        return { ...res, manifest: res } as unknown as SkillDetail;
+      }
+      return res as unknown as SkillDetail;
+    },
     enabled: !!skillId,
   });
 }
