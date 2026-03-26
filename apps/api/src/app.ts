@@ -101,6 +101,10 @@ export function buildApp(opts: AppOptions = {}) {
   const authService = new AuthService({ db });
   app.decorate('authService', authService);
 
+  // Skill registry
+  const skillRegistry = new SkillRegistryImpl();
+  app.decorate('skillRegistry', skillRegistry);
+
   // Knowledge search service
   const knowledgeSearch = new KnowledgeSearchService({ db });
   app.decorate('knowledgeSearch', knowledgeSearch);
