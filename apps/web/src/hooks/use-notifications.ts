@@ -22,6 +22,14 @@ export function useNotifications() {
 
   const addNotification = useCallback((notification: Notification) => {
     setNotifications((prev) => {
+      // Dedup: skip if same type + description within 3 seconds
+      const isDupe = prev.some(
+        (n) =>
+          n.type === notification.type &&
+          n.description === notification.description &&
+          Math.abs(new Date(n.timestamp).getTime() - new Date(notification.timestamp).getTime()) < 3000,
+      );
+      if (isDupe) return prev;
       const updated = [notification, ...prev].slice(0, MAX_NOTIFICATIONS);
       storeNotifications(updated);
       return updated;
