@@ -99,17 +99,26 @@ export function getSkillsForRole(skills: ParsedSkill[], role: string): ParsedSki
 }
 
 /**
- * Build a system prompt fragment listing available skills for an agent.
+ * Build a system prompt fragment with full skill instructions for an agent.
+ * Includes the SKILL.md content (not just name/description) so the AI
+ * learns HOW to use each tool.
  */
 export function buildSkillsPrompt(skills: ParsedSkill[]): string {
   if (skills.length === 0) return '';
 
-  const lines = ['## Available Skills', ''];
+  const sections = ['## Your Skills & Capabilities\n'];
+
   for (const s of skills) {
     const icon = SKILL_ICONS[s.id] ?? '🔧';
-    lines.push(`- ${icon} **${s.frontmatter.name}**: ${s.frontmatter.description}`);
+    sections.push(`### ${icon} ${s.frontmatter.name}\n`);
+    sections.push(`> ${s.frontmatter.description}\n`);
+    if (s.content) {
+      sections.push(s.content);
+    }
+    sections.push('');
   }
-  return lines.join('\n');
+
+  return sections.join('\n');
 }
 
 // ── Registry seeding ──────────────────────────────────────────────

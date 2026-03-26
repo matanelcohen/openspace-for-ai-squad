@@ -17,6 +17,7 @@ import type { MemoryExtractor } from '../memory/memory-extractor.js';
 import type { MemoryRecallEngine } from '../memory/memory-recall.js';
 import type { MemoryStore } from '../memory/memory-store.js';
 import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
+import { buildSkillsPrompt, getSkillsForRole, loadSkillsFromDirectory, type ParsedSkill } from '../seed-skills.js';
 import type { WebSocketManager } from '../websocket/index.js';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ export class AgentWorkerService {
   private readonly activeTask = new Map<string, string>();
   private readonly queueFilePath: string;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
+  private allSkills: ParsedSkill[] = [];
 
   constructor(config: AgentWorkerConfig) {
     this.config = config;
@@ -65,6 +67,15 @@ export class AgentWorkerService {
 
     for (const agent of config.agents) {
       this.queues.set(agent.id, []);
+    }
+
+    // Load skills from .squad/skills/
+    try {
+      const skillsDir = join(config.tasksDir, '..', 'skills');
+      this.allSkills = loadSkillsFromDirectory(skillsDir);
+      console.log(`[AgentWorker] Loaded ${this.allSkills.length} skills`);
+    } catch {
+      this.allSkills = [];
     }
   }
 
@@ -318,6 +329,10 @@ export class AgentWorkerService {
       // Collect progress events during execution
       const progressLog: string[] = [];
 
+      // Build role-matched skills prompt
+      const agentSkills = getSkillsForRole(this.allSkills, agent.role);
+      const skillsPrompt = buildSkillsPrompt(agentSkills);
+
       const result = await this.config.aiProvider.chatCompletion({
         taskTitle: task.title,
         agentId: agent.id,
@@ -326,6 +341,7 @@ export class AgentWorkerService {
           `Personality: ${agent.personality}\n\n` +
           `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
           `Do the actual work, don't just describe what you would do.\n\n` +
+          (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
           `When done, provide a brief summary of what you did.`,
         messages: [
           {
