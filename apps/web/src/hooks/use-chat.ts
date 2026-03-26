@@ -26,32 +26,38 @@ export function useChatMessages(recipient: string) {
   const queryClient = useQueryClient();
 
   // Listen for real-time chat messages via WebSocket
+  // Route each message to the correct channel cache regardless of which channel is viewed
   useWsEvent('chat:message', (envelope: WsEnvelope) => {
     const msg = envelope.payload as unknown as ChatMessage;
     if (!msg?.id) return;
 
-    // Route the message to this channel view only if it belongs here.
-    // For channels (recipient starts with "channel:"), match on recipient.
-    // For DMs, match on sender (incoming) or recipient (outgoing).
-    const channelId = extractChannelId(recipient);
-    const isRelevant = channelId
-      ? msg.recipient === recipient
-      : msg.sender === recipient || msg.recipient === recipient;
+    // Determine which cache key(s) this message belongs to
+    const targets: string[] = [];
 
-    if (isRelevant) {
-      queryClient.setQueryData<ChatMessage[]>(['chat', recipient], (old = []) => {
-        // Exact ID match — already have this message
+    const channelId = extractChannelId(msg.recipient);
+    if (channelId) {
+      // Channel message — goes to that channel's cache
+      targets.push(msg.recipient);
+    } else if (msg.recipient === 'team') {
+      // Team message — goes to team cache
+      targets.push('team');
+    } else {
+      // DM — goes to the agent's cache (whether sender or recipient)
+      // e.g. user→leela and leela→leela both go to 'leela' cache
+      const agentId = msg.sender === 'user' ? msg.recipient : msg.sender;
+      targets.push(agentId);
+    }
+
+    for (const cacheKey of targets) {
+      queryClient.setQueryData<ChatMessage[]>(['chat', cacheKey], (old = []) => {
         if (old.some((m) => m.id === msg.id)) return old;
 
-        // Remove optimistic messages that this real message supersedes
-        // Match on sender + content (trimmed) to handle whitespace differences
         const msgContentTrimmed = msg.content.trim();
         const cleaned = old.filter((m) => {
           if (!m.id.startsWith('optimistic-')) return true;
           return !(m.sender === msg.sender && m.content.trim() === msgContentTrimmed);
         });
 
-        // Also prevent exact duplicate content from same sender within 5 seconds
         const msgTime = new Date(msg.timestamp).getTime();
         const isDuplicate = cleaned.some(
           (m) =>

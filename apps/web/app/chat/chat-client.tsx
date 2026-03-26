@@ -154,7 +154,7 @@ export function ChatClient() {
   };
 
   return (
-    <AssistantRuntimeProvider runtime={runtime} key={selectedChannel}>
+    <AssistantRuntimeProvider runtime={runtime}>
       <div className="flex flex-1 overflow-hidden" data-testid="chat-client">
         {/* Sidebar — hidden on mobile when messages panel is shown */}
         <div
