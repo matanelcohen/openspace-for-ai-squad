@@ -225,10 +225,20 @@ export function useUpdateAgentSkillConfig(agentId: string) {
   });
 }
 
+export interface CreateSkillPayload {
+  name: string;
+  description: string;
+  tags: string[];
+  agentMatch: { roles: string[] };
+  requires: { bins: string[]; env: string[] };
+  instructions: string;
+}
+
 export function useCreateSkill() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (manifest: SkillManifest) => api.post<SkillSummary>('/api/skills', manifest),
+    mutationFn: (payload: CreateSkillPayload) =>
+      api.post<SkillSummary & { id?: string }>('/api/skills', payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['skills'] });
     },

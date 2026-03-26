@@ -4,10 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 
-import { SkillDetailDependencies } from '@/components/skills/skill-detail-dependencies';
+import { SkillDetailInstructions } from '@/components/skills/skill-detail-instructions';
 import { SkillDetailOverview } from '@/components/skills/skill-detail-overview';
-import { SkillDetailPrompts } from '@/components/skills/skill-detail-prompts';
-import { SkillDetailTools } from '@/components/skills/skill-detail-tools';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -30,9 +28,7 @@ export default function SkillDetailPage() {
             Back to Skill Store
           </Button>
         </Link>
-        <p className="text-sm text-destructive">
-          {error?.message ?? 'Skill not found.'}
-        </p>
+        <p className="text-sm text-destructive">{error?.message ?? 'Skill not found.'}</p>
       </div>
     );
   }
@@ -49,14 +45,16 @@ export default function SkillDetailPage() {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="tools">
-            Tools ({skill.manifest?.tools?.length ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="prompts">
-            Prompts ({skill.manifest?.prompts?.length ?? 0})
-          </TabsTrigger>
-          <TabsTrigger value="dependencies">
-            Dependencies ({skill.manifest?.dependencies?.length ?? 0})
+          <TabsTrigger value="instructions">Instructions</TabsTrigger>
+          <TabsTrigger value="agents">
+            Agents (
+            {(() => {
+              const agents = skill.activeAgents;
+              if (agents instanceof Set) return agents.size;
+              if (Array.isArray(agents)) return (agents as unknown[]).length;
+              return 0;
+            })()}
+            )
           </TabsTrigger>
         </TabsList>
 
@@ -64,16 +62,42 @@ export default function SkillDetailPage() {
           <SkillDetailOverview skill={skill} />
         </TabsContent>
 
-        <TabsContent value="tools">
-          <SkillDetailTools skill={skill} />
+        <TabsContent value="instructions">
+          <SkillDetailInstructions skill={skill} />
         </TabsContent>
 
-        <TabsContent value="prompts">
-          <SkillDetailPrompts skill={skill} />
-        </TabsContent>
-
-        <TabsContent value="dependencies">
-          <SkillDetailDependencies skill={skill} />
+        <TabsContent value="agents">
+          <div className="space-y-4" data-testid="skill-detail-agents">
+            {(() => {
+              const agents =
+                skill.activeAgents instanceof Set
+                  ? [...skill.activeAgents]
+                  : Array.isArray(skill.activeAgents)
+                    ? skill.activeAgents
+                    : [];
+              if (agents.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground">
+                    No agents are currently using this skill.
+                  </p>
+                );
+              }
+              return (
+                <ul className="space-y-2">
+                  {agents.map((agentId) => (
+                    <li key={String(agentId)}>
+                      <Link
+                        href={`/agents/${String(agentId)}`}
+                        className="text-sm font-medium text-primary hover:underline"
+                      >
+                        {String(agentId)}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              );
+            })()}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

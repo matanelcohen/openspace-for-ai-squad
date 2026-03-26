@@ -159,6 +159,8 @@ export function seedBuiltinSkills(registry: SkillRegistryImpl, squadDir?: string
         icon: SKILL_ICONS[skill.id] ?? '🔧',
         permissions: [],
         agentMatch: skill.frontmatter.agentMatch,
+        requires: skill.frontmatter.requires ?? { bins: [], env: [] },
+        instructions: skill.content,
       },
       phase: 'loaded' as const,
       hooks: null,

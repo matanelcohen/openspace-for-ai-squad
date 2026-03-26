@@ -86,7 +86,9 @@ export function SkillCreationWizard({ trigger, onCreated }: SkillCreationWizardP
     if (!form.isValid) return;
 
     try {
-      const result = await createSkill.mutateAsync(form.manifest);
+      const result = await createSkill.mutateAsync(
+        form.manifest as unknown as Parameters<typeof createSkill.mutateAsync>[0],
+      );
       setOpen(false);
       setCurrentStep(0);
       form.reset();
@@ -139,7 +141,10 @@ export function SkillCreationWizard({ trigger, onCreated }: SkillCreationWizardP
 
         <div className="flex flex-1 min-h-0 flex-col md:flex-row">
           {/* Step navigation — horizontal on mobile, sidebar on desktop */}
-          <nav className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r bg-muted/20 py-2 md:py-4 overflow-x-auto md:overflow-x-visible" aria-label="Wizard steps">
+          <nav
+            className="md:w-56 shrink-0 border-b md:border-b-0 md:border-r bg-muted/20 py-2 md:py-4 overflow-x-auto md:overflow-x-visible"
+            aria-label="Wizard steps"
+          >
             <ul className="flex md:flex-col gap-1 px-2 md:space-y-1">
               {STEPS.map((step, index) => {
                 const Icon = step.icon;
@@ -292,12 +297,7 @@ export function SkillCreationWizard({ trigger, onCreated }: SkillCreationWizardP
           </div>
 
           {currentStep < STEPS.length - 1 ? (
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleNext}
-              data-testid="wizard-next-btn"
-            >
+            <Button type="button" size="sm" onClick={handleNext} data-testid="wizard-next-btn">
               Next
               <ChevronRight className="h-4 w-4 ml-1" />
             </Button>

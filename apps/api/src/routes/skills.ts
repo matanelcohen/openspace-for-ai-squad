@@ -2,7 +2,7 @@
  * Skills API routes
  *
  * GET    /api/skills                  — List all registered skills
- * POST   /api/skills                  — Register a new skill
+ * POST   /api/skills                  — Create a new skill (SKILL.md format)
  * GET    /api/skills/health           — Health status for all skills
  * GET    /api/skills/:id              — Skill detail
  * PUT    /api/skills/:id              — Update skill manifest
@@ -14,16 +14,38 @@
  * DELETE /api/agents/:id/skills/:skillId — Detach (deactivate) a skill for an agent
  */
 
-import type { FastifyPluginAsync } from 'fastify';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import type { SkillManifest } from '@openspace/shared';
+import type { FastifyPluginAsync } from 'fastify';
 
 import { ErrorCodes, sendError } from '../lib/api-errors.js';
 import type { SkillRegistryImpl } from '../services/skill-registry/index.js';
 
+// ── Icon map (skill-id → emoji) ───────────────────────────────────
+
+const SKILL_ICONS: Record<string, string> = {
+  'file-operations': '📁',
+  'bash-execution': '💻',
+  'code-review': '🔍',
+  'web-search': '🌐',
+  'test-runner': '🧪',
+  'git-operations': '🔀',
+  'database-query': '🗄️',
+  'task-delegation': '📋',
+};
+
+// ── Helpers ───────────────────────────────────────────────────────
+
+function getSquadDir(): string {
+  return resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+}
+
 // Serialise a registry entry for the API response (Sets aren't JSON-friendly)
 function serialiseEntry(entry: ReturnType<SkillRegistryImpl['get']>) {
   if (!entry) return null;
+  const manifest = entry.manifest as Record<string, unknown>;
   return {
     id: entry.manifest.id,
     name: entry.manifest.name,
@@ -38,15 +60,36 @@ function serialiseEntry(entry: ReturnType<SkillRegistryImpl['get']>) {
     error: entry.error ?? null,
     tools: entry.manifest.tools ?? [],
     triggers: entry.manifest.triggers ?? [],
-    prompts: (entry.manifest.prompts ?? []).map((p: { id: string; name: string; role: string }) => ({
-      id: p.id,
-      name: p.name,
-      role: p.role,
-    })),
+    prompts: (entry.manifest.prompts ?? []).map(
+      (p: { id: string; name: string; role: string }) => ({
+        id: p.id,
+        name: p.name,
+        role: p.role,
+      }),
+    ),
     dependencies: entry.manifest.dependencies ?? [],
     config: entry.manifest.config ?? [],
     permissions: entry.manifest.permissions ?? [],
+    agentMatch: manifest.agentMatch ?? null,
+    requires: manifest.requires ?? null,
+    instructions: manifest.instructions ?? null,
   };
+}
+
+/** Type guard for SKILL.md-compatible payload */
+interface SkillMdPayload {
+  name: string;
+  description: string;
+  tags?: string[];
+  agentMatch?: { roles: string[] };
+  requires?: { bins?: string[]; env?: string[] };
+  instructions?: string;
+}
+
+function isSkillMdPayload(body: unknown): body is SkillMdPayload {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Record<string, unknown>;
+  return typeof b.name === 'string' && typeof b.description === 'string';
 }
 
 /** Type guard: does the body look like a minimal SkillManifest? */
@@ -59,6 +102,25 @@ function isManifestLike(body: unknown): body is SkillManifest {
     typeof b.version === 'string' &&
     typeof b.description === 'string'
   );
+}
+
+/** Generate SKILL.md content from the payload */
+function generateSkillMd(payload: SkillMdPayload): string {
+  const lines: string[] = ['---'];
+  lines.push(`name: ${payload.name}`);
+  lines.push(`description: ${payload.description}`);
+  lines.push(`tags: [${(payload.tags ?? []).join(', ')}]`);
+  lines.push('agentMatch:');
+  lines.push(`  roles: [${(payload.agentMatch?.roles ?? ['*']).map((r) => `"${r}"`).join(', ')}]`);
+  lines.push('requires:');
+  lines.push(`  bins: [${(payload.requires?.bins ?? []).join(', ')}]`);
+  lines.push(`  env: [${(payload.requires?.env ?? []).join(', ')}]`);
+  lines.push('---');
+  lines.push('');
+  if (payload.instructions) {
+    lines.push(payload.instructions);
+  }
+  return lines.join('\n');
 }
 
 const skillsRoute: FastifyPluginAsync = async (app) => {
@@ -85,20 +147,89 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     return reply.send({ statuses });
   });
 
-  // POST /api/skills — register a new skill
-  app.post<{ Body: SkillManifest }>('/skills', async (request, reply) => {
+  // POST /api/skills — create a new skill from SKILL.md-compatible payload
+  app.post('/skills', async (request, reply) => {
     const registry = app.skillRegistry;
     if (!registry) {
       return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
     }
 
     const body = request.body;
+
+    // Accept the new SKILL.md-compatible payload
+    if (isSkillMdPayload(body)) {
+      const payload = body as SkillMdPayload;
+      const kebabRe = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+      if (!kebabRe.test(payload.name)) {
+        return sendError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'Skill name must be kebab-case (e.g. "code-review")',
+        );
+      }
+
+      const skillId = payload.name;
+
+      // Check for duplicates
+      if (registry.get(skillId)) {
+        return sendError(reply, 409, ErrorCodes.CONFLICT, `Skill already exists: ${skillId}`);
+      }
+
+      // Write SKILL.md file
+      const squadDir = getSquadDir();
+      const skillDir = join(squadDir, 'skills', skillId);
+      const skillFile = join(skillDir, 'SKILL.md');
+
+      if (!existsSync(skillDir)) {
+        mkdirSync(skillDir, { recursive: true });
+      }
+      writeFileSync(skillFile, generateSkillMd(payload), 'utf-8');
+
+      // Pretty-print the display name from the kebab-case ID
+      const displayName = skillId
+        .split('-')
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join(' ');
+
+      // Register into the skill registry
+      const entries = (registry as unknown as { entries: Map<string, unknown> }).entries;
+      entries.set(skillId, {
+        manifest: {
+          manifestVersion: '1.0' as const,
+          id: skillId,
+          name: displayName,
+          version: '1.0.0',
+          description: payload.description,
+          author: 'openspace.ai',
+          tags: payload.tags ?? [],
+          icon: SKILL_ICONS[skillId] ?? '🔧',
+          permissions: [],
+          agentMatch: payload.agentMatch ?? { roles: ['*'] },
+          requires: payload.requires ?? { bins: [], env: [] },
+          instructions: payload.instructions ?? '',
+        },
+        phase: 'loaded' as const,
+        hooks: null,
+        activeAgents: new Set<string>(),
+        lastTransition: Date.now(),
+        error: null,
+        sourcePath: skillFile,
+        retryState: null,
+        circuitBreaker: null,
+      });
+
+      const entry = registry.get(skillId);
+      return reply.status(201).send(serialiseEntry(entry));
+    }
+
+    // Fallback: accept legacy SkillManifest payload
     if (!isManifestLike(body)) {
       return sendError(
         reply,
         400,
         ErrorCodes.VALIDATION_ERROR,
-        'Request body must be a valid skill manifest (id, name, version, description required)',
+        'Request body must include name and description (SKILL.md format) or id, name, version, description (legacy format)',
       );
     }
 
@@ -112,7 +243,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       );
     }
 
-    const entry = registry.get(body.id);
+    const entry = registry.get((body as SkillManifest).id);
     return reply.status(201).send(serialiseEntry(entry));
   });
 
@@ -148,7 +279,12 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
 
       const body = request.body;
       if (!body || typeof body !== 'object') {
-        return sendError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Request body must be a JSON object');
+        return sendError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'Request body must be a JSON object',
+        );
       }
 
       const result = await registry.updateManifest(skillId, body as Partial<SkillManifest>);
@@ -271,7 +407,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      await registry.activate(skillId, agentId, taskContext as any);
+      await registry.activate(skillId, agentId, taskContext as Record<string, unknown> | undefined);
       return reply.status(200).send({
         success: true,
         skillId,

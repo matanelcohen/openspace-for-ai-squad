@@ -1,6 +1,6 @@
 'use client';
 
-import { ExternalLink, FileCode, Package, Shield, Tag, User } from 'lucide-react';
+import { Package, Shield, Tag, Terminal, Users, Variable } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -15,6 +15,12 @@ interface SkillDetailOverviewProps {
 
 export function SkillDetailOverview({ skill }: SkillDetailOverviewProps) {
   const { manifest } = skill;
+  const manifestAny = manifest as unknown as Record<string, unknown>;
+  const agentMatch = manifestAny.agentMatch as { roles?: string[] } | undefined;
+  const requires = manifestAny.requires as { bins?: string[]; env?: string[] } | undefined;
+  const roles = agentMatch?.roles ?? [];
+  const bins = requires?.bins ?? [];
+  const env = requires?.env ?? [];
 
   return (
     <div className="space-y-6" data-testid="skill-detail-overview">
@@ -34,48 +40,72 @@ export function SkillDetailOverview({ skill }: SkillDetailOverviewProps) {
 
       {/* Metadata Cards */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium">
-              <Package className="h-4 w-4" />
-              Version
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-semibold">v{manifest.version}</p>
-            {manifest.license && (
-              <p className="text-sm text-muted-foreground">{manifest.license}</p>
-            )}
-          </CardContent>
-        </Card>
-
-        {manifest.author && (
+        {manifest.version && (
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="flex items-center gap-2 text-sm font-medium">
-                <User className="h-4 w-4" />
-                Author
+                <Package className="h-4 w-4" />
+                Version
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-lg font-medium">{manifest.author}</p>
+              <p className="text-2xl font-semibold">v{manifest.version}</p>
             </CardContent>
           </Card>
         )}
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium">
-              <FileCode className="h-4 w-4" />
-              Entry Point
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm font-mono text-muted-foreground">
-              {manifest.entryPoint ?? 'Declarative (no entry point)'}
-            </p>
-          </CardContent>
-        </Card>
+        {roles.length > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Users className="h-4 w-4" />
+                Agent Roles
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-1.5">
+                {roles.map((role) => (
+                  <Badge key={role} variant="secondary">
+                    {role === '*' ? 'All agents' : role}
+                  </Badge>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {(bins.length > 0 || env.length > 0) && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                <Shield className="h-4 w-4" />
+                Requirements
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {bins.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Terminal className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  {bins.map((bin) => (
+                    <Badge key={bin} variant="outline" className="font-mono text-xs">
+                      {bin}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {env.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Variable className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  {env.map((e) => (
+                    <Badge key={e} variant="outline" className="font-mono text-xs">
+                      {e}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Tags */}
@@ -84,7 +114,7 @@ export function SkillDetailOverview({ skill }: SkillDetailOverviewProps) {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium">
               <Tag className="h-4 w-4" />
-              Capability Tags
+              Tags
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -97,40 +127,6 @@ export function SkillDetailOverview({ skill }: SkillDetailOverviewProps) {
             </div>
           </CardContent>
         </Card>
-      )}
-
-      {/* Permissions */}
-      {manifest.permissions && manifest.permissions.length > 0 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="flex items-center gap-2 text-sm font-medium">
-              <Shield className="h-4 w-4" />
-              Required Permissions
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {manifest.permissions.map((perm) => (
-                <Badge key={perm} variant="outline" className="font-mono text-xs">
-                  {perm}
-                </Badge>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Homepage link */}
-      {manifest.homepage && (
-        <a
-          href={manifest.homepage}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
-        >
-          <ExternalLink className="h-3 w-3" />
-          Documentation
-        </a>
       )}
     </div>
   );
