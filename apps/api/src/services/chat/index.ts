@@ -930,8 +930,9 @@ export class ChatService {
     const messages = [...history, { role: 'user' as const, content: original.content }];
 
     const result = await this.aiProvider!.chatCompletion({
+      agentId: agent.id,
+      taskTitle: `Chat: ${original.content.substring(0, 50)}`,
       systemPrompt:
-        `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
         `Personality: ${agent.personality} ` +
         `Respond in character as ${agent.name}. Keep responses concise (2-4 sentences). ` +
         `IMPORTANT: Only speak for yourself. Never speak on behalf of other agents or summarize what they did. ` +
@@ -962,10 +963,9 @@ export class ChatService {
       const messages = [...history, { role: 'user' as const, content: original.content }];
 
       const result = await this.aiProvider!.chatCompletion({
+        agentId: agent.id,
+        taskTitle: `DM: ${original.content.substring(0, 50)}`,
         systemPrompt:
-          `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
-          `Personality: ${agent.personality} ` +
-          `The user is talking directly to you. Respond in character as ${agent.name}. ` +
           `You can and should take action on requests — create files, write code, run commands. ` +
           `If the user asks you to do something, do it. Don't just talk about it. ` +
           `Never prefix your response with your name — the UI handles that.`,
@@ -1110,6 +1110,8 @@ export class ChatService {
     const messages = [...history, { role: 'user' as const, content: original.content }];
 
     const result = await this.aiProvider!.chatCompletion({
+      agentId: agent.id,
+      taskTitle: `Chat: ${original.content.substring(0, 50)}`,
       systemPrompt,
       messages,
       stream: true,

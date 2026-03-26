@@ -43,6 +43,8 @@ export interface SpanRecord {
 }
 
 export interface CreateTraceInput {
+  traceId?: string;
+  spanId?: string;
   agentId?: string;
   taskTitle?: string;
   model: string;
@@ -77,14 +79,14 @@ export class TraceService {
 
   constructor(private readonly db: Database.Database) {
     this.insertTrace = db.prepare(`
-      INSERT INTO traces (id, root_span_name, agent_name, status, start_time, end_time, duration_ms,
+      INSERT OR IGNORE INTO traces (id, root_span_name, agent_name, status, start_time, end_time, duration_ms,
         span_count, total_tokens, prompt_tokens, completion_tokens, cost_usd, error_message, created_at)
       VALUES (@id, @root_span_name, @agent_name, @status, @start_time, @end_time, @duration_ms,
         @span_count, @total_tokens, @prompt_tokens, @completion_tokens, @cost_usd, @error_message, @created_at)
     `);
 
     this.insertSpan = db.prepare(`
-      INSERT INTO spans (id, trace_id, parent_span_id, name, kind, status, start_time, end_time, duration_ms, attributes, events)
+      INSERT OR IGNORE INTO spans (id, trace_id, parent_span_id, name, kind, status, start_time, end_time, duration_ms, attributes, events)
       VALUES (@id, @trace_id, @parent_span_id, @name, @kind, @status, @start_time, @end_time, @duration_ms, @attributes, @events)
     `);
 
@@ -197,8 +199,8 @@ export class TraceService {
    * Returns { traceId, spanId } so the caller can complete/fail it later.
    */
   startTrace(input: CreateTraceInput): { traceId: string; spanId: string } {
-    const traceId = randomUUID();
-    const spanId = randomUUID();
+    const traceId = input.traceId ?? randomUUID();
+    const spanId = input.spanId ?? randomUUID();
     const now = Date.now();
     const createdAt = new Date(now).toISOString();
 

@@ -29,6 +29,8 @@ import type { AgentRoutingProfile, LLMRouter } from '../voice/router.js';
 /** Minimal interface matching TraceService — avoids importing from ../traces. */
 export interface TraceServiceLike {
   startTrace(input: {
+    traceId?: string;
+    spanId?: string;
     agentId?: string;
     taskTitle?: string;
     model: string;
@@ -249,11 +251,15 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     const model = options.model ?? this.config.model;
     const prompt = this.buildPrompt(options.messages, options.systemPrompt);
 
-    // Start a DB trace record
+    // Start a DB trace record — use the OTel trace ID to avoid duplicates
     let traceIds: { traceId: string; spanId: string } | null = null;
+    const otelTraceId = span.spanContext().traceId;
+    const otelSpanId = span.spanContext().spanId;
     try {
       if (this.traceService) {
         traceIds = this.traceService.startTrace({
+          traceId: otelTraceId,
+          spanId: otelSpanId,
           agentId: options.agentId,
           taskTitle: options.taskTitle,
           model,
