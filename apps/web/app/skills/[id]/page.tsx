@@ -63,7 +63,6 @@ export default function SkillDetailPage() {
         <TabsContent value="agents">
           <SkillAgentsList skillId={params.id} />
         </TabsContent>
-        </TabsContent>
       </Tabs>
     </div>
   );
