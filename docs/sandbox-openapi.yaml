@@ -1,0 +1,652 @@
+openapi: 3.1.0
+info:
+  title: openspace.ai Sandbox API
+  description: |
+    Sandboxed code execution API for openspace.ai agents.
+    Manages Docker-based containers with resource limits, network isolation,
+    and streaming output for Node.js, Python, and Go runtimes.
+  version: 1.0.0
+  contact:
+    name: openspace.ai Squad
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:3001
+    description: Local development
+
+tags:
+  - name: Sandboxes
+    description: Container lifecycle management
+  - name: Execution
+    description: Command execution in sandbox containers
+  - name: Files
+    description: Workspace file operations
+
+paths:
+  /api/sandboxes:
+    get:
+      operationId: listSandboxes
+      summary: List all sandboxes
+      tags: [Sandboxes]
+      parameters:
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/SandboxStatus'
+        - name: runtime
+          in: query
+          schema:
+            $ref: '#/components/schemas/SandboxRuntime'
+        - name: agentId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of sandboxes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Sandbox'
+
+    post:
+      operationId: createSandbox
+      summary: Create a new sandbox
+      tags: [Sandboxes]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSandboxRequest'
+      responses:
+        '201':
+          description: Sandbox created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        '400':
+          description: Invalid request (bad runtime, resource limits exceeded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              examples:
+                invalidRuntime:
+                  summary: Unknown runtime
+                  value:
+                    statusCode: 400
+                    error: Bad Request
+                    message: "Unknown runtime: 'ruby'. Supported: node, python, go"
+                    code: INVALID_RUNTIME
+                resourceExceeded:
+                  summary: Resource limit exceeded
+                  value:
+                    statusCode: 400
+                    error: Bad Request
+                    message: 'memoryMb 2048 exceeds maximum 1024'
+                    code: RESOURCE_LIMIT_EXCEEDED
+        '429':
+          description: Max concurrent sandboxes reached
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                statusCode: 429
+                error: Too Many Requests
+                message: 'Maximum 5 concurrent sandboxes reached'
+                code: MAX_SANDBOXES_REACHED
+
+  /api/sandboxes/{sandboxId}:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+
+    get:
+      operationId: getSandbox
+      summary: Get sandbox details
+      tags: [Sandboxes]
+      responses:
+        '200':
+          description: Sandbox details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+
+    delete:
+      operationId: destroySandbox
+      summary: Destroy a sandbox
+      description: |
+        Forcefully removes the container and its workspace volume.
+        This operation is irreversible.
+      tags: [Sandboxes]
+      responses:
+        '204':
+          description: Sandbox destroyed
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+
+  /api/sandboxes/{sandboxId}/stop:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+
+    post:
+      operationId: stopSandbox
+      summary: Stop a running sandbox
+      description: |
+        Sends SIGTERM to the container with a 10-second grace period,
+        then SIGKILL. Workspace volume is preserved.
+      tags: [Sandboxes]
+      responses:
+        '200':
+          description: Sandbox stopped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+        '409':
+          description: Sandbox is not running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                statusCode: 409
+                error: Conflict
+                message: 'Sandbox is not running (current status: stopped)'
+                code: SANDBOX_NOT_RUNNING
+
+  /api/sandboxes/{sandboxId}/restart:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+
+    post:
+      operationId: restartSandbox
+      summary: Restart a stopped sandbox
+      tags: [Sandboxes]
+      responses:
+        '200':
+          description: Sandbox restarted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Sandbox'
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+        '409':
+          description: Sandbox is not in a restartable state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+
+  /api/sandboxes/{sandboxId}/exec:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+
+    post:
+      operationId: execCommand
+      summary: Execute a command in the sandbox
+      description: |
+        Submits a command for execution. Returns immediately with an
+        execution ID. Output is streamed via the WebSocket endpoint
+        at `ws://host/ws/sandboxes/{sandboxId}/stream`.
+      tags: [Execution]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExecRequest'
+      responses:
+        '202':
+          description: Command accepted for execution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExecResponse'
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+        '409':
+          description: Sandbox is not running
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+              example:
+                statusCode: 409
+                error: Conflict
+                message: 'Cannot exec: sandbox is not running'
+                code: SANDBOX_NOT_RUNNING
+
+  /api/sandboxes/{sandboxId}/files:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+
+    get:
+      operationId: listFiles
+      summary: List files in the workspace
+      tags: [Files]
+      parameters:
+        - name: path
+          in: query
+          description: Directory path relative to /workspace (default is root)
+          schema:
+            type: string
+            default: /
+      responses:
+        '200':
+          description: File listing
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileEntry'
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+
+  /api/sandboxes/{sandboxId}/files/content:
+    parameters:
+      - $ref: '#/components/parameters/SandboxId'
+
+    get:
+      operationId: readFile
+      summary: Read a file from the workspace
+      tags: [Files]
+      parameters:
+        - name: path
+          in: query
+          required: true
+          description: File path relative to /workspace
+          schema:
+            type: string
+      responses:
+        '200':
+          description: File content
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileContent'
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+
+    put:
+      operationId: writeFile
+      summary: Write a file to the workspace
+      tags: [Files]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WriteFileRequest'
+      responses:
+        '204':
+          description: File written successfully
+        '404':
+          $ref: '#/components/responses/SandboxNotFound'
+
+components:
+  parameters:
+    SandboxId:
+      name: sandboxId
+      in: path
+      required: true
+      description: Unique sandbox identifier
+      schema:
+        type: string
+        example: sbx-a1b2c3d4
+
+  schemas:
+    SandboxStatus:
+      type: string
+      enum: [creating, running, stopped, error, destroying]
+      description: Current state of the sandbox container
+
+    SandboxRuntime:
+      type: string
+      enum: [node, python, go]
+      description: Runtime environment for the sandbox
+
+    SandboxResources:
+      type: object
+      description: Current resource usage
+      required: [cpuPercent, memoryMb, memoryLimitMb]
+      properties:
+        cpuPercent:
+          type: number
+          format: float
+          description: Current CPU usage percentage
+          example: 12.5
+        memoryMb:
+          type: number
+          format: float
+          description: Current memory usage in MB
+          example: 128.3
+        memoryLimitMb:
+          type: number
+          format: float
+          description: Memory limit in MB
+          example: 512
+
+    Sandbox:
+      type: object
+      required:
+        [id, name, runtime, status, agentId, createdAt, lastActivityAt, image, port, resources]
+      properties:
+        id:
+          type: string
+          description: Unique sandbox identifier
+          example: sbx-a1b2c3d4
+        name:
+          type: string
+          description: Human-readable sandbox name
+          example: agent-bender-workspace
+        runtime:
+          $ref: '#/components/schemas/SandboxRuntime'
+        status:
+          $ref: '#/components/schemas/SandboxStatus'
+        agentId:
+          type: string
+          nullable: true
+          description: Associated agent ID, if any
+          example: bender
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-03-26T06:00:00.000Z'
+        lastActivityAt:
+          type: string
+          format: date-time
+          example: '2026-03-26T06:15:00.000Z'
+        image:
+          type: string
+          description: Docker image used for this sandbox
+          example: node:22-slim
+        port:
+          type: integer
+          nullable: true
+          description: Exposed port for dev servers
+          example: null
+        resources:
+          $ref: '#/components/schemas/SandboxResources'
+
+    ResourceLimits:
+      type: object
+      description: Resource constraints for a sandbox container
+      properties:
+        cpuCores:
+          type: number
+          format: float
+          minimum: 0.25
+          maximum: 2.0
+          default: 1.0
+          description: CPU core limit
+        memoryMb:
+          type: integer
+          minimum: 64
+          maximum: 1024
+          default: 512
+          description: Memory limit in MB
+        diskMb:
+          type: integer
+          minimum: 100
+          maximum: 5120
+          default: 1024
+          description: Workspace disk limit in MB
+        pidsLimit:
+          type: integer
+          minimum: 32
+          maximum: 512
+          default: 256
+          description: Maximum number of processes
+        execTimeoutSec:
+          type: integer
+          minimum: 10
+          maximum: 1800
+          default: 300
+          description: Per-execution timeout in seconds
+
+    CreateSandboxRequest:
+      type: object
+      required: [name, runtime]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Display name for the sandbox
+          example: my-node-sandbox
+        runtime:
+          $ref: '#/components/schemas/SandboxRuntime'
+        agentId:
+          type: string
+          description: Bind sandbox to a specific agent
+          example: bender
+        resources:
+          $ref: '#/components/schemas/ResourceLimits'
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Environment variables to inject
+          example:
+            DEBUG: 'true'
+            API_KEY_NAME: my-service
+        networkAccess:
+          type: string
+          enum: [none, internet]
+          default: none
+          description: |
+            Network access level. `none` = fully isolated (default).
+            `internet` = egress-only NAT for package installs.
+        idleTimeoutSec:
+          type: integer
+          minimum: 60
+          maximum: 7200
+          default: 1800
+          description: Seconds of inactivity before auto-destroy
+
+    ExecRequest:
+      type: object
+      required: [command]
+      properties:
+        command:
+          type: string
+          minLength: 1
+          description: Shell command to execute
+          example: npm run build
+        cwd:
+          type: string
+          default: /workspace
+          description: Working directory inside the container
+        timeoutSec:
+          type: integer
+          minimum: 1
+          maximum: 1800
+          description: Per-command timeout override in seconds
+        env:
+          type: object
+          additionalProperties:
+            type: string
+          description: Additional env vars for this execution only
+
+    ExecResponse:
+      type: object
+      required: [executionId, sandboxId]
+      properties:
+        executionId:
+          type: string
+          description: Unique execution ID for tracking via WebSocket
+          example: exec-x9y8z7
+        sandboxId:
+          type: string
+          description: Sandbox the command is running in
+          example: sbx-a1b2c3d4
+
+    FileEntry:
+      type: object
+      required: [name, path, type, size, modifiedAt]
+      properties:
+        name:
+          type: string
+          description: File or directory name
+          example: package.json
+        path:
+          type: string
+          description: Full path relative to /workspace
+          example: /package.json
+        type:
+          type: string
+          enum: [file, directory]
+        size:
+          type: integer
+          description: File size in bytes (0 for directories)
+          example: 1234
+        modifiedAt:
+          type: string
+          format: date-time
+
+    FileContent:
+      type: object
+      required: [path, content, encoding, size]
+      properties:
+        path:
+          type: string
+          example: /src/index.ts
+        content:
+          type: string
+          description: File content (UTF-8 text or base64 for binary)
+        encoding:
+          type: string
+          enum: [utf-8, base64]
+          default: utf-8
+        size:
+          type: integer
+          description: Original file size in bytes
+
+    WriteFileRequest:
+      type: object
+      required: [path, content]
+      properties:
+        path:
+          type: string
+          description: File path relative to /workspace
+          example: /src/index.ts
+        content:
+          type: string
+          description: File content
+        encoding:
+          type: string
+          enum: [utf-8, base64]
+          default: utf-8
+
+    ApiError:
+      type: object
+      required: [statusCode, error, message]
+      properties:
+        statusCode:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: Bad Request
+        message:
+          type: string
+          example: "Unknown runtime: 'ruby'"
+        code:
+          type: string
+          description: Machine-readable error code
+          example: INVALID_RUNTIME
+
+  responses:
+    SandboxNotFound:
+      description: Sandbox not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiError'
+          example:
+            statusCode: 404
+            error: Not Found
+            message: "Sandbox 'sbx-unknown' not found"
+            code: SANDBOX_NOT_FOUND
+
+  # WebSocket messages are documented here for reference (not part of OpenAPI spec)
+  # See sandbox-architecture.md Section 6.2 for the full WebSocket protocol.
+  x-websocket-messages:
+    sandbox-output:
+      description: Real-time stdout/stderr line from container
+      channel: 'ws://host/ws/sandboxes/{sandboxId}/stream'
+      direction: server-to-client
+      payload:
+        type: object
+        properties:
+          type:
+            const: 'sandbox:output'
+          payload:
+            type: object
+            required: [index, text, timestamp, stream]
+            properties:
+              index:
+                type: integer
+                description: Monotonic line index
+              text:
+                type: string
+                description: Raw text (may contain ANSI escapes)
+              timestamp:
+                type: string
+                format: date-time
+              stream:
+                type: string
+                enum: [stdout, stderr]
+
+    sandbox-exec-done:
+      description: Execution completed notification
+      channel: 'ws://host/ws/sandboxes/{sandboxId}/stream'
+      direction: server-to-client
+      payload:
+        type: object
+        properties:
+          type:
+            const: 'sandbox:exec:done'
+          payload:
+            type: object
+            required: [executionId, exitCode, durationMs]
+            properties:
+              executionId:
+                type: string
+              exitCode:
+                type: integer
+              durationMs:
+                type: integer
+
+    sandbox-status:
+      description: Sandbox status change notification
+      channel: 'ws://host/ws/sandboxes/{sandboxId}/stream'
+      direction: server-to-client
+      payload:
+        type: object
+        properties:
+          type:
+            const: 'sandbox:status'
+          payload:
+            type: object
+            required: [sandboxId, status]
+            properties:
+              sandboxId:
+                type: string
+              status:
+                $ref: '#/components/schemas/SandboxStatus'
+              error:
+                type: string
