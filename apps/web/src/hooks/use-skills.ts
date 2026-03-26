@@ -53,7 +53,10 @@ export function useSkills(filters?: { search?: string; tag?: string; phase?: Ski
 
   return useQuery<SkillSummary[]>({
     queryKey: ['skills', filters],
-    queryFn: () => api.get<SkillSummary[]>(`/api/skills${query ? `?${query}` : ''}`),
+    queryFn: async () => {
+      const res = await api.get<{ skills: SkillSummary[] } | SkillSummary[]>(`/api/skills${query ? `?${query}` : ''}`);
+      return Array.isArray(res) ? res : res.skills;
+    },
     refetchInterval: 30_000,
   });
 }
