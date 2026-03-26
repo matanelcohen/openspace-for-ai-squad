@@ -40,17 +40,27 @@ export function useChatMessages(recipient: string) {
 
     if (isRelevant) {
       queryClient.setQueryData<ChatMessage[]>(['chat', recipient], (old = []) => {
-        // Avoid duplicates (from optimistic update or refetch)
+        // Exact ID match — already have this message
         if (old.some((m) => m.id === msg.id)) return old;
+
         // Remove optimistic messages that this real message supersedes
-        const cleaned = old.filter(
+        // Match on sender + content (trimmed) to handle whitespace differences
+        const msgContentTrimmed = msg.content.trim();
+        const cleaned = old.filter((m) => {
+          if (!m.id.startsWith('optimistic-')) return true;
+          return !(m.sender === msg.sender && m.content.trim() === msgContentTrimmed);
+        });
+
+        // Also prevent exact duplicate content from same sender within 5 seconds
+        const msgTime = new Date(msg.timestamp).getTime();
+        const isDuplicate = cleaned.some(
           (m) =>
-            !(
-              m.id.startsWith('optimistic-') &&
-              m.content === msg.content &&
-              m.sender === msg.sender
-            ),
+            m.sender === msg.sender &&
+            m.content.trim() === msgContentTrimmed &&
+            Math.abs(new Date(m.timestamp).getTime() - msgTime) < 5000,
         );
+        if (isDuplicate) return old;
+
         const updated = [...cleaned, msg];
         updated.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         return updated;
