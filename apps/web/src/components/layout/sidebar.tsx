@@ -1,17 +1,20 @@
 'use client';
 
-import { LayoutDashboard, ListTodo, MessageSquare, Scale, Users } from 'lucide-react';
+import { Brain, LayoutDashboard, ListTodo, MessageSquare, Scale, Scan, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
+import { AgentWorkSummary } from '@/components/layout/agent-work-summary';
 import { cn } from '@/lib/utils';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
+  { href: '/traces', label: 'Traces', icon: Scan },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/decisions', label: 'Decisions', icon: Scale },
   { href: '/team-members', label: 'Team', icon: Users },
+  { href: '/memories', label: 'Memories', icon: Brain },
 ];
 
 interface SidebarProps {
@@ -55,6 +58,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
           );
         })}
       </nav>
+      <AgentWorkSummary />
     </aside>
   );
 }
