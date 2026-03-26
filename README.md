@@ -8,12 +8,16 @@
 
 | Feature | Description |
 |---------|-------------|
-| **Squad Dashboard** | Visual overview of all agents — status, current tasks, expertise, and recent activity at a glance. Auto-refreshes via WebSocket. |
-| **Task Management** | Kanban board and list views for creating, assigning, prioritizing, and tracking tasks. Drag-and-drop reordering, filters by agent/status/priority, [pending-approval workflow](docs/pending-approval-workflow.md) for AI-generated sub-tasks, and full sync with `.squad/` task files. |
-| **Real-time Activity Feed** | Live chronological stream of agent events — task starts, completions, decisions, errors — pushed to the browser within seconds via WebSocket. |
-| **Voice Interface** | Real-time, multi-party group voice chat with your AI squad. Continuous listening, multi-agent responses with distinct voices, shared conversation context, and voice-triggered actions (create tasks, assign work, query status — all by speaking naturally). |
-| **Chat Interface** | Text-based conversation with individual agents or the whole team. Markdown support, message history, and real-time delivery. Like Slack for your AI squad. |
-| **Decision Log** | Browse and search all team decisions. See who made them, when, why, and what they affect. Full-text search and filtering. |
+| **Squad Dashboard** | Visual overview of all agents — status, current tasks, queue depth, and recent activity. Auto-refreshes via WebSocket. Agent cards show live work status (🟢 Working / ⏸️ Idle). |
+| **Task Management** | Kanban board and list views for creating, assigning, prioritizing, and tracking tasks. Drag-and-drop reordering, filters by agent/status/priority, AI-powered task execution, retry button for blocked tasks, and full sync with `.squad/` task files. |
+| **Chat Interface** | ChatGPT-style conversation with [assistant-ui](https://www.assistant-ui.com/) — Slack-style agent avatars, markdown rendering, code blocks, copy/reload buttons, suggestion chips, voice dictation, and conversation history as context. |
+| **A2A Protocol** | [Agent-to-Agent](https://github.com/a2aproject/a2a-js) protocol support — each agent is discoverable via `AgentCard`, callable via JSON-RPC, and can delegate work to other agents. External A2A agents can join the squad. |
+| **AI Traces** | Full observability — every AI call logged with prompt, response, model, agent, task, and duration. OTLP collector receives spans from Copilot CLI. View at `/traces`. |
+| **Dynamic Team** | Hire/fire team members via API or UI. New members automatically get `.squad/` charter files, A2A endpoints, and agent worker queues. `.squad/` files are the source of truth, SQLite is a cache. |
+| **Voice Interface** | Real-time voice chat with browser speech recognition + TTS. Continuous listening, multi-agent responses, voice-triggered actions. |
+| **Real-time Activity Feed** | Live chronological stream of agent events — task starts, completions, decisions, errors — pushed via WebSocket. |
+| **Decision Log** | Browse and search all team decisions with full-text search and filtering. |
+| **Mobile Responsive** | Full mobile support — collapsible sidebar with hamburger menu, touch-friendly layouts across all pages. |
 
 ---
 
@@ -21,10 +25,13 @@
 
 | Layer | Technology |
 |-------|-----------|
-| **Frontend** | [Next.js](https://nextjs.org/) (App Router), React 19, [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/), [TanStack Query](https://tanstack.com/query) |
+| **Frontend** | [Next.js](https://nextjs.org/) (App Router), React 18, [Tailwind CSS](https://tailwindcss.com/), [shadcn/ui](https://ui.shadcn.com/), [assistant-ui](https://www.assistant-ui.com/) (ChatGPT-style chat), [TanStack Query](https://tanstack.com/query) |
 | **Backend** | [Fastify](https://www.fastify.io/), TypeScript, [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (cache/index layer) |
+| **AI** | [GitHub Copilot SDK](https://github.com/github/copilot-sdk) (`@github/copilot-sdk`) — server mode via TCP, session retry with exponential backoff |
+| **A2A** | [A2A JavaScript SDK](https://github.com/a2aproject/a2a-js) (`@a2a-js/sdk`) — Agent-to-Agent protocol for inter-agent communication |
 | **Real-time** | WebSocket (native), file watching via chokidar |
-| **Voice** | [OpenAI Realtime API](https://platform.openai.com/docs/guides/realtime) (streaming STT + TTS + VAD), per-agent voice profiles |
+| **Voice** | Browser SpeechRecognition + SpeechSynthesis, [react-speech-recognition](https://www.npmjs.com/package/react-speech-recognition) |
+| **Observability** | [OpenTelemetry](https://opentelemetry.io/) (`@opentelemetry/sdk-node`) — OTLP trace collection + custom AI interaction logging |
 | **Shared** | TypeScript monorepo with shared type contracts (`@openspace/shared`) |
 | **Data Layer** | `.squad/` file system (source of truth), SQLite (rebuildable cache with FTS5 search) |
 | **Build** | [Turborepo](https://turbo.build/), [pnpm](https://pnpm.io/) workspaces |
@@ -40,24 +47,39 @@ openspace.ai is a monorepo with a Next.js frontend, Fastify API backend, and a s
 ┌─────────────────────────────────────────────────────────────┐
 │                        Client (Browser)                      │
 │  ┌──────────┐  ┌──────────┐  ┌───────┐  ┌───────────────┐  │
-│  │Dashboard │  │Task Board│  │ Chat  │  │ Voice Interface│  │
+│  │Dashboard │  │Task Board│  │ Chat  │  │ Voice + Traces │  │
+│  │(agent    │  │(kanban,  │  │(asst- │  │ (speech rec,  │  │
+│  │ status)  │  │ retry)   │  │ -ui)  │  │  OTel viewer) │  │
 │  └────┬─────┘  └────┬─────┘  └───┬───┘  └───────┬───────┘  │
-│       │              │            │              │           │
 │       └──────────────┴────────────┴──────────────┘           │
 │                          │                                   │
 │                   REST + WebSocket                           │
 └──────────────────────────┼───────────────────────────────────┘
                            │
 ┌──────────────────────────┼───────────────────────────────────┐
-│                    API Gateway / BFF                          │
+│                    Fastify API Server                         │
 │  ┌──────────────┐  ┌──────────────┐  ┌───────────────────┐  │
-│  │  REST API    │  │  WebSocket   │  │  Voice Pipeline   │  │
-│  │  (CRUD,      │  │  Server      │  │  (STT → Agent →   │  │
-│  │   queries)   │  │  (live feed) │  │   TTS)            │  │
+│  │  REST API    │  │  WebSocket   │  │  A2A Protocol     │  │
+│  │  /api/*      │  │  /ws         │  │  /a2a/:agentId    │  │
 │  └──────┬───────┘  └──────┬───────┘  └────────┬──────────┘  │
 │         │                 │                    │             │
-│         └─────────────────┴────────────────────┘             │
-│                          │                                   │
+│  ┌──────┴─────────────────┴────────────────────┴──────────┐  │
+│  │              Agent Worker Service                       │  │
+│  │  Queue per agent → copilot-sdk → AI → result            │  │
+│  │  Retry logic, crash recovery, progress streaming        │  │
+│  └─────────────────────┬──────────────────────────────────┘  │
+│                        │                                     │
+│  ┌─────────────────────┴──────────────────────────────────┐  │
+│  │  Copilot SDK (server mode via TCP to CLI on port 3100)  │  │
+│  │  Session retry • sendAndWait retry • OTLP tracing       │  │
+│  └─────────────────────────────────────────────────────────┘  │
+│                                                              │
+│  ┌────────────────────┐  ┌─────────────────────────────────┐ │
+│  │  .squad/ files     │  │  SQLite Cache                   │ │
+│  │  (source of truth) │  │  (tasks, chat, team, traces)    │ │
+│  └────────────────────┘  └─────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
 │                  Squad Orchestration Layer                    │
 │         ┌────────────────┼────────────────┐                  │
 │         │     .squad/ File System          │                  │
@@ -79,46 +101,52 @@ openspace.ai is a monorepo with a Next.js frontend, Fastify API backend, and a s
 
 ### Prerequisites
 
-- **Node.js** 20+ (see `.nvmrc`)
+- **Node.js** 22+ 
 - **pnpm** 9+ — install via `corepack enable` or `npm install -g pnpm`
+- **Copilot CLI** (optional) — for AI-powered agents. Without it, agents use mock responses.
 
-### Installation
+### Quick Start
 
 ```bash
-# Clone the repository
+# Clone and start everything
 git clone https://github.com/your-org/openspace.ai.git
 cd openspace.ai
+./start.sh
+```
 
+`start.sh` handles everything: checks Node/pnpm, installs deps, starts Copilot CLI server, launches API + Web.
+
+### Manual Setup
+
+```bash
 # Install dependencies
 pnpm install
+
+# Start Copilot CLI server (optional, in a separate terminal)
+copilot --headless --port 3100 --model claude-opus-4.6
+
+# Start dev servers
+pnpm dev
 ```
 
 ### Environment Variables
 
-Copy the example env files and configure:
-
 ```bash
-# Root
-cp .env.example .env
-
-# API
-cp apps/api/.env.example apps/api/.env
-
-# Web
-cp apps/web/.env.example apps/web/.env
+# apps/api/.env
+COPILOT_CLI_URL=localhost:3100          # Copilot CLI server (TCP, not subprocess)
+COPILOT_MODEL=claude-opus-4.6           # Default AI model
+COPILOT_OTLP_ENDPOINT=http://localhost:3001  # Traces collected by our server
 ```
 
-See each `.env.example` file for documented variable descriptions.
+### URLs
 
-### Running
-
-```bash
-# Start both web and API in development mode
-pnpm dev
-
-# The web app runs at http://localhost:3000
-# The API runs at http://localhost:3001
-```
+| Service | URL |
+|---------|-----|
+| **Web App** | http://localhost:3000 |
+| **API** | http://localhost:3001 |
+| **LAN Access** | http://&lt;your-ip&gt;:3000 |
+| **Agent Cards (A2A)** | http://localhost:3001/.well-known/agent-card.json |
+| **Traces** | http://localhost:3000/traces |
 
 ### Other Commands
 
