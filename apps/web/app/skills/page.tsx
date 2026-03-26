@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { SkillFiltersToolbar } from '@/components/skills/skill-filters-toolbar';
 import { SkillFormDialog } from '@/components/skills/skill-form-dialog';
 import { SkillGrid } from '@/components/skills/skill-grid';
+import { SkillImportDialog } from '@/components/skills/skill-import-dialog';
 import { useAllSkillTags, useSkills } from '@/hooks/use-skills';
 
 export default function SkillStorePage() {
@@ -37,7 +38,10 @@ export default function SkillStorePage() {
             Browse, discover, and manage skills for your AI agents.
           </p>
         </div>
-        <SkillFormDialog />
+        <div className="flex items-center gap-2">
+          <SkillImportDialog />
+          <SkillFormDialog />
+        </div>
       </div>
 
       <SkillFiltersToolbar

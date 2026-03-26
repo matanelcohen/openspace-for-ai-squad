@@ -244,3 +244,50 @@ export function useCreateSkill() {
     },
   });
 }
+
+// ── GitHub import types ──────────────────────────────────────────
+
+export interface GitHubSkillSource {
+  owner: string;
+  repo: string;
+  path: string;
+}
+
+export interface ScannedGitHubSkill {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+export interface ScanGitHubSkillsResponse {
+  source: GitHubSkillSource;
+  skills: ScannedGitHubSkill[];
+}
+
+export interface ImportSkillsResponse {
+  imported: Array<{ id: string; name: string }>;
+  errors: Array<{ id: string; error: string }>;
+}
+
+// ── GitHub import hooks ──────────────────────────────────────────
+
+export function useScanGitHubSkills() {
+  return useMutation({
+    mutationFn: (url: string) =>
+      api.post<ScanGitHubSkillsResponse>('/api/skills/import/scan', { url }),
+  });
+}
+
+export function useImportSkills() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: {
+      source: { owner: string; repo: string; ref?: string };
+      skills: Array<{ id: string; path: string }>;
+    }) => api.post<ImportSkillsResponse>('/api/skills/import', payload),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['skills'] });
+    },
+  });
+}

@@ -12,6 +12,8 @@
  * POST   /api/skills/:id/recover      — Manually recover a failed/disabled skill
  * POST   /api/agents/:id/skills       — Attach (activate) a skill for an agent
  * DELETE /api/agents/:id/skills/:skillId — Detach (deactivate) a skill for an agent
+ * POST   /api/skills/import/scan      — Scan a GitHub URL for importable skills
+ * POST   /api/skills/import           — Import selected skills from GitHub
  */
 
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
@@ -19,6 +21,7 @@ import { join, resolve } from 'node:path';
 
 import type { SkillManifest } from '@openspace/shared';
 import type { FastifyPluginAsync } from 'fastify';
+import matter from 'gray-matter';
 
 import { ErrorCodes, sendError } from '../lib/api-errors.js';
 import type { SkillRegistryImpl } from '../services/skill-registry/index.js';
@@ -121,6 +124,120 @@ function generateSkillMd(payload: SkillMdPayload): string {
     lines.push(payload.instructions);
   }
   return lines.join('\n');
+}
+
+// ── GitHub import helpers ──────────────────────────────────────────
+
+interface GitHubSource {
+  owner: string;
+  repo: string;
+  path: string;
+  ref?: string;
+}
+
+interface ScannedSkill {
+  id: string;
+  name: string;
+  description: string;
+  path: string;
+}
+
+/** Parse a GitHub URL into owner/repo/path/ref components */
+function parseGitHubUrl(url: string): GitHubSource | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== 'github.com') return null;
+
+    // Path format: /{owner}/{repo}/tree/{ref}/{path...}
+    // or: /{owner}/{repo} (root)
+    const segments = parsed.pathname.replace(/^\//, '').split('/');
+    if (segments.length < 2) return null;
+
+    const owner = segments[0];
+    const repo = segments[1];
+
+    if (segments[2] === 'tree' && segments.length >= 4) {
+      const ref = segments[3];
+      const path = segments.slice(4).join('/') || '';
+      return { owner, repo, path, ref };
+    }
+
+    return { owner, repo, path: '', ref: 'main' };
+  } catch {
+    return null;
+  }
+}
+
+/** Build the headers for GitHub API requests */
+function githubHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/vnd.github.v3+json',
+    'User-Agent': 'openspace-skill-importer',
+  };
+  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  if (token) {
+    headers['Authorization'] = `token ${token}`;
+  }
+  return headers;
+}
+
+/** Fetch JSON from the GitHub API with rate-limit handling */
+async function githubApiFetch<T>(url: string): Promise<T> {
+  const res = await fetch(url, { headers: githubHeaders() });
+
+  if (res.status === 403) {
+    const remaining = res.headers.get('x-ratelimit-remaining');
+    if (remaining === '0') {
+      const resetAt = Number(res.headers.get('x-ratelimit-reset') ?? 0);
+      const waitSec = Math.max(0, resetAt - Math.floor(Date.now() / 1000));
+      throw new Error(
+        `GitHub API rate limit exceeded. Resets in ${waitSec}s. Set GH_TOKEN env var for higher limits.`,
+      );
+    }
+  }
+
+  if (!res.ok) {
+    throw new Error(`GitHub API error ${res.status}: ${await res.text()}`);
+  }
+
+  return res.json() as Promise<T>;
+}
+
+interface GitHubContentEntry {
+  name: string;
+  path: string;
+  type: 'file' | 'dir' | 'symlink' | 'submodule';
+  download_url: string | null;
+}
+
+/** Parse SKILL.md content to extract name + description, handling both frontmatter and plain formats */
+function parseSkillMd(raw: string, dirName: string): { name: string; description: string } | null {
+  try {
+    const { data, content } = matter(raw);
+
+    if (data && typeof data.name === 'string') {
+      return {
+        name: data.name,
+        description: (data.description as string) ?? content.split('\n')[0]?.trim() ?? '',
+      };
+    }
+
+    // No frontmatter — use directory name and first content line
+    const firstLine = content
+      .split('\n')
+      .map((l) => l.trim())
+      .find((l) => l.length > 0 && !l.startsWith('#'));
+
+    return {
+      name: dirName
+        .split('-')
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join(' '),
+      description: firstLine ?? '',
+    };
+  } catch {
+    return null;
+  }
 }
 
 const skillsRoute: FastifyPluginAsync = async (app) => {
@@ -463,6 +580,216 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  // ── GitHub Import Routes ──────────────────────────────────────
+
+  // POST /api/skills/import/scan — scan a GitHub URL for importable skills
+  app.post<{ Body: { url: string } }>('/skills/import/scan', async (request, reply) => {
+    const { url } = (request.body as { url?: string }) ?? {};
+    if (!url || typeof url !== 'string') {
+      return sendError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Missing required field: url');
+    }
+
+    const source = parseGitHubUrl(url);
+    if (!source) {
+      return sendError(
+        reply,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'Invalid GitHub URL. Expected format: https://github.com/{owner}/{repo}/tree/{branch}/{path}',
+      );
+    }
+
+    try {
+      const ref = source.ref ?? 'main';
+      const contentsUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/contents/${source.path}?ref=${ref}`;
+      const entries = await githubApiFetch<GitHubContentEntry[]>(contentsUrl);
+
+      if (!Array.isArray(entries)) {
+        return sendError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'The URL does not point to a directory',
+        );
+      }
+
+      const dirs = entries.filter((e) => e.type === 'dir');
+      const skills: ScannedSkill[] = [];
+
+      // Check each subdirectory for a SKILL.md
+      const scanResults = await Promise.allSettled(
+        dirs.map(async (dir) => {
+          const dirContentsUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/contents/${dir.path}?ref=${ref}`;
+          const dirEntries = await githubApiFetch<GitHubContentEntry[]>(dirContentsUrl);
+          const skillMdEntry = dirEntries.find((e) => e.name === 'SKILL.md' && e.type === 'file');
+
+          if (!skillMdEntry?.download_url) return null;
+
+          const rawRes = await fetch(skillMdEntry.download_url, {
+            headers: githubHeaders(),
+          });
+          if (!rawRes.ok) return null;
+          const rawContent = await rawRes.text();
+
+          const parsed = parseSkillMd(rawContent, dir.name);
+          if (!parsed) return null;
+
+          return {
+            id: dir.name,
+            name: parsed.name,
+            description: parsed.description,
+            path: dir.path,
+          };
+        }),
+      );
+
+      for (const result of scanResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          skills.push(result.value);
+        }
+      }
+
+      return reply.send({
+        source: { owner: source.owner, repo: source.repo, path: source.path },
+        skills,
+      });
+    } catch (err) {
+      const message = (err as Error).message;
+      if (message.includes('rate limit')) {
+        return sendError(reply, 429, ErrorCodes.VALIDATION_ERROR, message);
+      }
+      return sendError(
+        reply,
+        502,
+        ErrorCodes.INTERNAL_ERROR,
+        `Failed to scan GitHub repository: ${message}`,
+      );
+    }
+  });
+
+  // POST /api/skills/import — import selected skills from GitHub
+  app.post<{
+    Body: {
+      source: { owner: string; repo: string; ref?: string };
+      skills: Array<{ id: string; path: string }>;
+    };
+  }>('/skills/import', async (request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
+
+    const body = request.body as {
+      source?: { owner?: string; repo?: string; ref?: string };
+      skills?: Array<{ id?: string; path?: string }>;
+    };
+
+    if (!body?.source?.owner || !body?.source?.repo) {
+      return sendError(
+        reply,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'Missing required field: source (owner, repo)',
+      );
+    }
+    if (!Array.isArray(body.skills) || body.skills.length === 0) {
+      return sendError(
+        reply,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'Missing required field: skills (non-empty array)',
+      );
+    }
+
+    const { owner, repo, ref = 'main' } = body.source;
+    const squadDir = getSquadDir();
+    const skillsDir = join(squadDir, 'skills');
+
+    const imported: Array<{ id: string; name: string }> = [];
+    const errors: Array<{ id: string; error: string }> = [];
+    const entries = (registry as unknown as { entries: Map<string, unknown> }).entries;
+
+    for (const skill of body.skills) {
+      if (!skill.id || !skill.path) {
+        errors.push({ id: skill.id ?? 'unknown', error: 'Missing id or path' });
+        continue;
+      }
+
+      try {
+        // Fetch SKILL.md raw content
+        const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${skill.path}/SKILL.md`;
+        const rawRes = await fetch(rawUrl, { headers: githubHeaders() });
+        if (!rawRes.ok) {
+          throw new Error(`Failed to fetch SKILL.md: HTTP ${rawRes.status}`);
+        }
+        const rawContent = await rawRes.text();
+
+        // Save to local .squad/skills/{id}/SKILL.md
+        const skillDir = join(skillsDir, skill.id);
+        if (!existsSync(skillDir)) {
+          mkdirSync(skillDir, { recursive: true });
+        }
+        const skillFile = join(skillDir, 'SKILL.md');
+        writeFileSync(skillFile, rawContent, 'utf-8');
+
+        // Parse and register
+        const { data, content } = matter(rawContent);
+        const fm = data as Partial<{
+          name: string;
+          description: string;
+          tags: string[];
+          agentMatch: { roles: string[] };
+          requires: { bins?: string[]; env?: string[] };
+        }>;
+
+        const displayName =
+          fm.name ??
+          skill.id
+            .split('-')
+            .map((w) => w[0].toUpperCase() + w.slice(1))
+            .join(' ');
+        const description =
+          fm.description ??
+          content
+            .split('\n')
+            .map((l) => l.trim())
+            .find((l) => l.length > 0 && !l.startsWith('#')) ??
+          '';
+
+        entries.set(skill.id, {
+          manifest: {
+            manifestVersion: '1.0' as const,
+            id: skill.id,
+            name: displayName,
+            version: '1.0.0',
+            description,
+            author: `${owner}/${repo}`,
+            tags: fm.tags ?? [],
+            icon: SKILL_ICONS[skill.id] ?? '📦',
+            permissions: [],
+            agentMatch: fm.agentMatch ?? { roles: ['*'] },
+            requires: fm.requires ?? { bins: [], env: [] },
+            instructions: content.trim(),
+          },
+          phase: 'loaded' as const,
+          hooks: null,
+          activeAgents: new Set<string>(),
+          lastTransition: Date.now(),
+          error: null,
+          sourcePath: skillFile,
+          retryState: null,
+          circuitBreaker: null,
+        });
+
+        imported.push({ id: skill.id, name: displayName });
+      } catch (err) {
+        errors.push({ id: skill.id, error: (err as Error).message });
+      }
+    }
+
+    return reply.send({ imported, errors });
+  });
 };
 
 export default skillsRoute;
