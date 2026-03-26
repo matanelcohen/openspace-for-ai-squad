@@ -49,7 +49,7 @@ const terminalRoute: FastifyPluginAsync = async (app) => {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
-        cwd: process.env.HOME || process.cwd(),
+        cwd: process.cwd(),
         env: process.env as Record<string, string>,
       });
     } catch (err) {
