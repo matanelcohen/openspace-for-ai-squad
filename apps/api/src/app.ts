@@ -14,6 +14,7 @@ import chatRoute from './routes/chat.js';
 import decisionsRoute from './routes/decisions.js';
 import healthRoute from './routes/health.js';
 import knowledgeRoute from './routes/knowledge.js';
+import sandboxesRoute from './routes/sandboxes.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import teamMembersRoute from './routes/team-members.js';
@@ -28,6 +29,7 @@ import { AuthService } from './services/auth/index.js';
 import { ChatService } from './services/chat/index.js';
 import { openDatabase } from './services/db/index.js';
 import { seedTeamMembers } from './services/db/seed-team.js';
+import { SandboxService } from './services/sandbox/index.js';
 import { KnowledgeSearchService } from './services/search/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import {
@@ -96,6 +98,10 @@ export function buildApp(opts: AppOptions = {}) {
   // Knowledge search service
   const knowledgeSearch = new KnowledgeSearchService({ db });
   app.decorate('knowledgeSearch', knowledgeSearch);
+
+  // Sandbox service (Docker container management)
+  const sandboxService = new SandboxService();
+  app.decorate('sandboxService', sandboxService);
 
   // Voice services
   const AGENT_PROFILES = [
@@ -242,6 +248,11 @@ export function buildApp(opts: AppOptions = {}) {
   // Decorate Fastify instance with the SQLite database
   app.decorate('db', db);
 
+  // Shut down sandbox containers on app close
+  app.addHook('onClose', async () => {
+    await sandboxService.shutdown();
+  });
+
   // Routes
   app.register(healthRoute);
   app.register(a2aRoute);
@@ -255,6 +266,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(channelsRoute, { prefix: '/api' });
   app.register(knowledgeRoute, { prefix: '/api' });
   app.register(teamMembersRoute, { prefix: '/api' });
+  app.register(sandboxesRoute, { prefix: '/api' });
 
   app.setErrorHandler((error, request, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
@@ -275,5 +287,6 @@ declare module 'fastify' {
     knowledgeSearch: KnowledgeSearchService;
     agentWorker?: AgentWorkerService;
     a2aService?: A2AService;
+    sandboxService: SandboxService;
   }
 }
