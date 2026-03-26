@@ -128,3 +128,14 @@ export function useAllSkillTags() {
   skills?.forEach((s) => s.tags?.forEach((t) => tags.add(t)));
   return Array.from(tags).sort();
 }
+
+export function useCreateSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (manifest: SkillManifest) =>
+      api.post<SkillSummary>('/api/skills', manifest),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['skills'] });
+    },
+  });
+}

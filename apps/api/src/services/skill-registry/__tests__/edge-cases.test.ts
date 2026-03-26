@@ -426,3 +426,205 @@ describe('boundary conditions', () => {
     expect(result.valid).toBe(true);
   });
 });
+
+// ── 4+ Node Circular Dependencies ───────────────────────────────
+
+describe('complex circular dependencies', () => {
+  let registry: SkillRegistryImpl;
+
+  beforeEach(() => {
+    registry = new SkillRegistryImpl();
+    tempDir = createTempDir();
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('detects 4-node circular dependency (A → B → C → D → A)', async () => {
+    const ids = ['circ-4a', 'circ-4b', 'circ-4c', 'circ-4d'];
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: ids[0], dependencies: [{ skillId: ids[1] }] }),
+    );
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: ids[1], dependencies: [{ skillId: ids[2] }] }),
+    );
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: ids[2], dependencies: [{ skillId: ids[3] }] }),
+    );
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: ids[3], dependencies: [{ skillId: ids[0] }] }),
+    );
+
+    await registry.discover([tempDir]);
+    for (const id of ids) {
+      await registry.validate(id);
+    }
+
+    let circularFound = false;
+    for (const id of ids) {
+      try {
+        await registry.load(id);
+      } catch (e: unknown) {
+        if (e instanceof Error && e.message.includes('Circular dependency')) {
+          circularFound = true;
+        }
+      }
+    }
+    expect(circularFound).toBe(true);
+  });
+
+  it('detects 5-node circular dependency with branching', async () => {
+    // A → B → C → D → E → B (cycle B→C→D→E→B, A enters from outside)
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: 'branch-a', dependencies: [{ skillId: 'branch-b' }] }),
+    );
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: 'branch-b', dependencies: [{ skillId: 'branch-c' }] }),
+    );
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: 'branch-c', dependencies: [{ skillId: 'branch-d' }] }),
+    );
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: 'branch-d', dependencies: [{ skillId: 'branch-e' }] }),
+    );
+    createSkillOnDisk(
+      tempDir,
+      makeManifest({ id: 'branch-e', dependencies: [{ skillId: 'branch-b' }] }),
+    );
+
+    await registry.discover([tempDir]);
+    for (const id of ['branch-a', 'branch-b', 'branch-c', 'branch-d', 'branch-e']) {
+      await registry.validate(id);
+    }
+
+    let circularFound = false;
+    for (const id of ['branch-a', 'branch-b', 'branch-c', 'branch-d', 'branch-e']) {
+      try {
+        await registry.load(id);
+      } catch (e: unknown) {
+        if (e instanceof Error && e.message.includes('Circular dependency')) {
+          circularFound = true;
+        }
+      }
+    }
+    expect(circularFound).toBe(true);
+  });
+});
+
+// ── Concurrent Reload During Active Use ──────────────────────────
+
+describe('concurrent reload during active use', () => {
+  let registry: SkillRegistryImpl;
+
+  beforeEach(() => {
+    registry = new SkillRegistryImpl();
+    tempDir = createTempDir();
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('reload properly deactivates all agents before reloading', async () => {
+    createSkillOnDisk(tempDir, makeManifest({ id: 'busy-skill', description: 'v1' }));
+    await registry.discoverAndLoadAll([tempDir]);
+
+    // Activate for multiple agents
+    await registry.activate('busy-skill', 'agent-1');
+    await registry.activate('busy-skill', 'agent-2');
+    await registry.activate('busy-skill', 'agent-3');
+
+    expect(registry.get('busy-skill')!.activeAgents.size).toBe(3);
+
+    // Update on disk
+    writeFileSync(
+      join(tempDir, 'busy-skill', 'manifest.json'),
+      JSON.stringify(makeManifest({ id: 'busy-skill', description: 'v2' }), null, 2),
+    );
+
+    await registry.reload('busy-skill');
+
+    const entry = registry.get('busy-skill');
+    expect(entry).toBeDefined();
+    expect(entry!.manifest.description).toBe('v2');
+    expect(entry!.activeAgents.size).toBe(0);
+    expect(entry!.phase).toBe('loaded');
+  });
+
+  it('concurrent reloads do not corrupt state', async () => {
+    createSkillOnDisk(tempDir, makeManifest({ id: 'reload-race' }));
+    await registry.discoverAndLoadAll([tempDir]);
+
+    // Multiple concurrent reloads — one should succeed, others may fail
+    const results = await Promise.allSettled([
+      registry.reload('reload-race'),
+      registry.reload('reload-race'),
+    ]);
+
+    // At least one should succeed
+    const succeeded = results.filter((r) => r.status === 'fulfilled');
+    expect(succeeded.length).toBeGreaterThanOrEqual(1);
+
+    // Skill should still exist in some valid state
+    const entry = registry.get('reload-race');
+    // It either exists and is loaded, or was unloaded by the race
+    if (entry) {
+      expect(['loaded', 'active', 'deactivated', 'validated', 'discovered']).toContain(
+        entry.phase,
+      );
+    }
+  });
+});
+
+// ── Manifest with Maximum Field Lengths ──────────────────────────
+
+describe('manifest with maximum field lengths', () => {
+  it('accepts manifest with long but valid description', () => {
+    const longDesc = 'A'.repeat(1000);
+    const result = validateSkillManifest(makeManifest({ description: longDesc }), '/path');
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts manifest with many tools', () => {
+    const tools = Array.from({ length: 50 }, (_, i) => ({
+      toolId: `tool:item-${i}`,
+      reason: `Tool ${i}`,
+    }));
+    const result = validateSkillManifest(makeManifest({ tools }), '/path');
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts manifest with many triggers', () => {
+    const triggers = Array.from({ length: 20 }, (_, i) => ({
+      type: 'task-type' as const,
+      taskTypes: [`task-${i}`],
+    }));
+    const result = validateSkillManifest(makeManifest({ triggers }), '/path');
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts manifest with many tags', () => {
+    const tags = Array.from({ length: 30 }, (_, i) => `tag-${i}`);
+    const result = validateSkillManifest(makeManifest({ tags }), '/path');
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts manifest with many config entries', () => {
+    const config = Array.from({ length: 25 }, (_, i) => ({
+      key: `config-${i}`,
+      type: 'string' as const,
+      default: `default-${i}`,
+    }));
+    const result = validateSkillManifest(makeManifest({ config }), '/path');
+    expect(result.valid).toBe(true);
+  });
+});

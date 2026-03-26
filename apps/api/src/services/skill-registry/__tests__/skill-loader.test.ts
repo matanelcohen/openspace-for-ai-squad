@@ -4,9 +4,10 @@
  * Covers: discoverManifests, validateSkillManifest,
  *         detectCircularDependencies, topologicalSortSkills, resolveManifest
  */
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import type { SkillDependency, SkillManifest } from '@openspace/shared/src/types/skill.js';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -18,6 +19,8 @@ import {
   topologicalSortSkills,
   validateSkillManifest,
 } from '../skill-loader.js';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -480,5 +483,367 @@ describe('resolveManifest', () => {
     expect(resolved.id).toBe('spread-test');
     expect(resolved.name).toBe('Spread Test');
     expect(resolved.manifestVersion).toBe(1);
+  });
+});
+
+// ── Reference Skill Manifests ────────────────────────────────────
+
+describe('reference skill manifest validation', () => {
+  const SKILLS_CORE_DIR = join(
+    __dirname,
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+    'packages',
+    'skills-core',
+    'src',
+  );
+
+  function loadRealManifest(skillId: string): SkillManifest {
+    const manifestPath = join(SKILLS_CORE_DIR, skillId, 'manifest.json');
+    const raw = readFileSync(manifestPath, 'utf-8');
+    return JSON.parse(raw) as SkillManifest;
+  }
+
+  it('git-expert manifest passes schema validation', () => {
+    const manifest = loadRealManifest('git-expert');
+    const result = validateSkillManifest(manifest, '/ref/git-expert/manifest.json');
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('code-reviewer manifest passes schema validation', () => {
+    const manifest = loadRealManifest('code-reviewer');
+    const result = validateSkillManifest(manifest, '/ref/code-reviewer/manifest.json');
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('test-runner manifest passes schema validation', () => {
+    const manifest = loadRealManifest('test-runner');
+    const result = validateSkillManifest(manifest, '/ref/test-runner/manifest.json');
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('all 3 reference manifests have unique IDs', () => {
+    const ids = ['git-expert', 'code-reviewer', 'test-runner'].map(
+      (id) => loadRealManifest(id).id,
+    );
+    expect(new Set(ids).size).toBe(3);
+  });
+
+  it('code-reviewer optional dependency on git-expert resolves correctly', () => {
+    const crManifest = loadRealManifest('code-reviewer');
+    const geManifest = loadRealManifest('git-expert');
+
+    expect(crManifest.dependencies).toBeDefined();
+    const gitDep = crManifest.dependencies!.find((d) => d.skillId === 'git-expert');
+    expect(gitDep).toBeDefined();
+    expect(gitDep!.optional).toBe(true);
+
+    const loaded = new Map<string, SkillManifest>([['git-expert', geManifest]]);
+    const resolved = resolveManifest(crManifest, '/ref/code-reviewer/manifest.json', loaded);
+    expect(resolved.resolvedDependencies['git-expert']).toBe(geManifest.version);
+  });
+
+  it('code-reviewer resolves without git-expert (optional dep missing)', () => {
+    const crManifest = loadRealManifest('code-reviewer');
+    const resolved = resolveManifest(crManifest, '/ref/code-reviewer/manifest.json', new Map());
+    expect(resolved.resolvedDependencies).toEqual({});
+  });
+
+  it('reference manifests all have semver versions', () => {
+    for (const id of ['git-expert', 'code-reviewer', 'test-runner']) {
+      const manifest = loadRealManifest(id);
+      expect(manifest.version).toMatch(/^\d+\.\d+\.\d+$/);
+    }
+  });
+
+  it('reference manifests all have system prompts', () => {
+    for (const id of ['git-expert', 'code-reviewer', 'test-runner']) {
+      const manifest = loadRealManifest(id);
+      const system = manifest.prompts.find((p) => p.role === 'system');
+      expect(system).toBeDefined();
+      expect(system!.content).toContain('{{agent.name}}');
+    }
+  });
+
+  it('all reference manifests are discoverable from skills-core/src', () => {
+    const discovered = discoverManifests([SKILLS_CORE_DIR]);
+    const ids = discovered.map((d) => d.manifest.id).sort();
+    expect(ids).toContain('git-expert');
+    expect(ids).toContain('code-reviewer');
+    expect(ids).toContain('test-runner');
+  });
+});
+
+// ── Manifest ID Validation Edge Cases ────────────────────────────
+
+describe('manifest ID validation edge cases', () => {
+  it('rejects ID starting with a digit', () => {
+    const result = validateSkillManifest(makeManifest({ id: '1bad-id' }), '/path');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects ID containing uppercase letters', () => {
+    const result = validateSkillManifest(makeManifest({ id: 'Bad-Id' }), '/path');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects ID with underscores', () => {
+    const result = validateSkillManifest(makeManifest({ id: 'bad_id_here' }), '/path');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects ID with spaces', () => {
+    const result = validateSkillManifest(makeManifest({ id: 'bad id' }), '/path');
+    expect(result.valid).toBe(false);
+  });
+
+  it('rejects ID with special characters', () => {
+    const result = validateSkillManifest(makeManifest({ id: 'bad@id!' }), '/path');
+    expect(result.valid).toBe(false);
+  });
+
+  it('accepts ID with only lowercase and hyphens', () => {
+    const result = validateSkillManifest(makeManifest({ id: 'good-skill-id' }), '/path');
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts ID with digits after first char', () => {
+    const result = validateSkillManifest(makeManifest({ id: 'skill-v2-beta' }), '/path');
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects empty ID', () => {
+    const result = validateSkillManifest(makeManifest({ id: '' }), '/path');
+    expect(result.valid).toBe(false);
+  });
+});
+
+// ── Prompt Role Enum Validation ──────────────────────────────────
+
+describe('prompt role validation', () => {
+  const validRoles = ['system', 'planning', 'execution', 'review', 'error', 'handoff'] as const;
+
+  it.each(validRoles)('accepts prompt with role "%s"', (role) => {
+    const result = validateSkillManifest(
+      makeManifest({
+        prompts: [{ id: `${role}-prompt`, name: `${role} Prompt`, role, content: 'test' }],
+      }),
+      '/path',
+    );
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects prompt with invalid role', () => {
+    const result = validateSkillManifest(
+      makeManifest({
+        prompts: [
+          {
+            id: 'bad-role',
+            name: 'Bad Role',
+            role: 'invalid-role' as 'system',
+            content: 'test',
+          },
+        ],
+      }),
+      '/path',
+    );
+    expect(result.valid).toBe(false);
+  });
+});
+
+// ── YAML Discovery Edge Cases ────────────────────────────────────
+
+describe('YAML manifest edge cases', () => {
+  beforeEach(() => {
+    tempDir = createTempDir();
+  });
+
+  afterEach(() => {
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  it('discovers .yml extension', () => {
+    const skillDir = join(tempDir, 'yml-skill');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'skill.yml'),
+      `manifestVersion: 1
+id: yml-skill
+name: YML Skill
+version: "1.0.0"
+description: A YML skill
+tools:
+  - toolId: "file:read"
+    reason: Read files
+prompts:
+  - id: system
+    name: System
+    role: system
+    content: "You are {{agent.name}}"
+triggers:
+  - type: task-type
+    taskTypes:
+      - yml-task`,
+    );
+
+    const results = discoverManifests([tempDir]);
+    expect(results).toHaveLength(1);
+    expect(results[0].manifest.id).toBe('yml-skill');
+  });
+
+  it('handles YAML with multi-line strings', () => {
+    const skillDir = join(tempDir, 'multiline-yaml');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(
+      join(skillDir, 'skill.yaml'),
+      `manifestVersion: 1
+id: multiline-yaml
+name: Multiline YAML
+version: "1.0.0"
+description: >
+  A skill with a very long
+  description that spans
+  multiple lines
+tools:
+  - toolId: "file:read"
+    reason: Read files
+prompts:
+  - id: system
+    name: System
+    role: system
+    content: |
+      You are {{agent.name}}.
+      You are a multiline prompt test.
+triggers:
+  - type: task-type
+    taskTypes:
+      - multiline-task`,
+    );
+
+    const results = discoverManifests([tempDir]);
+    expect(results).toHaveLength(1);
+    expect(results[0].manifest.id).toBe('multiline-yaml');
+    expect(results[0].manifest.description).toContain('multiple lines');
+  });
+
+  it('handles malformed YAML gracefully', () => {
+    const skillDir = join(tempDir, 'bad-yaml');
+    mkdirSync(skillDir, { recursive: true });
+    writeFileSync(join(skillDir, 'skill.yaml'), 'this: is: not: valid: yaml: [[[');
+
+    const results = discoverManifests([tempDir]);
+    expect(results).toHaveLength(1);
+    // Stub manifest
+    expect(results[0].manifest.id).toBe('bad-yaml');
+  });
+});
+
+// ── Manifest with All Optional Fields ────────────────────────────
+
+describe('manifest with all optional fields', () => {
+  it('validates a manifest with every optional field populated', () => {
+    const fullManifest = makeManifest({
+      id: 'full-manifest',
+      author: 'test-author',
+      license: 'Apache-2.0',
+      homepage: 'https://example.com/skill',
+      tags: ['code-analysis', 'security', 'testing'],
+      icon: 'shield',
+      dependencies: [
+        { skillId: 'git-expert', versionRange: '^1.0.0', optional: true },
+      ],
+      config: [
+        { key: 'timeout', type: 'number', default: 30 },
+        { key: 'verbose', type: 'boolean', default: false },
+        { key: 'mode', type: 'string', default: 'standard' },
+      ],
+      entryPoint: './hooks.js',
+      permissions: ['fs:read', 'fs:write', 'net:outbound', 'exec:shell'],
+    });
+
+    const result = validateSkillManifest(fullManifest, '/path');
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+    expect(result.warnings).toHaveLength(0);
+  });
+});
+
+// ── Topological Sort Edge Cases ──────────────────────────────────
+
+describe('topologicalSortSkills edge cases', () => {
+  it('handles deep linear chain (10 levels)', () => {
+    const ids = Array.from({ length: 10 }, (_, i) => `skill-${i}`);
+    const deps = new Map<string, SkillDependency[]>();
+    for (let i = 0; i < ids.length - 1; i++) {
+      deps.set(ids[i], [{ skillId: ids[i + 1] }]);
+    }
+
+    const sorted = topologicalSortSkills(ids, deps);
+    // The deepest dependency should come first
+    expect(sorted[0]).toBe('skill-9');
+    expect(sorted[sorted.length - 1]).toBe('skill-0');
+  });
+
+  it('handles multiple independent subgraphs', () => {
+    const deps = new Map<string, SkillDependency[]>([
+      ['app-a', [{ skillId: 'lib-a' }]],
+      ['app-b', [{ skillId: 'lib-b' }]],
+    ]);
+    const sorted = topologicalSortSkills(['app-a', 'lib-a', 'app-b', 'lib-b'], deps);
+    expect(sorted.indexOf('lib-a')).toBeLessThan(sorted.indexOf('app-a'));
+    expect(sorted.indexOf('lib-b')).toBeLessThan(sorted.indexOf('app-b'));
+  });
+
+  it('handles skill with multiple dependencies', () => {
+    const deps = new Map<string, SkillDependency[]>([
+      ['top', [{ skillId: 'mid-a' }, { skillId: 'mid-b' }, { skillId: 'mid-c' }]],
+    ]);
+    const sorted = topologicalSortSkills(['top', 'mid-a', 'mid-b', 'mid-c'], deps);
+    expect(sorted.indexOf('top')).toBe(sorted.length - 1);
+  });
+});
+
+// ── Circular Dependency Edge Cases ───────────────────────────────
+
+describe('detectCircularDependencies edge cases', () => {
+  it('detects 4-node cycle (A → B → C → D → A)', () => {
+    const deps = new Map<string, SkillDependency[]>([
+      ['a', [{ skillId: 'b' }]],
+      ['b', [{ skillId: 'c' }]],
+      ['c', [{ skillId: 'd' }]],
+      ['d', [{ skillId: 'a' }]],
+    ]);
+    const cycle = detectCircularDependencies('a', deps);
+    expect(cycle).not.toBeNull();
+    expect(cycle).toContain('a');
+    expect(cycle).toContain('d');
+  });
+
+  it('detects cycle in one branch but not another', () => {
+    const deps = new Map<string, SkillDependency[]>([
+      ['root', [{ skillId: 'safe' }, { skillId: 'cycle-start' }]],
+      ['cycle-start', [{ skillId: 'cycle-end' }]],
+      ['cycle-end', [{ skillId: 'cycle-start' }]],
+    ]);
+    const cycle = detectCircularDependencies('root', deps);
+    expect(cycle).not.toBeNull();
+    expect(cycle).toContain('cycle-start');
+    expect(cycle).toContain('cycle-end');
+  });
+
+  it('handles empty dependency map', () => {
+    expect(detectCircularDependencies('solo', new Map())).toBeNull();
+  });
+
+  it('handles skill not in dependency map', () => {
+    const deps = new Map<string, SkillDependency[]>([['other', [{ skillId: 'another' }]]]);
+    expect(detectCircularDependencies('missing', deps)).toBeNull();
   });
 });
