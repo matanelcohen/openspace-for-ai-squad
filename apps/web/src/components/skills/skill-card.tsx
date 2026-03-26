@@ -3,8 +3,10 @@
 import { Terminal, Users } from 'lucide-react';
 import Link from 'next/link';
 
+import { AgentAvatar } from '@/components/agent-avatar';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { SkillSummary } from '@/hooks/use-skills';
 
 import { SkillIcon } from './skill-icon';
@@ -12,9 +14,11 @@ import { SkillPhaseBadge } from './skill-phase-badge';
 
 interface SkillCardProps {
   skill: SkillSummary;
+  /** Agents that have this skill enabled, with their display info. */
+  enabledAgents?: { id: string; name: string }[];
 }
 
-export function SkillCard({ skill }: SkillCardProps) {
+export function SkillCard({ skill, enabledAgents }: SkillCardProps) {
   return (
     <Link href={`/skills/${skill.id}`} data-testid={`skill-card-${skill.id}`}>
       <Card className="h-full transition-all hover:shadow-md hover:border-primary/30 cursor-pointer">
@@ -63,12 +67,44 @@ export function SkillCard({ skill }: SkillCardProps) {
               )}
             </div>
             {skill.activeAgentCount > 0 && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground" title="Active agents">
+              <div
+                className="flex items-center gap-1 text-xs text-muted-foreground"
+                title="Active agents"
+              >
                 <Users className="h-3 w-3" />
                 <span>{skill.activeAgentCount}</span>
               </div>
             )}
           </div>
+          {enabledAgents && enabledAgents.length > 0 && (
+            <div className="flex items-center gap-1 pt-1 w-full">
+              <span className="text-xs text-muted-foreground mr-1">Agents:</span>
+              <div className="flex -space-x-1.5">
+                {enabledAgents.slice(0, 5).map((agent) => (
+                  <Tooltip key={agent.id}>
+                    <TooltipTrigger asChild>
+                      <div>
+                        <AgentAvatar
+                          agentId={agent.id}
+                          name={agent.name}
+                          size="sm"
+                          className="ring-2 ring-background h-6 w-6 text-[10px]"
+                        />
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="text-xs">
+                      {agent.name}
+                    </TooltipContent>
+                  </Tooltip>
+                ))}
+                {enabledAgents.length > 5 && (
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-muted text-[10px] font-medium ring-2 ring-background">
+                    +{enabledAgents.length - 5}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </CardFooter>
       </Card>
     </Link>

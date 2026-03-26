@@ -1,16 +1,46 @@
 /**
  * Agents API — P1-4
  *
- * GET /api/agents         — List all agents with status, role, current task.
- * GET /api/agents/status  — Real-time agent work status (active tasks + queues).
- * GET /api/agents/:id     — Agent detail with charter, history, expertise.
+ * GET    /api/agents              — List all agents with status, role, current task.
+ * GET    /api/agents/status       — Real-time agent work status (active tasks + queues).
+ * GET    /api/agents/:id          — Agent detail with charter, history, expertise.
+ * GET    /api/agents/:id/skills   — Per-agent skills (role-matched + overrides).
+ * PATCH  /api/agents/:id/skills   — Toggle a skill override for an agent.
  */
 
-import { resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 
 import type { FastifyPluginAsync } from 'fastify';
 
+import { ErrorCodes, sendError } from '../lib/api-errors.js';
+import { getSkillsForRole, loadSkillsFromDirectory } from '../services/seed-skills.js';
 import { getTask } from '../services/squad-writer/task-writer.js';
+
+// ── Skill override persistence helpers ────────────────────────────
+
+type OverrideMap = Record<string, Record<string, boolean>>;
+
+function getOverridesPath(squadDir: string): string {
+  return join(squadDir, '.cache', 'agent-skill-overrides.json');
+}
+
+function readOverrides(squadDir: string): OverrideMap {
+  const path = getOverridesPath(squadDir);
+  if (!existsSync(path)) return {};
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8')) as OverrideMap;
+  } catch {
+    return {};
+  }
+}
+
+function writeOverrides(squadDir: string, overrides: OverrideMap): void {
+  const path = getOverridesPath(squadDir);
+  const cacheDir = join(squadDir, '.cache');
+  if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
+  writeFileSync(path, JSON.stringify(overrides, null, 2), 'utf-8');
+}
 
 const agentsRoute: FastifyPluginAsync = async (app) => {
   app.get('/agents', async (_request, reply) => {
@@ -79,17 +109,108 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
     return reply.send({ agents });
   });
 
-  app.get<{ Params: { id: string } }>(
-    '/agents/:id',
+  app.get<{ Params: { id: string } }>('/agents/:id', async (request, reply) => {
+    const { id } = request.params;
+    const agent = await app.squadParser.getAgent(id);
+
+    if (!agent) {
+      return reply.status(404).send({ error: `Agent not found: ${id}` });
+    }
+
+    return reply.send(agent);
+  });
+
+  // GET /api/agents/:id/skills — per-agent skills (role-matched + overrides)
+  app.get<{ Params: { id: string } }>('/agents/:id/skills', async (request, reply) => {
+    const { id } = request.params;
+    const agent = await app.squadParser.getAgent(id);
+
+    if (!agent) {
+      return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
+    }
+
+    const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+    const skillsDir = join(squadDir, 'skills');
+    const allSkills = loadSkillsFromDirectory(skillsDir);
+    const roleMatched = getSkillsForRole(allSkills, agent.role);
+    const roleMatchedIds = new Set(roleMatched.map((s) => s.id));
+
+    const overrides = readOverrides(squadDir);
+    const agentOverrides = overrides[id] ?? {};
+
+    // Build merged skill list: start with all skills, mark enabled/source
+    const skills = allSkills.map((skill) => {
+      const matchedByRole = roleMatchedIds.has(skill.id);
+      const hasOverride = skill.id in agentOverrides;
+      const enabled = hasOverride ? agentOverrides[skill.id] : matchedByRole;
+      const source: 'role-match' | 'manual' = hasOverride ? 'manual' : 'role-match';
+
+      return {
+        id: skill.id,
+        name: skill.frontmatter.name,
+        description: skill.frontmatter.description,
+        tags: skill.frontmatter.tags,
+        enabled,
+        source,
+        matchedByRole,
+      };
+    });
+
+    return reply.send({
+      agentId: id,
+      role: agent.role,
+      skills,
+    });
+  });
+
+  // PATCH /api/agents/:id/skills — toggle a skill for an agent
+  app.patch<{ Params: { id: string }; Body: { skillId: string; enabled: boolean } }>(
+    '/agents/:id/skills',
     async (request, reply) => {
       const { id } = request.params;
-      const agent = await app.squadParser.getAgent(id);
+      const { skillId, enabled } = request.body ?? {};
 
-      if (!agent) {
-        return reply.status(404).send({ error: `Agent not found: ${id}` });
+      if (!skillId || typeof enabled !== 'boolean') {
+        return sendError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'Missing required fields: skillId (string) and enabled (boolean)',
+        );
       }
 
-      return reply.send(agent);
+      const agent = await app.squadParser.getAgent(id);
+      if (!agent) {
+        return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
+      }
+
+      const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+      const skillsDir = join(squadDir, 'skills');
+      const allSkills = loadSkillsFromDirectory(skillsDir);
+      const skill = allSkills.find((s) => s.id === skillId);
+
+      if (!skill) {
+        return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
+      }
+
+      // Check if this is just the role-match default — if so, remove override
+      const roleMatched = getSkillsForRole(allSkills, agent.role);
+      const isRoleMatch = roleMatched.some((s) => s.id === skillId);
+
+      const overrides = readOverrides(squadDir);
+      if (!overrides[id]) overrides[id] = {};
+
+      if (enabled === isRoleMatch) {
+        // Override matches default — remove it
+        delete overrides[id][skillId];
+        if (Object.keys(overrides[id]).length === 0) delete overrides[id];
+      } else {
+        overrides[id][skillId] = enabled;
+      }
+
+      writeOverrides(squadDir, overrides);
+
+      return reply.send({ success: true, agentId: id, skillId, enabled });
     },
   );
 };

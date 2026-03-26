@@ -44,6 +44,23 @@ export interface AgentSkillsConfig {
   activeOnCurrentTask: string[];
 }
 
+/** Shape returned by GET /api/agents/:id/skills */
+export interface AgentSkillEntry {
+  id: string;
+  name: string;
+  description: string;
+  tags: string[];
+  enabled: boolean;
+  source: 'role-match' | 'manual';
+  matchedByRole: boolean;
+}
+
+export interface AgentSkillsResponse {
+  agentId: string;
+  role: string;
+  skills: AgentSkillEntry[];
+}
+
 // ── Hooks ────────────────────────────────────────────────────────
 
 export function useSkills(filters?: { search?: string; tag?: string; phase?: SkillPhase }) {
@@ -56,7 +73,9 @@ export function useSkills(filters?: { search?: string; tag?: string; phase?: Ski
   return useQuery<SkillSummary[]>({
     queryKey: ['skills', filters],
     queryFn: async () => {
-      const res = await api.get<{ skills: SkillSummary[] } | SkillSummary[]>(`/api/skills${query ? `?${query}` : ''}`);
+      const res = await api.get<{ skills: SkillSummary[] } | SkillSummary[]>(
+        `/api/skills${query ? `?${query}` : ''}`,
+      );
       return Array.isArray(res) ? res : res.skills;
     },
     refetchInterval: 30_000,
@@ -79,13 +98,23 @@ export function useAgentSkills(agentId: string) {
   });
 }
 
+export function useAgentSkillsManagement(agentId: string) {
+  return useQuery<AgentSkillsResponse>({
+    queryKey: ['agent-skills-mgmt', agentId],
+    queryFn: () => api.get<AgentSkillsResponse>(`/api/agents/${agentId}/skills`),
+    enabled: !!agentId,
+    refetchInterval: 30_000,
+  });
+}
+
 export function useToggleAgentSkill(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ skillId, enabled }: { skillId: string; enabled: boolean }) =>
-      api.put(`/api/agents/${agentId}/skills/${skillId}`, { enabled }),
+      api.patch(`/api/agents/${agentId}/skills`, { skillId, enabled }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['agent-skills', agentId] });
+      void queryClient.invalidateQueries({ queryKey: ['agent-skills-mgmt', agentId] });
     },
   });
 }

@@ -2,12 +2,14 @@
 
 import type { Task } from '@openspace/shared';
 import { TASK_STATUS_LABELS, TEAM_MEMBER_RANK_LABELS } from '@openspace/shared';
-import { ArrowLeft, Building2, Calendar, CheckCircle2, ListTodo, Mail } from 'lucide-react';
+import { ArrowLeft, Bot, Building2, Calendar, CheckCircle2, ListTodo, Mail } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
+import { AgentAvatar } from '@/components/agent-avatar';
 import { PriorityBadge } from '@/components/priority-badge';
+import { AgentSkillDialog } from '@/components/skills/agent-skill-dialog';
 import { RankManagementDialog } from '@/components/team-members/rank-management-dialog';
 import { SkillsEditor } from '@/components/team-members/skills-editor';
 import {
@@ -19,6 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAgents } from '@/hooks/use-agents';
+import { useAgentSkillsManagement } from '@/hooks/use-skills';
 import { useTasks } from '@/hooks/use-tasks';
 import {
   useTeamMember,
@@ -43,6 +47,73 @@ function getInitials(name: string): string {
     .join('')
     .toUpperCase()
     .slice(0, 2);
+}
+
+// ── Agent Skills Card (manage AI agent skills inline) ────────────
+
+function AgentSkillsCard({ agentId }: { agentId: string }) {
+  const { data } = useAgentSkillsManagement(agentId);
+  const enabledCount = data?.skills.filter((s) => s.enabled).length ?? 0;
+  const totalCount = data?.skills.length ?? 0;
+
+  return (
+    <div className="text-sm">
+      <span className="font-medium">{enabledCount}</span>
+      <span className="text-muted-foreground">/{totalCount} skills</span>
+    </div>
+  );
+}
+
+function AgentSkillsSection() {
+  const { data: agents } = useAgents();
+  const [selectedAgent, setSelectedAgent] = useState<{
+    id: string;
+    name: string;
+    role: string;
+  } | null>(null);
+
+  if (!agents?.length) return null;
+
+  return (
+    <Card data-testid="agent-skills-section">
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+        <CardTitle className="text-sm font-medium flex items-center gap-2">
+          <Bot className="h-4 w-4" />
+          AI Agent Skills
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-2">
+          {agents.map((agent) => (
+            <button
+              key={agent.id}
+              type="button"
+              onClick={() => setSelectedAgent({ id: agent.id, name: agent.name, role: agent.role })}
+              className="flex w-full items-center gap-3 rounded-md border p-2.5 transition-colors hover:bg-muted/50"
+              data-testid={`agent-skills-row-${agent.id}`}
+            >
+              <AgentAvatar agentId={agent.id} name={agent.name} size="sm" />
+              <div className="flex-1 text-left min-w-0">
+                <p className="text-sm font-medium truncate">{agent.name}</p>
+                <p className="text-xs text-muted-foreground">{agent.role}</p>
+              </div>
+              <AgentSkillsCard agentId={agent.id} />
+            </button>
+          ))}
+        </div>
+
+        {selectedAgent && (
+          <AgentSkillDialog
+            agentId={selectedAgent.id}
+            agentName={selectedAgent.name}
+            agentRole={selectedAgent.role}
+            open={!!selectedAgent}
+            onOpenChange={(open) => !open && setSelectedAgent(null)}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 function DetailSkeleton() {
@@ -272,6 +343,9 @@ export default function TeamMemberDetailPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* AI Agent Skills Management */}
+          <AgentSkillsSection />
         </div>
       </div>
     </div>
