@@ -10,25 +10,64 @@
  * Config via env vars:
  *   AI_PROVIDER        -- "copilot-sdk" | "mock" (default: "mock")
  *   COPILOT_GITHUB_TOKEN -- GitHub token for Copilot auth (or GH_TOKEN/GITHUB_TOKEN)
- *   COPILOT_MODEL      -- Model to use (default: "gpt-4o")
+ *   COPILOT_MODEL      -- Model to use (default: "claude-opus-4.6")
  */
 
+import { appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { approveAll, CopilotClient } from '@github/copilot-sdk';
+import { type Span, SpanStatusCode, trace } from '@opentelemetry/api';
+
+const tracer = trace.getTracer('openspace-ai', '1.0.0');
 
 import type { LLMIntentParser, ParsedIntent } from '../voice/actions.js';
 import type { AgentRoutingProfile, LLMRouter } from '../voice/router.js';
+
+// -- Trace service interface (avoids circular dep) -------------------------
+
+/** Minimal interface matching TraceService — avoids importing from ../traces. */
+export interface TraceServiceLike {
+  startTrace(input: {
+    agentId?: string;
+    taskTitle?: string;
+    model: string;
+    systemPrompt?: string;
+    prompt: string;
+  }): { traceId: string; spanId: string };
+  completeTrace(
+    traceId: string,
+    spanId: string,
+    input: {
+      response: string;
+      model: string;
+      promptTokens?: number;
+      completionTokens?: number;
+    },
+  ): void;
+  failTrace(traceId: string, spanId: string, errorMessage: string): void;
+}
 
 // -- Types -----------------------------------------------------------------
 
 export interface CopilotProviderConfig {
   /** GitHub token for authentication. Falls back to env vars. */
   githubToken?: string;
-  /** Model to use (default from COPILOT_MODEL env or "gpt-4o"). */
+  /** Model to use (default from COPILOT_MODEL env or "claude-opus-4.6"). */
   model?: string;
   /** Path to the Copilot CLI executable. */
   cliPath?: string;
+  /**
+   * URL of a running Copilot CLI server (e.g. "localhost:3100").
+   * When set, the SDK connects to this server instead of spawning a subprocess.
+   * Start the server with: `gh copilot server --port 3100`
+   * Falls back to COPILOT_CLI_URL env var.
+   */
+  cliUrl?: string;
   /** Working directory for agent tool operations. Defaults to process.cwd(). */
   workingDirectory?: string;
+  /** Optional TraceService for persisting AI traces to SQLite. */
+  traceService?: TraceServiceLike | null;
 }
 
 export interface ChatCompletionMessage {
@@ -48,6 +87,10 @@ export interface ChatCompletionOptions {
   onChunk?: (chunk: string) => void;
   /** Callback for all session events (thinking, tool calls, progress). */
   onEvent?: (event: { type: string; data?: Record<string, unknown> }) => void;
+  /** Task title for tracing/logging context. */
+  taskTitle?: string;
+  /** Agent ID for tracing/logging context. */
+  agentId?: string;
 }
 
 export interface ChatCompletionResult {
@@ -92,12 +135,14 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
   private readonly requestQueue: Array<{
     resolve: () => void;
   }> = [];
+  private readonly traceService: TraceServiceLike | null;
 
   constructor(config: CopilotProviderConfig = {}) {
     this.config = {
       ...config,
       model: config.model ?? process.env.COPILOT_MODEL ?? 'claude-opus-4.6',
     };
+    this.traceService = config.traceService ?? null;
   }
 
   // -- Lifecycle -----------------------------------------------------------
@@ -117,15 +162,29 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
         process.env.GITHUB_TOKEN ??
         undefined;
 
+      const cliUrl = this.config.cliUrl ?? process.env.COPILOT_CLI_URL ?? undefined;
+
       const clientOpts: Record<string, unknown> = {
         autoStart: false,
+        otlpEndpoint: process.env.COPILOT_OTLP_ENDPOINT ?? 'http://localhost:4318',
       };
       if (token) clientOpts.githubToken = token;
-      if (this.config.cliPath) clientOpts.cliPath = this.config.cliPath;
+      if (cliUrl) {
+        clientOpts.cliUrl = cliUrl;
+        console.log(`[AI] Connecting to Copilot CLI server at ${cliUrl}`);
+      } else if (this.config.cliPath) {
+        clientOpts.cliPath = this.config.cliPath;
+        console.log('[AI] Spawning Copilot CLI subprocess');
+      } else {
+        console.log('[AI] Spawning Copilot CLI subprocess (default)');
+      }
 
       this.client = new CopilotClient(clientOpts) as unknown as CopilotClientLike;
       await this.client.start();
       this.initialized = true;
+      console.log(
+        `[AI] Copilot SDK initialized (model: ${this.config.model}, server: ${cliUrl ? 'external' : 'subprocess'}, otlp: ${clientOpts.otlpEndpoint})`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(
@@ -154,6 +213,31 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
    * Supports streaming via onChunk callback.
    */
   async chatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResult> {
+    const spanName = options.taskTitle
+      ? `ai.chat ${options.agentId ?? 'unknown'}:${options.taskTitle}`
+      : `ai.chat ${options.agentId ?? 'completion'}`;
+
+    return tracer.startActiveSpan(spanName, async (span: Span) => {
+      try {
+        const result = await this._chatCompletionImpl(options, span);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (err) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
+  }
+
+  private async _chatCompletionImpl(
+    options: ChatCompletionOptions,
+    span: Span,
+  ): Promise<ChatCompletionResult> {
     if (!this.client) {
       throw new Error('CopilotProvider not initialized. Call initialize() first.');
     }
@@ -163,6 +247,29 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
 
     const model = options.model ?? this.config.model;
     const prompt = this.buildPrompt(options.messages, options.systemPrompt);
+
+    // Start a DB trace record
+    let traceIds: { traceId: string; spanId: string } | null = null;
+    try {
+      if (this.traceService) {
+        traceIds = this.traceService.startTrace({
+          agentId: options.agentId,
+          taskTitle: options.taskTitle,
+          model,
+          systemPrompt: options.systemPrompt,
+          prompt,
+        });
+      }
+    } catch {
+      // Best effort — don't break AI calls if trace recording fails
+    }
+
+    // Add trace attributes with real prompt/response data
+    span.setAttribute('ai.model', model);
+    span.setAttribute('ai.agent_id', options.agentId ?? 'unknown');
+    span.setAttribute('ai.task_title', options.taskTitle ?? '');
+    span.setAttribute('ai.prompt', prompt);
+    span.setAttribute('ai.system_prompt', options.systemPrompt ?? '');
 
     const sessionConfig: Record<string, unknown> = {
       model,
@@ -177,46 +284,96 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
 
     let session: CopilotSessionLike | null = null;
     try {
-      session = await this.client.createSession(sessionConfig);
+      session = await this.createSessionWithRetry(sessionConfig);
 
-      // Subscribe to session events for progress tracking
       if (options.onEvent) {
-        const eventCallback = options.onEvent;
-        session.on('assistant.intent', (e: unknown) => {
-          const ev = e as { type: string; data?: { intent?: string } };
-          eventCallback({ type: 'intent', data: { intent: ev.data?.intent } });
-        });
-        session.on('assistant.reasoning', (e: unknown) => {
-          const ev = e as { type: string; data?: { content?: string } };
-          eventCallback({ type: 'thinking', data: { content: ev.data?.content } });
-        });
-        session.on('tool.execution_start', (e: unknown) => {
-          const ev = e as { type: string; data?: { name?: string; arguments?: unknown } };
-          eventCallback({
-            type: 'tool_start',
-            data: { name: ev.data?.name, arguments: ev.data?.arguments },
-          });
-        });
-        session.on('session.info', (e: unknown) => {
-          const ev = e as { type: string; data?: { message?: string } };
-          eventCallback({ type: 'info', data: { message: ev.data?.message } });
-        });
-        session.on('assistant.message_delta', (e: unknown) => {
-          const ev = e as { type: string; data?: { deltaContent?: string } };
-          if (ev.data?.deltaContent) {
-            eventCallback({ type: 'progress', data: { content: ev.data.deltaContent } });
-          }
-        });
+        this.attachEventListeners(session, options.onEvent);
       }
 
       if (options.stream && options.onChunk) {
+        this.logInteraction('stream-start', model, prompt);
         const content = await this.streamResponse(session, prompt, options.onChunk);
+        this.logInteraction('stream-done', model, prompt, content);
+        span.setAttribute('ai.response', content);
+        try {
+          if (this.traceService && traceIds) {
+            this.traceService.completeTrace(traceIds.traceId, traceIds.spanId, {
+              response: content,
+              model,
+            });
+          }
+        } catch {
+          /* best effort */
+        }
         return { content, model };
       }
 
-      const result = await session.sendAndWait({ prompt }, 3_600_000);
-      const content = (result?.data?.content as string) ?? '';
-      return { content, model };
+      // Retry sendAndWait on transient failures
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) {
+            const delay = 2000 * attempt;
+            console.log(`[AI] sendAndWait retry ${attempt}/2 after ${delay}ms...`);
+            span.addEvent('retry', { attempt, delay });
+            await new Promise((r) => setTimeout(r, delay));
+            await session.disconnect().catch(() => {});
+            session = await this.createSessionWithRetry(sessionConfig);
+            if (options.onEvent) this.attachEventListeners(session, options.onEvent);
+          }
+
+          this.logInteraction('request', model, prompt);
+          const result = await session.sendAndWait({ prompt }, 3_600_000);
+          const content = (result?.data?.content as string) ?? '';
+          this.logInteraction('response', model, prompt, content);
+          span.setAttribute('ai.response', content);
+          try {
+            if (this.traceService && traceIds) {
+              this.traceService.completeTrace(traceIds.traceId, traceIds.spanId, {
+                response: content,
+                model,
+              });
+            }
+          } catch {
+            /* best effort */
+          }
+          return { content, model };
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          const msg = lastError.message;
+          console.warn(`[AI] sendAndWait attempt ${attempt + 1} failed: ${msg}`);
+          this.logInteraction('error', model, prompt, msg);
+
+          const isTransient =
+            msg.includes('fetch failed') ||
+            msg.includes('ECONNRE') ||
+            msg.includes('ETIMEDOUT') ||
+            msg.includes('socket') ||
+            msg.includes('Timeout');
+          if (!isTransient) {
+            try {
+              if (this.traceService && traceIds) {
+                this.traceService.failTrace(traceIds.traceId, traceIds.spanId, msg);
+              }
+            } catch {
+              /* best effort */
+            }
+            throw lastError;
+          }
+        }
+      }
+      try {
+        if (this.traceService && traceIds) {
+          this.traceService.failTrace(
+            traceIds.traceId,
+            traceIds.spanId,
+            lastError?.message ?? 'sendAndWait failed after retries',
+          );
+        }
+      } catch {
+        /* best effort */
+      }
+      throw lastError ?? new Error('sendAndWait failed after retries');
     } finally {
       if (session) {
         await session.disconnect().catch(() => {
@@ -244,6 +401,108 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     } else {
       this.activeRequests--;
     }
+  }
+
+  /** Attach event listeners to a session for progress tracking. */
+  private attachEventListeners(
+    session: CopilotSessionLike,
+    eventCallback: (event: { type: string; data?: Record<string, unknown> }) => void,
+  ): void {
+    session.on('assistant.intent', (e: unknown) => {
+      const ev = e as { type: string; data?: { intent?: string } };
+      eventCallback({ type: 'intent', data: { intent: ev.data?.intent } });
+    });
+    session.on('assistant.reasoning', (e: unknown) => {
+      const ev = e as { type: string; data?: { content?: string } };
+      eventCallback({ type: 'thinking', data: { content: ev.data?.content } });
+    });
+    session.on('tool.execution_start', (e: unknown) => {
+      const ev = e as { type: string; data?: { name?: string; arguments?: unknown } };
+      eventCallback({
+        type: 'tool_start',
+        data: { name: ev.data?.name, arguments: ev.data?.arguments },
+      });
+    });
+    session.on('session.info', (e: unknown) => {
+      const ev = e as { type: string; data?: { message?: string } };
+      eventCallback({ type: 'info', data: { message: ev.data?.message } });
+    });
+    session.on('assistant.message_delta', (e: unknown) => {
+      const ev = e as { type: string; data?: { deltaContent?: string } };
+      if (ev.data?.deltaContent) {
+        eventCallback({ type: 'progress', data: { content: ev.data.deltaContent } });
+      }
+    });
+  }
+
+  /** Log prompts and responses to a persistent file for debugging. */
+  private logInteraction(type: string, model: string, prompt: string, response?: string): void {
+    try {
+      const logDir = join(this.config.workingDirectory ?? process.cwd(), '.squad', '.cache');
+      if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+
+      const ts = new Date().toISOString();
+      const entry = {
+        timestamp: ts,
+        type,
+        model,
+        prompt,
+        ...(response && { response }),
+      };
+
+      appendFileSync(join(logDir, 'ai-interactions.jsonl'), JSON.stringify(entry) + '\n', 'utf-8');
+    } catch {
+      // Best effort — don't break AI calls if logging fails
+    }
+  }
+
+  /**
+   * Create a session with exponential backoff retry.
+   * Handles the intermittent "session.create failed: fetch failed" error.
+   */
+  private async createSessionWithRetry(
+    config: Record<string, unknown>,
+    maxRetries = 4,
+  ): Promise<CopilotSessionLike> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 0) {
+          const delayMs = Math.min(1000 * 2 ** (attempt - 1), 15_000);
+          console.log(`[AI] session.create retry ${attempt}/${maxRetries} after ${delayMs}ms...`);
+          await new Promise((r) => setTimeout(r, delayMs));
+
+          if (!this.client || !this.initialized) {
+            console.log('[AI] Re-initializing client before retry...');
+            await this.shutdown();
+            await this.initialize();
+          }
+        }
+
+        const session = await this.client!.createSession(config);
+        if (attempt > 0) {
+          console.log(`[AI] session.create succeeded on retry ${attempt}`);
+        }
+        return session;
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.warn(`[AI] session.create attempt ${attempt + 1} failed: ${lastError.message}`);
+
+        const isTransient =
+          lastError.message.includes('fetch failed') ||
+          lastError.message.includes('ECONNREFUSED') ||
+          lastError.message.includes('ECONNRESET') ||
+          lastError.message.includes('ETIMEDOUT') ||
+          lastError.message.includes('socket hang up');
+
+        if (!isTransient) throw lastError;
+      }
+    }
+
+    throw new Error(
+      `session.create failed after ${maxRetries + 1} attempts: ${lastError?.message}`,
+    );
   }
 
   // -- LLMRouter interface (voice routing) ---------------------------------

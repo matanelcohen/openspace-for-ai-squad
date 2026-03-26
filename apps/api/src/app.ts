@@ -18,6 +18,7 @@ import sandboxesRoute from './routes/sandboxes.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import teamMembersRoute from './routes/team-members.js';
+import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
@@ -32,6 +33,7 @@ import { seedTeamMembers } from './services/db/seed-team.js';
 import { SandboxService } from './services/sandbox/index.js';
 import { KnowledgeSearchService } from './services/search/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
+import { TraceService } from './services/traces/index.js';
 import {
   ConversationContextManager,
   VoiceRouter,
@@ -170,6 +172,7 @@ export function buildApp(opts: AppOptions = {}) {
     if (!opts.aiProvider) {
       const provider = await createAIProvider(undefined, {
         workingDirectory: resolve(squadDir, '..'),
+        traceService,
       });
       chatService.setAIProvider(provider);
       voiceServices.aiProvider = provider;
@@ -245,6 +248,10 @@ export function buildApp(opts: AppOptions = {}) {
     });
   });
 
+  // Trace service for recording AI interactions
+  const traceService = new TraceService(db);
+  app.decorate('traceService', traceService);
+
   // Decorate Fastify instance with the SQLite database
   app.decorate('db', db);
 
@@ -267,6 +274,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(knowledgeRoute, { prefix: '/api' });
   app.register(teamMembersRoute, { prefix: '/api' });
   app.register(sandboxesRoute, { prefix: '/api' });
+  app.register(tracesRoute, { prefix: '/api' });
 
   app.setErrorHandler((error, request, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
