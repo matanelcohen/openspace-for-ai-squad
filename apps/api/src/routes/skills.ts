@@ -3,10 +3,13 @@
  *
  * GET    /api/skills                  — List all registered skills
  * POST   /api/skills                  — Register a new skill
+ * GET    /api/skills/health           — Health status for all skills
  * GET    /api/skills/:id              — Skill detail
  * PUT    /api/skills/:id              — Update skill manifest
  * DELETE /api/skills/:id              — Unregister (unload) a skill
  * GET    /api/skills/:id/agents       — List agents using a skill
+ * GET    /api/skills/:id/health       — Health status for a single skill
+ * POST   /api/skills/:id/recover      — Manually recover a failed/disabled skill
  * POST   /api/agents/:id/skills       — Attach (activate) a skill for an agent
  * DELETE /api/agents/:id/skills/:skillId — Detach (deactivate) a skill for an agent
  */
@@ -69,6 +72,17 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     const entries = registry.list();
     const skills = entries.map(serialiseEntry).filter(Boolean);
     return reply.send({ skills });
+  });
+
+  // GET /api/skills/health — health status for all registered skills
+  app.get('/skills/health', async (_request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
+
+    const statuses = registry.getAllHealthStatuses();
+    return reply.send({ statuses });
   });
 
   // POST /api/skills — register a new skill
@@ -192,6 +206,46 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     }
 
     return reply.send({ skillId, agents: [...entry.activeAgents] });
+  });
+
+  // GET /api/skills/:id/health — health status for a single skill
+  app.get<{ Params: { id: string } }>('/skills/:id/health', async (request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
+
+    const status = registry.getHealthStatus(request.params.id);
+    if (!status) {
+      return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${request.params.id}`);
+    }
+
+    return reply.send(status);
+  });
+
+  // POST /api/skills/:id/recover — manually recover a failed/disabled skill
+  app.post<{ Params: { id: string } }>('/skills/:id/recover', async (request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
+
+    const skillId = request.params.id;
+    const entry = registry.get(skillId);
+    if (!entry) {
+      return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
+    }
+
+    const result = await registry.recover(skillId);
+    if (!result.success) {
+      return sendError(reply, 400, ErrorCodes.VALIDATION_ERROR, result.error ?? 'Recovery failed');
+    }
+
+    const updated = registry.get(skillId);
+    return reply.send({
+      success: true,
+      skill: serialiseEntry(updated),
+    });
   });
 
   // POST /api/agents/:id/skills — attach skill to agent

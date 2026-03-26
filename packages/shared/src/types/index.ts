@@ -147,6 +147,8 @@ export type {
   VectorStoreProvider,
 } from './rag.js';
 export type {
+  AgentSkillAssignment,
+  AgentSkillsConfig,
   CompositeTrigger,
   FileTrigger,
   LabelTrigger,
@@ -230,3 +232,5 @@ export type {
   SandboxRuntime,
   SandboxStatus,
 } from './sandbox.js';
+
+export * from './skill.js';

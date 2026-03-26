@@ -11,7 +11,7 @@ import type {
   SkillRegistryEntry,
   SkillTaskContext,
   SkillTrigger,
-} from '@openspace/shared/src/types/skill.js';
+} from '@openspace/shared';
 import { describe, expect, it } from 'vitest';
 
 import {

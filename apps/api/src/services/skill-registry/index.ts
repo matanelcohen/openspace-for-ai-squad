@@ -8,6 +8,9 @@
  *   - Skills are isolated: hook failures → error phase, agent keeps running
  *   - Events emitted on every phase transition for observability
  *   - Thread-safe activation: multiple agents can share a loaded skill
+ *   - Automatic retry with configurable backoff on transient hook failures
+ *   - Circuit breaker trips after N consecutive failures → 'disabled' phase
+ *   - Health-check heartbeat for active skills
  */
 
 import { existsSync } from 'node:fs';
@@ -17,9 +20,11 @@ import type {
   PromptRole,
   RenderedPrompt,
   SkillAgentRef,
+  SkillCircuitBreakerState,
   SkillContext,
   SkillDependency,
   SkillFilter,
+  SkillHealthStatus,
   SkillLoadSummary,
   SkillManifest,
   SkillMatchResult,
@@ -30,11 +35,14 @@ import type {
   SkillRegistryEvent,
   SkillRegistryEventListener,
   SkillRegistryEventType,
+  SkillRetryPolicy,
   SkillTaskContext,
   SkillValidationResult,
-} from '@openspace/shared/src/types/skill.js';
+} from '@openspace/shared';
+import { DEFAULT_RETRY_POLICY } from '@openspace/shared';
 
 import {
+  executeHookWithRetry,
   safeImportEntryPoint,
   safeOnActivate,
   safeOnDeactivate,
@@ -117,10 +125,28 @@ function createStubInterop() {
 
 // ── SkillRegistryImpl ────────────────────────────────────────────
 
+/** Create a fresh circuit breaker state. */
+function createCircuitBreakerState(): SkillCircuitBreakerState {
+  return {
+    consecutiveFailures: 0,
+    status: 'closed',
+    lastFailureTime: null,
+    disabledAt: null,
+  };
+}
+
+/** Resolve the effective retry policy for a skill. */
+function resolveRetryPolicy(manifest: SkillManifest): SkillRetryPolicy {
+  return manifest.retryPolicy
+    ? { ...DEFAULT_RETRY_POLICY, ...manifest.retryPolicy }
+    : { ...DEFAULT_RETRY_POLICY };
+}
+
 export class SkillRegistryImpl implements SkillRegistry {
   private entries = new Map<string, SkillRegistryEntry>();
   private contexts = new Map<string, SkillContext>(); // key: `${skillId}:${agentId}`
   private listeners = new Map<SkillRegistryEventType, Set<SkillRegistryEventListener>>();
+  private healthCheckTimer: ReturnType<typeof setInterval> | null = null;
 
   // ── Discovery & Loading ──────────────────────────────────────
 
@@ -138,6 +164,7 @@ export class SkillRegistryImpl implements SkillRegistry {
         hooks: null,
         activeAgents: new Set(),
         lastTransition: Date.now(),
+        circuitBreaker: createCircuitBreakerState(),
       });
       newIds.push(manifest.id);
       this.emit('skill:discovered', manifest.id);
@@ -343,6 +370,14 @@ export class SkillRegistryImpl implements SkillRegistry {
   ): Promise<SkillContext> {
     const entry = this.entries.get(skillId);
     if (!entry) throw new Error(`Skill "${skillId}" not found`);
+
+    // Block activation if circuit breaker is open (skill is disabled)
+    if (entry.phase === 'disabled') {
+      throw new Error(
+        `Skill "${skillId}" is disabled by circuit breaker — call recover() first`,
+      );
+    }
+
     if (!['loaded', 'deactivated', 'active'].includes(entry.phase)) {
       throw new Error(
         `Skill "${skillId}" must be loaded before activation (current: ${entry.phase})`,
@@ -351,18 +386,44 @@ export class SkillRegistryImpl implements SkillRegistry {
 
     const agent: SkillAgentRef = { id: agentId, name: agentId, role: 'agent', expertise: [] };
     const ctx = this.createContext(entry, agent, taskContext ?? null);
+    const policy = resolveRetryPolicy(entry.manifest);
 
-    // Call onActivate hook
-    const activateResult = await safeOnActivate(entry.hooks, ctx);
+    // Execute onActivate with retry
+    const activateResult = await executeHookWithRetry(
+      'onActivate',
+      () => {
+        if (!entry.hooks?.onActivate) return Promise.resolve(undefined as Record<string, unknown> | void);
+        return entry.hooks.onActivate(ctx);
+      },
+      policy,
+      undefined,
+      (attempt, error) => {
+        this.emit('skill:retry', skillId, agentId);
+      },
+    );
+
     if (!activateResult.success) {
-      this.transitionToError(
-        skillId,
-        entry.phase,
-        'LIFECYCLE_HOOK_ERROR',
-        `onActivate failed: ${activateResult.error?.message}`,
+      this.recordFailure(skillId, entry);
+      const fromPhase = entry.phase;
+
+      // Check if circuit breaker should trip
+      if (this.shouldTripCircuitBreaker(entry)) {
+        this.tripCircuitBreaker(skillId, entry);
+      } else {
+        this.transitionToError(
+          skillId,
+          fromPhase,
+          'LIFECYCLE_HOOK_ERROR',
+          `onActivate failed after ${activateResult.attempts} attempt(s): ${activateResult.error?.message}`,
+        );
+      }
+      throw new Error(
+        `onActivate failed for "${skillId}" after ${activateResult.attempts} attempt(s): ${activateResult.error?.message}`,
       );
-      throw new Error(`onActivate failed for "${skillId}": ${activateResult.error?.message}`);
     }
+
+    // Success — reset circuit breaker failures
+    this.recordSuccess(entry);
 
     // Merge any vars returned by onActivate
     if (activateResult.result && typeof activateResult.result === 'object') {
@@ -483,6 +544,7 @@ export class SkillRegistryImpl implements SkillRegistry {
       hooks: null,
       activeAgents: new Set(),
       lastTransition: Date.now(),
+      circuitBreaker: createCircuitBreakerState(),
     });
 
     this.emit('skill:discovered', manifest.id);
@@ -630,6 +692,167 @@ export class SkillRegistryImpl implements SkillRegistry {
       entry.lastTransition = Date.now();
       entry.error = { phase: fromPhase, code, message };
       this.emit('skill:error', skillId);
+    }
+  }
+
+  // ── Circuit Breaker Helpers ───────────────────────────────────
+
+  /** Record a lifecycle failure — increments consecutive failure count. */
+  private recordFailure(skillId: string, entry: SkillRegistryEntry): void {
+    if (!entry.circuitBreaker) {
+      entry.circuitBreaker = createCircuitBreakerState();
+    }
+    entry.circuitBreaker.consecutiveFailures++;
+    entry.circuitBreaker.lastFailureTime = Date.now();
+  }
+
+  /** Record a successful operation — resets consecutive failure count and closes breaker. */
+  private recordSuccess(entry: SkillRegistryEntry): void {
+    if (!entry.circuitBreaker) {
+      entry.circuitBreaker = createCircuitBreakerState();
+    }
+    entry.circuitBreaker.consecutiveFailures = 0;
+    entry.circuitBreaker.status = 'closed';
+  }
+
+  /** Check if the circuit breaker threshold has been reached. */
+  private shouldTripCircuitBreaker(entry: SkillRegistryEntry): boolean {
+    if (!entry.circuitBreaker) return false;
+    const policy = resolveRetryPolicy(entry.manifest);
+    return entry.circuitBreaker.consecutiveFailures >= policy.circuitBreakerThreshold;
+  }
+
+  /** Trip the circuit breaker — disable the skill and emit event. */
+  private tripCircuitBreaker(skillId: string, entry: SkillRegistryEntry): void {
+    if (!entry.circuitBreaker) {
+      entry.circuitBreaker = createCircuitBreakerState();
+    }
+    entry.circuitBreaker.status = 'open';
+    entry.circuitBreaker.disabledAt = Date.now();
+    entry.phase = 'disabled';
+    entry.lastTransition = Date.now();
+    entry.error = {
+      phase: 'active',
+      code: 'LIFECYCLE_HOOK_ERROR',
+      message: `Circuit breaker tripped after ${entry.circuitBreaker.consecutiveFailures} consecutive failures`,
+    };
+    this.emit('skill:circuit-open', skillId);
+  }
+
+  // ── Error Recovery ──────────────────────────────────────────
+
+  async recover(skillId: string): Promise<{ success: boolean; error?: string }> {
+    const entry = this.entries.get(skillId);
+    if (!entry) {
+      return { success: false, error: `Skill "${skillId}" not found` };
+    }
+
+    if (entry.phase !== 'error' && entry.phase !== 'disabled') {
+      return { success: false, error: `Skill "${skillId}" is not in error or disabled state (current: ${entry.phase})` };
+    }
+
+    // Capture the phase the skill originally failed at before resetting
+    const failedPhase = entry.error?.phase ?? 'discovered';
+
+    // Reset circuit breaker
+    entry.circuitBreaker = createCircuitBreakerState();
+    delete entry.error;
+
+    try {
+      // Re-attempt from the earliest safe point
+      if (['discovered', 'validated', 'loaded', 'active', 'deactivated'].includes(failedPhase)) {
+        // For validated/loaded/active failures, try to get back to loaded state
+        entry.phase = 'discovered';
+        entry.lastTransition = Date.now();
+
+        const validation = await this.validate(skillId);
+        if (!validation.valid) {
+          return { success: false, error: `Validation failed: ${validation.errors.map((e) => e.message).join('; ')}` };
+        }
+
+        await this.load(skillId);
+      }
+
+      this.emit('skill:recovered', skillId);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  }
+
+  // ── Health Status ───────────────────────────────────────────
+
+  getHealthStatus(skillId: string): SkillHealthStatus | undefined {
+    const entry = this.entries.get(skillId);
+    if (!entry) return undefined;
+
+    return {
+      skillId,
+      phase: entry.phase,
+      circuitBreaker: entry.circuitBreaker ?? createCircuitBreakerState(),
+      retryPolicy: resolveRetryPolicy(entry.manifest),
+      lastHealthCheck: entry.lastHealthCheck ?? null,
+      activeAgents: [...entry.activeAgents],
+      error: entry.error ?? null,
+    };
+  }
+
+  getAllHealthStatuses(): SkillHealthStatus[] {
+    const statuses: SkillHealthStatus[] = [];
+    for (const [skillId] of this.entries) {
+      const status = this.getHealthStatus(skillId);
+      if (status) statuses.push(status);
+    }
+    return statuses;
+  }
+
+  // ── Health Check Heartbeat ──────────────────────────────────
+
+  startHealthChecks(intervalMs: number = 60_000): void {
+    this.stopHealthChecks();
+    this.healthCheckTimer = setInterval(() => {
+      this.runHealthChecks();
+    }, intervalMs);
+  }
+
+  stopHealthChecks(): void {
+    if (this.healthCheckTimer) {
+      clearInterval(this.healthCheckTimer);
+      this.healthCheckTimer = null;
+    }
+  }
+
+  private async runHealthChecks(): Promise<void> {
+    for (const [skillId, entry] of this.entries) {
+      if (entry.phase !== 'active') continue;
+
+      entry.lastHealthCheck = Date.now();
+
+      // For skills with hooks, do a lightweight onActivate probe
+      // using the first active agent's context
+      if (entry.hooks?.onActivate && entry.activeAgents.size > 0) {
+        const agentId = [...entry.activeAgents][0];
+        const ctx = this.contexts.get(`${skillId}:${agentId}`);
+        if (ctx) {
+          const result = await executeHookWithRetry(
+            'healthCheck',
+            () => entry.hooks!.onActivate!(ctx),
+            { ...resolveRetryPolicy(entry.manifest), maxRetries: 1 },
+            5_000, // short timeout for health checks
+          );
+
+          if (!result.success) {
+            this.recordFailure(skillId, entry);
+            if (this.shouldTripCircuitBreaker(entry)) {
+              this.tripCircuitBreaker(skillId, entry);
+            }
+          } else {
+            this.recordSuccess(entry);
+          }
+        }
+      }
+
+      this.emit('skill:health-check', skillId);
     }
   }
 

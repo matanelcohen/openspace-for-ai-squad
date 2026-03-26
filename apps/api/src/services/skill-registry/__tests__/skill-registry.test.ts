@@ -9,7 +9,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { SkillManifest, SkillRegistryEvent } from '@openspace/shared/src/types/skill.js';
+import type { SkillManifest, SkillRegistryEvent } from '@openspace/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SkillRegistryImpl } from '../index.js';
@@ -604,4 +604,249 @@ describe('SkillRegistryImpl', () => {
       expect(registry.get('hacked')).toBeUndefined();
     });
   });
-});
+
+  // ── Circuit Breaker ────────────────────────────────────────
+
+  describe('circuit breaker', () => {
+    it('blocks activation when skill is disabled', async () => {
+      await registry.register(makeManifest({ id: 'disabled-skill' }));
+      const entry = registry.get('disabled-skill')!;
+      // Manually set to disabled to simulate circuit breaker trip
+      entry.phase = 'disabled';
+
+      await expect(registry.activate('disabled-skill', 'agent-1')).rejects.toThrow(
+        'disabled by circuit breaker',
+      );
+    });
+
+    it('initialises circuit breaker state on registration', async () => {
+      await registry.register(makeManifest({ id: 'cb-init' }));
+      const entry = registry.get('cb-init')!;
+      expect(entry.circuitBreaker).toBeDefined();
+      expect(entry.circuitBreaker!.consecutiveFailures).toBe(0);
+      expect(entry.circuitBreaker!.status).toBe('closed');
+    });
+
+    it('initialises circuit breaker state on discovery', async () => {
+      createSkillOnDisk(tempDir, makeManifest({ id: 'cb-disco' }));
+      await registry.discover([tempDir]);
+      const entry = registry.get('cb-disco')!;
+      expect(entry.circuitBreaker).toBeDefined();
+      expect(entry.circuitBreaker!.status).toBe('closed');
+    });
+  });
+
+  // ── Recovery ──────────────────────────────────────────────
+
+  describe('recover', () => {
+    it('recovers a skill in error state back to loaded', async () => {
+      createSkillOnDisk(tempDir, makeManifest({ id: 'err-recover' }));
+      await registry.discover([tempDir]);
+      await registry.validate('err-recover');
+      await registry.load('err-recover');
+
+      // Manually put into error state
+      const entry = registry.get('err-recover')!;
+      entry.phase = 'error';
+      entry.error = { phase: 'active', code: 'LIFECYCLE_HOOK_ERROR', message: 'boom' };
+
+      const result = await registry.recover('err-recover');
+      expect(result.success).toBe(true);
+      expect(registry.get('err-recover')!.phase).toBe('loaded');
+    });
+
+    it('recovers a disabled skill back to loaded', async () => {
+      createSkillOnDisk(tempDir, makeManifest({ id: 'disabled-recover' }));
+      await registry.discover([tempDir]);
+      await registry.validate('disabled-recover');
+      await registry.load('disabled-recover');
+
+      // Simulate circuit breaker trip
+      const entry = registry.get('disabled-recover')!;
+      entry.phase = 'disabled';
+      entry.circuitBreaker = {
+        consecutiveFailures: 5,
+        status: 'open',
+        lastFailureTime: Date.now(),
+        disabledAt: Date.now(),
+      };
+      entry.error = { phase: 'active', code: 'LIFECYCLE_HOOK_ERROR', message: 'tripped' };
+
+      const result = await registry.recover('disabled-recover');
+      expect(result.success).toBe(true);
+      expect(registry.get('disabled-recover')!.phase).toBe('loaded');
+      expect(registry.get('disabled-recover')!.circuitBreaker!.consecutiveFailures).toBe(0);
+      expect(registry.get('disabled-recover')!.circuitBreaker!.status).toBe('closed');
+    });
+
+    it('resets circuit breaker state on recovery', async () => {
+      createSkillOnDisk(tempDir, makeManifest({ id: 'cb-reset' }));
+      await registry.discover([tempDir]);
+      await registry.validate('cb-reset');
+      await registry.load('cb-reset');
+
+      const entry = registry.get('cb-reset')!;
+      entry.phase = 'error';
+      entry.error = { phase: 'loaded', code: 'LIFECYCLE_HOOK_ERROR', message: 'fail' };
+      entry.circuitBreaker = {
+        consecutiveFailures: 3,
+        status: 'open',
+        lastFailureTime: Date.now(),
+        disabledAt: Date.now(),
+      };
+
+      await registry.recover('cb-reset');
+      const updated = registry.get('cb-reset')!;
+      expect(updated.circuitBreaker!.consecutiveFailures).toBe(0);
+      expect(updated.circuitBreaker!.status).toBe('closed');
+      expect(updated.circuitBreaker!.disabledAt).toBeNull();
+    });
+
+    it('emits skill:recovered on success', async () => {
+      const events: SkillRegistryEvent[] = [];
+      registry.on('skill:recovered', (e) => events.push(e));
+
+      createSkillOnDisk(tempDir, makeManifest({ id: 'evt-recover' }));
+      await registry.discover([tempDir]);
+      await registry.validate('evt-recover');
+      await registry.load('evt-recover');
+
+      const entry = registry.get('evt-recover')!;
+      entry.phase = 'error';
+      entry.error = { phase: 'active', code: 'LIFECYCLE_HOOK_ERROR', message: 'boom' };
+
+      await registry.recover('evt-recover');
+      expect(events).toHaveLength(1);
+      expect(events[0].skillId).toBe('evt-recover');
+    });
+
+    it('returns error for non-existent skill', async () => {
+      const result = await registry.recover('ghost');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not found');
+    });
+
+    it('returns error when skill is not in error/disabled state', async () => {
+      await registry.register(makeManifest({ id: 'healthy-skill' }));
+      const result = await registry.recover('healthy-skill');
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not in error');
+    });
+  });
+
+  // ── Health Status ─────────────────────────────────────────
+
+  describe('health status', () => {
+    it('returns health status for a registered skill', async () => {
+      await registry.register(makeManifest({ id: 'health-skill' }));
+      const status = registry.getHealthStatus('health-skill');
+
+      expect(status).toBeDefined();
+      expect(status!.skillId).toBe('health-skill');
+      expect(status!.phase).toBe('loaded');
+      expect(status!.circuitBreaker.consecutiveFailures).toBe(0);
+      expect(status!.circuitBreaker.status).toBe('closed');
+      expect(status!.retryPolicy.maxRetries).toBe(3);
+      expect(status!.lastHealthCheck).toBeNull();
+      expect(status!.activeAgents).toEqual([]);
+      expect(status!.error).toBeNull();
+    });
+
+    it('returns undefined for non-existent skill', () => {
+      expect(registry.getHealthStatus('nope')).toBeUndefined();
+    });
+
+    it('includes active agents in health status', async () => {
+      await registry.register(makeManifest({ id: 'active-health' }));
+      await registry.activate('active-health', 'agent-1');
+
+      const status = registry.getHealthStatus('active-health');
+      expect(status!.activeAgents).toEqual(['agent-1']);
+    });
+
+    it('includes error info in health status', async () => {
+      await registry.register(makeManifest({ id: 'err-health' }));
+      const entry = registry.get('err-health')!;
+      entry.phase = 'error';
+      entry.error = { phase: 'loaded', code: 'LIFECYCLE_HOOK_ERROR', message: 'fail' };
+
+      const status = registry.getHealthStatus('err-health');
+      expect(status!.error).toBeDefined();
+      expect(status!.error!.message).toBe('fail');
+    });
+
+    it('returns all health statuses', async () => {
+      await registry.register(makeManifest({ id: 'all-a' }));
+      await registry.register(makeManifest({ id: 'all-b' }));
+
+      const statuses = registry.getAllHealthStatuses();
+      expect(statuses).toHaveLength(2);
+      expect(statuses.map((s) => s.skillId).sort()).toEqual(['all-a', 'all-b']);
+    });
+
+    it('respects custom retry policy in health status', async () => {
+      await registry.register(
+        makeManifest({
+          id: 'custom-policy',
+          retryPolicy: {
+            maxRetries: 5,
+            backoffStrategy: 'linear',
+            backoffBaseMs: 500,
+            backoffMaxMs: 10_000,
+            circuitBreakerThreshold: 10,
+          },
+        }),
+      );
+
+      const status = registry.getHealthStatus('custom-policy');
+      expect(status!.retryPolicy.maxRetries).toBe(5);
+      expect(status!.retryPolicy.backoffStrategy).toBe('linear');
+      expect(status!.retryPolicy.circuitBreakerThreshold).toBe(10);
+    });
+  });
+
+  // ── Health Check Heartbeat ────────────────────────────────
+
+  describe('health check heartbeat', () => {
+    it('starts and stops health checks without error', () => {
+      registry.startHealthChecks(60_000);
+      registry.stopHealthChecks();
+    });
+
+    it('stopHealthChecks is idempotent', () => {
+      registry.stopHealthChecks();
+      registry.stopHealthChecks();
+    });
+
+    it('emits skill:health-check events for active skills', async () => {
+      const events: SkillRegistryEvent[] = [];
+      registry.on('skill:health-check', (e) => events.push(e));
+
+      await registry.register(makeManifest({ id: 'hc-skill' }));
+      await registry.activate('hc-skill', 'agent-1');
+
+      // Directly invoke the private runHealthChecks via a short interval
+      registry.startHealthChecks(50);
+
+      // Wait for at least one health check cycle
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      registry.stopHealthChecks();
+
+      expect(events.length).toBeGreaterThan(0);
+      expect(events[0].skillId).toBe('hc-skill');
+    });
+
+    it('updates lastHealthCheck timestamp for active skills', async () => {
+      await registry.register(makeManifest({ id: 'hc-timestamp' }));
+      await registry.activate('hc-timestamp', 'agent-1');
+
+      expect(registry.get('hc-timestamp')!.lastHealthCheck).toBeUndefined();
+
+      registry.startHealthChecks(50);
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      registry.stopHealthChecks();
+
+      expect(registry.get('hc-timestamp')!.lastHealthCheck).toBeDefined();
+      expect(registry.get('hc-timestamp')!.lastHealthCheck).toBeGreaterThan(0);
+    });
+  });

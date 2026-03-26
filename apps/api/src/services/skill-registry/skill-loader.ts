@@ -15,7 +15,7 @@ import type {
   SkillValidationError,
   SkillValidationResult,
   SkillValidationWarning,
-} from '@openspace/shared/src/types/skill.js';
+} from '@openspace/shared';
 import Ajv from 'ajv';
 import YAML from 'yaml';
 

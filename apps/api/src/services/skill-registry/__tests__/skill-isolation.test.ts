@@ -4,7 +4,7 @@
  * Covers: executeHook, safeOnLoad, safeOnActivate,
  *         safeOnDeactivate, safeOnUnload, safeImportEntryPoint
  */
-import type { SkillContext, SkillLifecycleHooks } from '@openspace/shared/src/types/skill.js';
+import type { SkillContext, SkillLifecycleHooks } from '@openspace/shared';
 import { describe, expect, it, vi } from 'vitest';
 
 import {

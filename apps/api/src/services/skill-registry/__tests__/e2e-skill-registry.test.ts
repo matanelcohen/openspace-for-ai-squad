@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { SkillTaskContext } from '@openspace/shared/src/types/skill.js';
+import type { SkillTaskContext } from '@openspace/shared';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { SkillRegistryImpl } from '../index.js';
