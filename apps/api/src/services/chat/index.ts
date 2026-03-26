@@ -10,7 +10,7 @@
 
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { appendFile, readFile, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import type { ChatChannel, ChatMessage } from '@openspace/shared';
 import { CHAT_CHANNEL_PREFIX, CHAT_TEAM_RECIPIENT } from '@openspace/shared';
@@ -20,11 +20,14 @@ import { nanoid } from 'nanoid';
 import type { ActivityFeed } from '../activity/index.js';
 import type { AIProvider } from '../ai/copilot-provider.js';
 import {
+  buildSkillsPrompt,
+  getSkillsForRole,
+  loadSkillsFromDirectory,
+  type ParsedSkill,
+} from '../seed-skills.js';
+import {
   createChannel as writeChannelFile,
   deleteChannel as deleteChannelFile,
-  generateChannelId,
-  getChannel as readChannelFile,
-  listChannels as listChannelFiles,
   updateChannel as updateChannelFile,
 } from '../squad-writer/channel-writer.js';
 import type { WebSocketManager, WsEnvelope } from '../websocket/index.js';
@@ -57,10 +60,7 @@ export interface StreamEvent {
 
 // ── Channel Validation ────────────────────────────────────────────
 
-export type ChannelValidationCode =
-  | 'DUPLICATE_NAME'
-  | 'NAME_REQUIRED'
-  | 'EMPTY_MEMBER_LIST';
+export type ChannelValidationCode = 'DUPLICATE_NAME' | 'NAME_REQUIRED' | 'EMPTY_MEMBER_LIST';
 
 /**
  * Thrown by channel CRUD methods when input validation fails.
@@ -110,6 +110,7 @@ export class ChatService {
   private wsManager: WebSocketManager | null = null;
   private aiProvider: AIProvider | null = null;
   private activityFeed: ActivityFeed | null = null;
+  private readonly allSkills: ParsedSkill[];
 
   constructor(opts: {
     db?: Database.Database | null;
@@ -128,6 +129,16 @@ export class ChatService {
     if (this.sessionsDir && !existsSync(this.sessionsDir)) {
       mkdirSync(this.sessionsDir, { recursive: true });
     }
+
+    // Load skills from .squad/skills/ for per-agent filtering
+    const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+    this.allSkills = loadSkillsFromDirectory(join(squadDir, 'skills'));
+  }
+
+  /** Get the skills prompt fragment for a given agent role. */
+  private getSkillsPromptForAgent(role: string): string {
+    const matched = getSkillsForRole(this.allSkills, role);
+    return buildSkillsPrompt(matched);
   }
 
   /** Connect to a WebSocket manager for broadcasting chat events. */
@@ -293,10 +304,12 @@ export class ChatService {
   }
 
   /** Delete all messages, optionally filtered by agent/channel (thread). */
-  async clearMessages(opts: {
-    agent?: string;
-    channel?: string;
-  } = {}): Promise<{ deleted: number }> {
+  async clearMessages(
+    opts: {
+      agent?: string;
+      channel?: string;
+    } = {},
+  ): Promise<{ deleted: number }> {
     if (!this.db) return { deleted: 0 };
 
     const { agent, channel } = opts;
@@ -329,7 +342,9 @@ export class ChatService {
 
     let files: string[];
     try {
-      files = readdirSync(this.sessionsDir).filter((f) => f.startsWith('chat-') && f.endsWith('.md'));
+      files = readdirSync(this.sessionsDir).filter(
+        (f) => f.startsWith('chat-') && f.endsWith('.md'),
+      );
     } catch {
       return;
     }
@@ -389,6 +404,112 @@ export class ChatService {
       timestamp: row.timestamp,
       threadId: row.thread_id,
     };
+  }
+
+  // ── Message Pruning ────────────────────────────────────────────
+
+  /**
+   * Prune old messages beyond the retention window.
+   * Archives pruned messages to `.squad/archive/` as JSONL before deletion.
+   *
+   * @param maxAgeDays - Delete messages older than this many days (default: 30)
+   * @param maxPerChannel - Keep at most this many messages per channel/recipient (default: 500)
+   * @returns Count of pruned messages
+   */
+  async pruneOldMessages(maxAgeDays = 30, maxPerChannel = 500): Promise<{ pruned: number }> {
+    if (!this.db) return { pruned: 0 };
+
+    let totalPruned = 0;
+
+    // 1. Archive & delete messages older than maxAgeDays
+    const cutoffDate = new Date(Date.now() - maxAgeDays * 24 * 60 * 60 * 1000).toISOString();
+    const oldMessages = this.db
+      .prepare('SELECT * FROM chat_messages WHERE timestamp < ? ORDER BY timestamp ASC')
+      .all(cutoffDate) as Array<{
+      id: string;
+      sender: string;
+      recipient: string;
+      content: string;
+      timestamp: string;
+      thread_id: string | null;
+    }>;
+
+    if (oldMessages.length > 0) {
+      await this.archiveMessages(oldMessages);
+      this.db.prepare('DELETE FROM chat_messages WHERE timestamp < ?').run(cutoffDate);
+      totalPruned += oldMessages.length;
+    }
+
+    // 2. For each channel/recipient, delete excess messages beyond maxPerChannel
+    const recipients = this.db
+      .prepare('SELECT DISTINCT recipient FROM chat_messages')
+      .all() as Array<{ recipient: string }>;
+
+    for (const { recipient } of recipients) {
+      const count = (
+        this.db
+          .prepare('SELECT COUNT(*) as cnt FROM chat_messages WHERE recipient = ?')
+          .get(recipient) as { cnt: number }
+      ).cnt;
+
+      if (count > maxPerChannel) {
+        const excess = count - maxPerChannel;
+        const excessMessages = this.db
+          .prepare('SELECT * FROM chat_messages WHERE recipient = ? ORDER BY timestamp ASC LIMIT ?')
+          .all(recipient, excess) as Array<{
+          id: string;
+          sender: string;
+          recipient: string;
+          content: string;
+          timestamp: string;
+          thread_id: string | null;
+        }>;
+
+        if (excessMessages.length > 0) {
+          await this.archiveMessages(excessMessages);
+          const ids = excessMessages.map((m) => m.id);
+          const placeholders = ids.map(() => '?').join(',');
+          this.db.prepare(`DELETE FROM chat_messages WHERE id IN (${placeholders})`).run(...ids);
+          totalPruned += excessMessages.length;
+        }
+      }
+    }
+
+    if (totalPruned > 0) {
+      console.log(
+        `[Chat] Pruned ${totalPruned} messages (maxAge: ${maxAgeDays}d, maxPerChannel: ${maxPerChannel})`,
+      );
+    }
+
+    return { pruned: totalPruned };
+  }
+
+  /** Archive messages to .squad/archive/chat-{date}.jsonl */
+  private async archiveMessages(
+    messages: Array<{
+      id: string;
+      sender: string;
+      recipient: string;
+      content: string;
+      timestamp: string;
+      thread_id: string | null;
+    }>,
+  ): Promise<void> {
+    if (!this.sessionsDir) return;
+
+    try {
+      const archiveDir = join(this.sessionsDir, '..', 'archive');
+      if (!existsSync(archiveDir)) {
+        mkdirSync(archiveDir, { recursive: true });
+      }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      const archivePath = join(archiveDir, `chat-${dateStr}.jsonl`);
+      const lines = messages.map((m) => JSON.stringify(m)).join('\n') + '\n';
+      await appendFile(archivePath, lines, 'utf-8');
+    } catch (err) {
+      console.warn('[Chat] Failed to archive messages:', err);
+    }
   }
 
   // ── Channel CRUD ───────────────────────────────────────────────
@@ -891,7 +1012,10 @@ export class ChatService {
     }
 
     // Short messages or greetings → route to Leela (lead) as the default responder
-    const isGreeting = /^\s*(hi|hey|hello|yo|sup|howdy|hiya|greetings|good\s*(morning|afternoon|evening))\b/i.test(content);
+    const isGreeting =
+      /^\s*(hi|hey|hello|yo|sup|howdy|hiya|greetings|good\s*(morning|afternoon|evening))\b/i.test(
+        content,
+      );
     if (isGreeting || content.trim().length < 20) {
       return ['leela'];
     }
@@ -928,6 +1052,7 @@ export class ChatService {
   ): Promise<ChatMessage> {
     const history = this.getRecentHistory(original.recipient);
     const messages = [...history, { role: 'user' as const, content: original.content }];
+    const skillsFragment = this.getSkillsPromptForAgent(agent.role);
 
     const result = await this.aiProvider!.chatCompletion({
       agentId: agent.id,
@@ -937,7 +1062,8 @@ export class ChatService {
         `Respond in character as ${agent.name}. Keep responses concise (2-4 sentences). ` +
         `IMPORTANT: Only speak for yourself. Never speak on behalf of other agents or summarize what they did. ` +
         `Other agents will respond separately in their own messages. ` +
-        `Never prefix your response with your name or any other agent's name — the UI handles that.`,
+        `Never prefix your response with your name or any other agent's name — the UI handles that.` +
+        (skillsFragment ? `\n\n${skillsFragment}` : ''),
       messages,
     });
 
@@ -961,6 +1087,7 @@ export class ChatService {
 
       const history = this.getRecentHistory(agent.id);
       const messages = [...history, { role: 'user' as const, content: original.content }];
+      const skillsFragment = this.getSkillsPromptForAgent(agent.role);
 
       const result = await this.aiProvider!.chatCompletion({
         agentId: agent.id,
@@ -968,7 +1095,8 @@ export class ChatService {
         systemPrompt:
           `You can and should take action on requests — create files, write code, run commands. ` +
           `If the user asks you to do something, do it. Don't just talk about it. ` +
-          `Never prefix your response with your name — the UI handles that.`,
+          `Never prefix your response with your name — the UI handles that.` +
+          (skillsFragment ? `\n\n${skillsFragment}` : ''),
         messages,
       });
 
@@ -1092,19 +1220,24 @@ export class ChatService {
     onChunk: (chunk: string) => void,
   ): Promise<ChatMessage> {
     const isDirectMessage = responseRecipient !== CHAT_TEAM_RECIPIENT;
+    const skillsFragment = this.getSkillsPromptForAgent(agent.role);
+    const skillsSuffix = skillsFragment ? `\n\n${skillsFragment}` : '';
+
     const systemPrompt = isDirectMessage
       ? `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
         `Personality: ${agent.personality} ` +
         `The user is talking directly to you. Respond in character as ${agent.name}. ` +
         `You can and should take action on requests — create files, write code, run commands. ` +
         `If the user asks you to do something, do it. Don't just talk about it. ` +
-        `Never prefix your response with your name — the UI handles that.`
+        `Never prefix your response with your name — the UI handles that.` +
+        skillsSuffix
       : `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
         `Personality: ${agent.personality} ` +
         `Respond in character as ${agent.name}. Keep responses concise (2-4 sentences). ` +
         `IMPORTANT: Only speak for yourself. Never speak on behalf of other agents or summarize what they did. ` +
         `Other agents will respond separately in their own messages. ` +
-        `Never prefix your response with your name or any other agent's name — the UI handles that.`;
+        `Never prefix your response with your name or any other agent's name — the UI handles that.` +
+        skillsSuffix;
 
     const history = this.getRecentHistory(responseRecipient);
     const messages = [...history, { role: 'user' as const, content: original.content }];

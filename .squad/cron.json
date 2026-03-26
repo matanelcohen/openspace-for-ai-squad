@@ -1,0 +1,22 @@
+{
+  "jobs": [
+    {
+      "id": "daily-standup",
+      "schedule": "0 9 * * 1-5",
+      "agent": "leela",
+      "action": "chat",
+      "message": "Good morning team! Give me a status update on all in-progress tasks.",
+      "channel": "team",
+      "enabled": true
+    },
+    {
+      "id": "nightly-tests",
+      "schedule": "0 22 * * *",
+      "agent": "zoidberg",
+      "action": "task",
+      "title": "Run nightly test suite",
+      "description": "Run all tests and report results to the team channel.",
+      "enabled": true
+    }
+  ]
+}

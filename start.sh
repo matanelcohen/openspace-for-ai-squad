@@ -3,10 +3,16 @@ set -e
 
 # ─── openspace.ai — Start Script ────────────────────────────────
 # Checks dependencies, installs if needed, starts CLI server + dev servers.
-# Usage: ./start.sh
+# Usage: ./start.sh          — normal startup
+#        ./start.sh doctor   — run diagnostics
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 cd "$SCRIPT_DIR"
+
+# ─── Doctor subcommand ──────────────────────────────────────────
+if [ "${1:-}" = "doctor" ]; then
+  exec bash scripts/doctor.sh
+fi
 
 # Colors
 GREEN='\033[0;32m'

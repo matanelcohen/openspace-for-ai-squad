@@ -14,19 +14,15 @@ import type { ChatService, SendMessageInput } from '../services/chat/index.js';
 const chatRoute: FastifyPluginAsync = async (app) => {
   // Allow DELETE (and other bodyless methods) to send Content-Type: application/json
   // without a body — the default Fastify JSON parser rejects empty payloads.
-  app.addContentTypeParser(
-    'application/json',
-    { parseAs: 'string' },
-    (_req, body, done) => {
-      const str = typeof body === 'string' ? body : (body as Buffer).toString();
-      if (str.trim() === '') return done(null, undefined);
-      try {
-        done(null, JSON.parse(str));
-      } catch (err) {
-        done(err as Error, undefined);
-      }
-    },
-  );
+  app.addContentTypeParser('application/json', { parseAs: 'string' }, (_req, body, done) => {
+    const str = typeof body === 'string' ? body : (body as Buffer).toString();
+    if (str.trim() === '') return done(null, undefined);
+    try {
+      done(null, JSON.parse(str));
+    } catch (err) {
+      done(err as Error, undefined);
+    }
+  });
 
   // POST /api/chat/messages — send a message
   app.post<{ Body: SendMessageInput }>('/chat/messages', async (request, reply) => {
@@ -89,6 +85,16 @@ const chatRoute: FastifyPluginAsync = async (app) => {
     const agent = request.query.agent || undefined;
     const channel = request.query.channel || undefined;
     const result = await app.chatService.clearMessages({ agent, channel });
+    return reply.status(200).send(result);
+  });
+
+  // DELETE /api/chat/messages/prune — prune old messages with archival
+  app.delete<{
+    Querystring: { maxAgeDays?: string; maxPerChannel?: string };
+  }>('/chat/messages/prune', async (request, reply) => {
+    const maxAgeDays = Math.max(Number(request.query.maxAgeDays) || 30, 1);
+    const maxPerChannel = Math.max(Number(request.query.maxPerChannel) || 500, 10);
+    const result = await app.chatService.pruneOldMessages(maxAgeDays, maxPerChannel);
     return reply.status(200).send(result);
   });
 

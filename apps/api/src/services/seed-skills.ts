@@ -1,130 +1,166 @@
 /**
  * Seed built-in skills into the SkillRegistry on startup.
- * These represent the core capabilities available to squad agents.
+ *
+ * Reads SKILL.md files from `.squad/skills/` with YAML frontmatter
+ * (parsed via gray-matter) and registers each as a built-in skill.
+ * Falls back to hardcoded defaults if the skills directory is missing.
  */
+
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+import matter from 'gray-matter';
 
 import type { SkillRegistryImpl } from './skill-registry/index.js';
 
-interface BuiltinSkill {
-  id: string;
+// ── Types ─────────────────────────────────────────────────────────
+
+export interface SkillFrontmatter {
   name: string;
-  version: string;
   description: string;
-  author: string;
   tags: string[];
-  icon: string;
+  agentMatch: { roles: string[] };
+  requires?: { bins?: string[]; env?: string[] };
 }
 
-const BUILTIN_SKILLS: BuiltinSkill[] = [
-  {
-    id: 'file-operations',
-    name: 'File Operations',
-    version: '1.0.0',
-    description: 'Read, write, create, and modify files in the project. Supports all text formats.',
-    author: 'openspace.ai',
-    tags: ['core', 'filesystem', 'code'],
-    icon: '📁',
-  },
-  {
-    id: 'bash-execution',
-    name: 'Bash Execution',
-    version: '1.0.0',
-    description: 'Run shell commands, install packages, build projects, and execute scripts.',
-    author: 'openspace.ai',
-    tags: ['core', 'shell', 'devops'],
-    icon: '💻',
-  },
-  {
-    id: 'code-review',
-    name: 'Code Review',
-    version: '1.0.0',
-    description: 'Analyze code for bugs, security issues, performance problems, and style violations.',
-    author: 'openspace.ai',
-    tags: ['quality', 'review', 'code'],
-    icon: '🔍',
-  },
-  {
-    id: 'web-search',
-    name: 'Web Search',
-    version: '1.0.0',
-    description: 'Search the web for documentation, APIs, libraries, and best practices.',
-    author: 'openspace.ai',
-    tags: ['research', 'web', 'docs'],
-    icon: '🌐',
-  },
-  {
-    id: 'test-runner',
-    name: 'Test Runner',
-    version: '1.0.0',
-    description: 'Run unit tests, integration tests, and E2E tests. Report results and coverage.',
-    author: 'openspace.ai',
-    tags: ['testing', 'quality', 'ci'],
-    icon: '🧪',
-  },
-  {
-    id: 'git-operations',
-    name: 'Git Operations',
-    version: '1.0.0',
-    description: 'Stage, commit, branch, merge, and manage git repositories.',
-    author: 'openspace.ai',
-    tags: ['core', 'git', 'vcs'],
-    icon: '🔀',
-  },
-  {
-    id: 'database-query',
-    name: 'Database Query',
-    version: '1.0.0',
-    description: 'Query SQLite databases, inspect schemas, run migrations, and analyze data.',
-    author: 'openspace.ai',
-    tags: ['data', 'sql', 'database'],
-    icon: '🗄️',
-  },
-  {
-    id: 'task-delegation',
-    name: 'Task Delegation',
-    version: '1.0.0',
-    description: 'Break down tasks, assign to team members, track progress, and coordinate work via A2A protocol.',
-    author: 'openspace.ai',
-    tags: ['management', 'a2a', 'coordination'],
-    icon: '📋',
-  },
-];
+export interface ParsedSkill {
+  id: string;
+  frontmatter: SkillFrontmatter;
+  content: string;
+}
+
+// ── Icon map (skill-id → emoji) ───────────────────────────────────
+
+const SKILL_ICONS: Record<string, string> = {
+  'file-operations': '📁',
+  'bash-execution': '💻',
+  'code-review': '🔍',
+  'web-search': '🌐',
+  'test-runner': '🧪',
+  'git-operations': '🔀',
+  'database-query': '🗄️',
+  'task-delegation': '📋',
+};
+
+// ── SKILL.md parsing ──────────────────────────────────────────────
+
+/**
+ * Scan `.squad/skills/` for directories containing SKILL.md,
+ * parse YAML frontmatter with gray-matter, and return structured skills.
+ */
+export function loadSkillsFromDirectory(skillsDir: string): ParsedSkill[] {
+  if (!existsSync(skillsDir)) return [];
+
+  const skills: ParsedSkill[] = [];
+
+  for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+
+    const skillFile = join(skillsDir, entry.name, 'SKILL.md');
+    if (!existsSync(skillFile)) continue;
+
+    try {
+      const raw = readFileSync(skillFile, 'utf-8');
+      const { data, content } = matter(raw);
+
+      const fm = data as Partial<SkillFrontmatter>;
+      if (!fm.name || !fm.description) {
+        console.warn(`[Skills] Skipping ${entry.name}/SKILL.md — missing name or description`);
+        continue;
+      }
+
+      skills.push({
+        id: entry.name,
+        frontmatter: {
+          name: fm.name,
+          description: fm.description,
+          tags: fm.tags ?? [],
+          agentMatch: fm.agentMatch ?? { roles: ['*'] },
+          requires: fm.requires ?? { bins: [], env: [] },
+        },
+        content: content.trim(),
+      });
+    } catch (err) {
+      console.warn(`[Skills] Failed to parse ${entry.name}/SKILL.md:`, err);
+    }
+  }
+
+  return skills;
+}
+
+/**
+ * Get the skills that match a given agent role.
+ */
+export function getSkillsForRole(skills: ParsedSkill[], role: string): ParsedSkill[] {
+  return skills.filter((s) => {
+    const roles = s.frontmatter.agentMatch.roles;
+    return roles.includes('*') || roles.includes(role);
+  });
+}
+
+/**
+ * Build a system prompt fragment listing available skills for an agent.
+ */
+export function buildSkillsPrompt(skills: ParsedSkill[]): string {
+  if (skills.length === 0) return '';
+
+  const lines = ['## Available Skills', ''];
+  for (const s of skills) {
+    const icon = SKILL_ICONS[s.id] ?? '🔧';
+    lines.push(`- ${icon} **${s.frontmatter.name}**: ${s.frontmatter.description}`);
+  }
+  return lines.join('\n');
+}
+
+// ── Registry seeding ──────────────────────────────────────────────
 
 /**
  * Register built-in skills into the registry.
- * Uses the registry's internal discover-like flow to add entries.
+ * Scans `.squad/skills/` for SKILL.md files and registers each.
  */
-export function seedBuiltinSkills(registry: SkillRegistryImpl): void {
+export function seedBuiltinSkills(registry: SkillRegistryImpl, squadDir?: string): void {
+  const resolvedSquadDir = squadDir ?? resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+  const skillsDir = join(resolvedSquadDir, 'skills');
+
+  const skills = loadSkillsFromDirectory(skillsDir);
+
   // Access the internal entries map via discover simulation
-  // We call discover with empty dirs then manually add entries
   const entries = (registry as unknown as { entries: Map<string, unknown> }).entries;
 
-  for (const skill of BUILTIN_SKILLS) {
+  for (const skill of skills) {
     if (entries.has(skill.id)) continue;
+
+    // Pretty-print the skill name from the directory name
+    const displayName =
+      skill.frontmatter.name ||
+      skill.id
+        .split('-')
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join(' ');
 
     entries.set(skill.id, {
       manifest: {
         manifestVersion: '1.0' as const,
         id: skill.id,
-        name: skill.name,
-        version: skill.version,
-        description: skill.description,
-        author: skill.author,
-        tags: skill.tags,
-        icon: skill.icon,
+        name: displayName,
+        version: '1.0.0',
+        description: skill.frontmatter.description,
+        author: 'openspace.ai',
+        tags: skill.frontmatter.tags,
+        icon: SKILL_ICONS[skill.id] ?? '🔧',
         permissions: [],
-        agentMatch: { roles: ['*'] },
+        agentMatch: skill.frontmatter.agentMatch,
       },
       phase: 'loaded' as const,
       hooks: null,
       activeAgents: new Set<string>(),
       lastTransition: Date.now(),
       error: null,
-      sourcePath: 'builtin',
+      sourcePath: join(skillsDir, skill.id, 'SKILL.md'),
       retryState: null,
       circuitBreaker: null,
     });
   }
 
-  console.log(`[Skills] Seeded ${BUILTIN_SKILLS.length} built-in skills`);
+  console.log(`[Skills] Seeded ${skills.length} skills from ${skillsDir}`);
 }

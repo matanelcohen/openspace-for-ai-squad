@@ -11,6 +11,7 @@ import activityRoute from './routes/activity.js';
 import agentsRoute from './routes/agents.js';
 import channelsRoute from './routes/channels.js';
 import chatRoute from './routes/chat.js';
+import cronRoute from './routes/cron.js';
 import decisionsRoute from './routes/decisions.js';
 import healthRoute from './routes/health.js';
 import knowledgeRoute from './routes/knowledge.js';
@@ -18,25 +19,26 @@ import otlpCollectorRoute from './routes/otlp-collector.js';
 import sandboxesRoute from './routes/sandboxes.js';
 import skillsRoute from './routes/skills.js';
 import squadRoute from './routes/squad.js';
-import terminalRoute from './routes/terminal.js';
 import tasksRoute from './routes/tasks.js';
 import teamMembersRoute from './routes/team-members.js';
+import terminalRoute from './routes/terminal.js';
 import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
-import { SkillRegistryImpl } from './services/skill-registry/index.js';
-import { seedBuiltinSkills } from './services/seed-skills.js';
 import { ActivityFeed } from './services/activity/index.js';
 import { AgentWorkerService } from './services/agent-worker/index.js';
 import type { AIProvider } from './services/ai/copilot-provider.js';
 import { createAIProvider } from './services/ai/copilot-provider.js';
 import { AuthService } from './services/auth/index.js';
 import { ChatService } from './services/chat/index.js';
+import { CronService } from './services/cron/index.js';
 import { openDatabase } from './services/db/index.js';
 import { seedTeamMembers } from './services/db/seed-team.js';
 import { SandboxService } from './services/sandbox/index.js';
 import { KnowledgeSearchService } from './services/search/index.js';
+import { seedBuiltinSkills } from './services/seed-skills.js';
+import { SkillRegistryImpl } from './services/skill-registry/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import { TraceService } from './services/traces/index.js';
 import {
@@ -104,8 +106,13 @@ export function buildApp(opts: AppOptions = {}) {
 
   // Skill registry
   const skillRegistry = new SkillRegistryImpl();
-  seedBuiltinSkills(skillRegistry);
+  seedBuiltinSkills(skillRegistry, squadDir);
   app.decorate('skillRegistry', skillRegistry);
+
+  // Cron scheduler
+  const cronService = new CronService({ squadDir });
+  cronService.setChatService(chatService);
+  app.decorate('cronService', cronService);
 
   // Knowledge search service
   const knowledgeSearch = new KnowledgeSearchService({ db });
@@ -256,6 +263,9 @@ export function buildApp(opts: AppOptions = {}) {
         timestamp: new Date().toISOString(),
       });
     });
+
+    // Start cron scheduler
+    cronService.start();
   });
 
   // Trace service for recording AI interactions
@@ -265,8 +275,9 @@ export function buildApp(opts: AppOptions = {}) {
   // Decorate Fastify instance with the SQLite database
   app.decorate('db', db);
 
-  // Shut down sandbox containers on app close
+  // Shut down sandbox containers and cron on app close
   app.addHook('onClose', async () => {
+    cronService.stop();
     await sandboxService.shutdown();
   });
 
@@ -287,6 +298,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(sandboxesRoute, { prefix: '/api' });
   app.register(tracesRoute, { prefix: '/api' });
   app.register(skillsRoute, { prefix: '/api' });
+  app.register(cronRoute, { prefix: '/api' });
   // Terminal route
   app.register(terminalRoute, { prefix: '/api' });
 

@@ -48,13 +48,17 @@ export interface TraceServiceLike {
     },
   ): void;
   failTrace(traceId: string, spanId: string, errorMessage: string): void;
-  addSubSpan?(traceId: string, parentSpanId: string, span: {
-    name: string;
-    kind: string;
-    startTime: number;
-    endTime?: number;
-    attributes?: Record<string, unknown>;
-  }): void;
+  addSubSpan?(
+    traceId: string,
+    parentSpanId: string,
+    span: {
+      name: string;
+      kind: string;
+      startTime: number;
+      endTime?: number;
+      attributes?: Record<string, unknown>;
+    },
+  ): void;
 }
 
 // -- Types -----------------------------------------------------------------
@@ -146,12 +150,22 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
   }> = [];
   private readonly traceService: TraceServiceLike | null;
 
+  // ── Model failover state ────────────────────────────────────
+  private readonly fallbackModel: string;
+  private consecutiveFailures = 0;
+  private readonly failoverThreshold = 3;
+  private usingFallback = false;
+  private fallbackSwitchTime = 0;
+  /** Cooldown before retrying primary model (5 minutes). */
+  private readonly primaryRetryCooldownMs = 5 * 60 * 1000;
+
   constructor(config: CopilotProviderConfig = {}) {
     this.config = {
       ...config,
       model: config.model ?? process.env.COPILOT_MODEL ?? 'claude-opus-4.6',
     };
     this.traceService = config.traceService ?? null;
+    this.fallbackModel = process.env.COPILOT_FALLBACK_MODEL ?? 'gpt-4o';
   }
 
   // -- Lifecycle -----------------------------------------------------------
@@ -255,8 +269,27 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     // Wait for a slot if at max concurrency
     await this.acquireSlot();
 
-    const model = options.model ?? this.config.model;
+    // ── Model failover logic ──────────────────────────────────
+    const requestedModel = options.model ?? this.config.model;
+    let model = requestedModel;
+
+    // If we're on fallback, check if cooldown has elapsed to try primary again
+    if (this.usingFallback && !options.model) {
+      const elapsed = Date.now() - this.fallbackSwitchTime;
+      if (elapsed >= this.primaryRetryCooldownMs) {
+        console.log(`[AI] Cooldown elapsed, retrying primary model: ${this.config.model}`);
+        this.usingFallback = false;
+        this.consecutiveFailures = 0;
+        model = this.config.model;
+      } else {
+        model = this.fallbackModel;
+      }
+    }
+
     const prompt = this.buildPrompt(options.messages, options.systemPrompt);
+
+    // ── Token estimation (rough: ~4 chars per token) ──────────
+    const promptTokensEstimate = Math.ceil(prompt.length / 4);
 
     // Start a DB trace record — use the OTel trace ID to avoid duplicates
     let traceIds: { traceId: string; spanId: string } | null = null;
@@ -284,6 +317,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     span.setAttribute('ai.task_title', options.taskTitle ?? '');
     span.setAttribute('ai.prompt', prompt);
     span.setAttribute('ai.system_prompt', options.systemPrompt ?? '');
+    span.setAttribute('ai.prompt_tokens_estimate', promptTokensEstimate);
 
     const sessionConfig: Record<string, unknown> = {
       model,
@@ -309,39 +343,80 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
         const sId = traceIds.spanId;
 
         // Always record session creation
-        addSub(tId, sId, { name: '🔌 Session created', kind: 'internal', startTime: sessionCreateStart, endTime: sessionCreateEnd });
+        addSub(tId, sId, {
+          name: '🔌 Session created',
+          kind: 'internal',
+          startTime: sessionCreateStart,
+          endTime: sessionCreateEnd,
+        });
 
         const eventListener = (event: { type: string; data?: Record<string, unknown> }) => {
           try {
             const now = Date.now();
             switch (event.type) {
               case 'intent':
-                addSub(tId, sId, { name: `🎯 ${event.data?.intent ?? 'analyzing'}`, kind: 'internal', startTime: now, attributes: event.data });
+                addSub(tId, sId, {
+                  name: `🎯 ${event.data?.intent ?? 'analyzing'}`,
+                  kind: 'internal',
+                  startTime: now,
+                  attributes: event.data,
+                });
                 break;
               case 'thinking':
-                addSub(tId, sId, { name: `🧠 ${((event.data?.content as string) ?? '').substring(0, 80)}`, kind: 'llm', startTime: now, attributes: event.data });
+                addSub(tId, sId, {
+                  name: `🧠 ${((event.data?.content as string) ?? '').substring(0, 80)}`,
+                  kind: 'llm',
+                  startTime: now,
+                  attributes: event.data,
+                });
                 break;
               case 'tool_start':
-                addSub(tId, sId, { name: `🔧 ${event.data?.name ?? 'tool'}`, kind: 'tool', startTime: now, attributes: event.data });
+                addSub(tId, sId, {
+                  name: `🔧 ${event.data?.name ?? 'tool'}`,
+                  kind: 'tool',
+                  startTime: now,
+                  attributes: event.data,
+                });
                 break;
               case 'info':
-                addSub(tId, sId, { name: `ℹ️ ${event.data?.message ?? ''}`, kind: 'internal', startTime: now, attributes: event.data });
+                addSub(tId, sId, {
+                  name: `ℹ️ ${event.data?.message ?? ''}`,
+                  kind: 'internal',
+                  startTime: now,
+                  attributes: event.data,
+                });
                 break;
               case 'progress':
                 // First delta = response started
                 addSub(tId, sId, { name: '📝 Generating response', kind: 'llm', startTime: now });
                 break;
             }
-          } catch { /* best effort */ }
+          } catch {
+            /* best effort */
+          }
         };
-        session.on('assistant.intent', (e: unknown) => eventListener({ type: 'intent', data: (e as { data?: Record<string, unknown> }).data }));
-        session.on('assistant.reasoning', (e: unknown) => eventListener({ type: 'thinking', data: (e as { data?: Record<string, unknown> }).data }));
-        session.on('tool.execution_start', (e: unknown) => eventListener({ type: 'tool_start', data: (e as { data?: Record<string, unknown> }).data }));
-        session.on('session.info', (e: unknown) => eventListener({ type: 'info', data: (e as { data?: Record<string, unknown> }).data }));
+        session.on('assistant.intent', (e: unknown) =>
+          eventListener({ type: 'intent', data: (e as { data?: Record<string, unknown> }).data }),
+        );
+        session.on('assistant.reasoning', (e: unknown) =>
+          eventListener({ type: 'thinking', data: (e as { data?: Record<string, unknown> }).data }),
+        );
+        session.on('tool.execution_start', (e: unknown) =>
+          eventListener({
+            type: 'tool_start',
+            data: (e as { data?: Record<string, unknown> }).data,
+          }),
+        );
+        session.on('session.info', (e: unknown) =>
+          eventListener({ type: 'info', data: (e as { data?: Record<string, unknown> }).data }),
+        );
         // Capture first message delta as "generating response"
         let firstDelta = true;
         session.on('assistant.message_delta', () => {
-          if (firstDelta) { firstDelta = false; eventListener({ type: 'progress' }); }
+          if (firstDelta) {
+            firstDelta = false;
+            eventListener({ type: 'progress' });
+          }
         });
       }
 
@@ -354,17 +429,26 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
         const content = await this.streamResponse(session, prompt, options.onChunk);
         this.logInteraction('stream-done', model, prompt, content);
         span.setAttribute('ai.response', content);
+        const completionTokensEstimate = Math.ceil(content.length / 4);
+        span.setAttribute('ai.completion_tokens_estimate', completionTokensEstimate);
+        this.recordSuccessFailover();
         try {
           if (this.traceService && traceIds) {
             this.traceService.completeTrace(traceIds.traceId, traceIds.spanId, {
               response: content,
               model,
+              promptTokens: promptTokensEstimate,
+              completionTokens: completionTokensEstimate,
             });
           }
         } catch {
           /* best effort */
         }
-        return { content, model };
+        return {
+          content,
+          model,
+          usage: { promptTokens: promptTokensEstimate, completionTokens: completionTokensEstimate },
+        };
       }
 
       // Retry sendAndWait on transient failures
@@ -386,22 +470,35 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
           const content = (result?.data?.content as string) ?? '';
           this.logInteraction('response', model, prompt, content);
           span.setAttribute('ai.response', content);
+          const completionTokensEstimate = Math.ceil(content.length / 4);
+          span.setAttribute('ai.completion_tokens_estimate', completionTokensEstimate);
+          this.recordSuccessFailover();
           try {
             if (this.traceService && traceIds) {
               this.traceService.completeTrace(traceIds.traceId, traceIds.spanId, {
                 response: content,
                 model,
+                promptTokens: promptTokensEstimate,
+                completionTokens: completionTokensEstimate,
               });
             }
           } catch {
             /* best effort */
           }
-          return { content, model };
+          return {
+            content,
+            model,
+            usage: {
+              promptTokens: promptTokensEstimate,
+              completionTokens: completionTokensEstimate,
+            },
+          };
         } catch (err) {
           lastError = err instanceof Error ? err : new Error(String(err));
           const msg = lastError.message;
           console.warn(`[AI] sendAndWait attempt ${attempt + 1} failed: ${msg}`);
           this.logInteraction('error', model, prompt, msg);
+          this.recordFailureFailover(model);
 
           const isTransient =
             msg.includes('fetch failed') ||
@@ -459,6 +556,31 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       next.resolve();
     } else {
       this.activeRequests--;
+    }
+  }
+
+  // ── Model failover helpers ─────────────────────────────────
+
+  /** Record a successful request — reset failover counters. */
+  private recordSuccessFailover(): void {
+    this.consecutiveFailures = 0;
+    // If we succeeded on the fallback, keep using it until cooldown elapses
+  }
+
+  /** Record a failed request — switch to fallback after threshold. */
+  private recordFailureFailover(currentModel: string): void {
+    this.consecutiveFailures++;
+
+    if (
+      this.consecutiveFailures >= this.failoverThreshold &&
+      !this.usingFallback &&
+      currentModel !== this.fallbackModel
+    ) {
+      console.warn(
+        `[AI] ${this.consecutiveFailures} consecutive failures on ${currentModel}, switching to fallback: ${this.fallbackModel}`,
+      );
+      this.usingFallback = true;
+      this.fallbackSwitchTime = Date.now();
     }
   }
 
