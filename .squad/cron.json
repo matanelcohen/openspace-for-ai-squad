@@ -7,7 +7,7 @@
       "action": "chat",
       "message": "Good morning team! Give me a status update on all in-progress tasks.",
       "channel": "team",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "nightly-tests",
@@ -16,7 +16,7 @@
       "action": "task",
       "title": "Run nightly test suite",
       "description": "Run all tests and report results to the team channel.",
-      "enabled": true
+      "enabled": false
     }
   ]
 }
