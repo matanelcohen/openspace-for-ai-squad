@@ -48,6 +48,13 @@ export interface TraceServiceLike {
     },
   ): void;
   failTrace(traceId: string, spanId: string, errorMessage: string): void;
+  addSubSpan?(traceId: string, parentSpanId: string, span: {
+    name: string;
+    kind: string;
+    startTime: number;
+    endTime?: number;
+    attributes?: Record<string, unknown>;
+  }): void;
 }
 
 // -- Types -----------------------------------------------------------------
@@ -292,6 +299,36 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     let session: CopilotSessionLike | null = null;
     try {
       session = await this.createSessionWithRetry(sessionConfig);
+
+      // Record sub-spans for AI events (thinking, tool calls, etc.)
+      if (this.traceService?.addSubSpan && traceIds) {
+        const addSub = this.traceService.addSubSpan.bind(this.traceService);
+        const tId = traceIds.traceId;
+        const sId = traceIds.spanId;
+        const eventListener = (event: { type: string; data?: Record<string, unknown> }) => {
+          try {
+            const now = Date.now();
+            switch (event.type) {
+              case 'intent':
+                addSub(tId, sId, { name: `🎯 ${event.data?.intent ?? 'analyzing'}`, kind: 'internal', startTime: now, attributes: event.data });
+                break;
+              case 'thinking':
+                addSub(tId, sId, { name: `🧠 ${((event.data?.content as string) ?? '').substring(0, 80)}`, kind: 'llm', startTime: now, attributes: event.data });
+                break;
+              case 'tool_start':
+                addSub(tId, sId, { name: `🔧 ${event.data?.name ?? 'tool'}`, kind: 'tool', startTime: now, attributes: event.data });
+                break;
+              case 'info':
+                addSub(tId, sId, { name: `ℹ️ ${event.data?.message ?? ''}`, kind: 'internal', startTime: now, attributes: event.data });
+                break;
+            }
+          } catch { /* best effort */ }
+        };
+        session.on('assistant.intent', (e: unknown) => eventListener({ type: 'intent', data: (e as { data?: Record<string, unknown> }).data }));
+        session.on('assistant.reasoning', (e: unknown) => eventListener({ type: 'thinking', data: (e as { data?: Record<string, unknown> }).data }));
+        session.on('tool.execution_start', (e: unknown) => eventListener({ type: 'tool_start', data: (e as { data?: Record<string, unknown> }).data }));
+        session.on('session.info', (e: unknown) => eventListener({ type: 'info', data: (e as { data?: Record<string, unknown> }).data }));
+      }
 
       if (options.onEvent) {
         this.attachEventListeners(session, options.onEvent);

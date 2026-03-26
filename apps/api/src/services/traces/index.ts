@@ -363,6 +363,36 @@ export class TraceService {
     this.refreshTraceAggregatesStmt.run({ id: traceId });
   }
 
+  /** Add a sub-span to an existing trace (for thinking, tool calls, etc.) */
+  addSubSpan(
+    traceId: string,
+    parentSpanId: string,
+    span: {
+      name: string;
+      kind: string;
+      startTime: number;
+      endTime?: number;
+      attributes?: Record<string, unknown>;
+    },
+  ): void {
+    const spanId = randomUUID();
+    const now = Date.now();
+    this.insertSpan.run({
+      id: spanId,
+      trace_id: traceId,
+      parent_span_id: parentSpanId,
+      name: span.name,
+      kind: span.kind,
+      status: 'success',
+      start_time: span.startTime,
+      end_time: span.endTime ?? now,
+      duration_ms: (span.endTime ?? now) - span.startTime,
+      attributes: JSON.stringify(span.attributes ?? {}),
+      events: '[]',
+    });
+    this.refreshTraceAggregatesStmt.run({ id: traceId });
+  }
+
   // ── Query methods ─────────────────────────────────────────────────
 
   /**
