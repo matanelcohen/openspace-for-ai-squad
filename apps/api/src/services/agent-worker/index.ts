@@ -16,7 +16,7 @@ import type { AIProvider } from '../ai/copilot-provider.js';
 import type { MemoryExtractor } from '../memory/memory-extractor.js';
 import type { MemoryRecallEngine } from '../memory/memory-recall.js';
 import type { MemoryStore } from '../memory/memory-store.js';
-import { getTask, updateTask } from '../squad-writer/task-writer.js';
+import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -307,6 +307,14 @@ export class AgentWorkerService {
 
       console.log(`[AgentWorker] ${agent.name} started: ${task.title}`);
 
+      // ── Lead delegation: break down task and assign to team ──
+      const isLead = agent.role.toLowerCase().includes('lead');
+      if (isLead) {
+        await this.handleLeadDelegation(agent, task, taskId);
+        return;
+      }
+
+      // ── Regular agent: execute the task directly ──
       // Collect progress events during execution
       const progressLog: string[] = [];
 
@@ -417,6 +425,130 @@ export class AgentWorkerService {
       }
       // Wait before picking next task to let resources settle
       setTimeout(() => this.processNext(agentId), 3000);
+    }
+  }
+
+  // ── Lead Delegation ──────────────────────────────────────────────
+
+  /**
+   * When a lead agent gets a task, they break it down into sub-tasks
+   * and assign them to the right team members instead of doing the work themselves.
+   */
+  private async handleLeadDelegation(
+    agent: AgentProfile,
+    task: Task,
+    taskId: string,
+  ): Promise<void> {
+    const now = () => new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const otherAgents = this.config.agents.filter(
+      (a) => a.id !== agent.id && !['scribe', 'ralph'].includes(a.id),
+    );
+    const agentList = otherAgents.map((a) => `- ${a.id}: ${a.name} (${a.role})`).join('\n');
+
+    try {
+      const result = await this.config.aiProvider.chatCompletion({
+        taskTitle: task.title,
+        agentId: agent.id,
+        systemPrompt:
+          `You are ${agent.name}, the Lead of the openspace.ai squad.\n` +
+          `Your job is to break down tasks and delegate to the right team members.\n\n` +
+          `Available team members:\n${agentList}\n\n` +
+          `Respond ONLY with valid JSON — an array of sub-tasks:\n` +
+          `[{"title": "...", "description": "...", "assignee": "agent_id"}]\n\n` +
+          `Rules:\n` +
+          `- Break the task into 2-5 focused sub-tasks\n` +
+          `- Assign frontend work to the Frontend Dev\n` +
+          `- Assign backend/API work to the Backend Dev\n` +
+          `- Assign testing to the Tester\n` +
+          `- Each sub-task should be specific and actionable\n` +
+          `- Output ONLY the JSON array, nothing else`,
+        messages: [
+          {
+            role: 'user',
+            content: `Break down this task and assign to team:\n\nTitle: ${task.title}\nDescription: ${task.description || '(none)'}\nPriority: ${task.priority}`,
+          },
+        ],
+      });
+
+      // Parse sub-tasks from AI response
+      let subTasks: Array<{ title: string; description: string; assignee: string }> = [];
+      try {
+        const jsonMatch = result.content.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          subTasks = JSON.parse(jsonMatch[0]);
+        }
+      } catch {
+        console.error(`[AgentWorker] ${agent.name} failed to parse sub-tasks JSON`);
+      }
+
+      if (subTasks.length === 0) {
+        // Fallback: couldn't break down, mark done with the AI's response
+        await updateTask(this.config.tasksDir, taskId, {
+          status: 'done',
+          description:
+            task.description +
+            `\n\n---\n**[${now()}]** 📋 ${agent.name} analyzed this task but couldn't break it down.\n\n**Analysis:**\n${result.content}`,
+        });
+        this.broadcastTaskUpdate(taskId, 'done');
+        return;
+      }
+
+      // Create sub-tasks and enqueue them
+      const createdSubTasks: string[] = [];
+      for (const sub of subTasks) {
+        const validAssignee = otherAgents.find((a) => a.id === sub.assignee);
+        if (!validAssignee) continue;
+
+        const subTask = await createTask(this.config.tasksDir, {
+          title: sub.title,
+          description: sub.description,
+          priority: task.priority,
+          assignee: sub.assignee,
+          status: 'backlog',
+          labels: [`parent:${taskId}`],
+        });
+
+        this.enqueue(subTask);
+        createdSubTasks.push(`- **${sub.title}** → ${validAssignee.name} (${validAssignee.role})`);
+        this.broadcastTaskUpdate(subTask.id, 'backlog');
+
+        console.log(`[AgentWorker] ${agent.name} delegated "${sub.title}" to ${validAssignee.name}`);
+      }
+
+      // Mark parent task as done with delegation summary
+      const summary = createdSubTasks.join('\n');
+      await updateTask(this.config.tasksDir, taskId, {
+        status: 'done',
+        description:
+          task.description +
+          `\n\n---\n**[${now()}]** 📋 ${agent.name} broke this task into ${createdSubTasks.length} sub-tasks:\n\n${summary}\n\n**[${now()}]** ✅ Delegation complete.`,
+      });
+      this.broadcastTaskUpdate(taskId, 'done');
+      this.emitActivity(
+        agent.id,
+        'completed',
+        `Delegated: ${task.title} → ${createdSubTasks.length} sub-tasks`,
+      );
+
+      console.log(`[AgentWorker] ${agent.name} delegated ${createdSubTasks.length} sub-tasks for: ${task.title}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(`[AgentWorker] ${agent.name} delegation failed:`, message);
+
+      await updateTask(this.config.tasksDir, taskId, {
+        status: 'blocked',
+        description:
+          task.description +
+          `\n\n---\n**[${now()}]** ❌ ${agent.name} failed to delegate.\n\n**Error:** ${message}`,
+      });
+      this.broadcastTaskUpdate(taskId, 'blocked');
+    } finally {
+      this.activeTask.delete(agent.id);
+      this.persistQueue();
+      if ((this.queues.get(agent.id)?.length ?? 0) === 0) {
+        this.broadcastAgentIdle(agent.id);
+      }
+      setTimeout(() => this.processNext(agent.id), 3000);
     }
   }
 
