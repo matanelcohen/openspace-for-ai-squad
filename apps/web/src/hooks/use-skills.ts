@@ -275,7 +275,7 @@ export interface ImportSkillsResponse {
 export function useScanGitHubSkills() {
   return useMutation({
     mutationFn: (url: string) =>
-      api.post<ScanGitHubSkillsResponse>('/api/skills/import/scan', { url }),
+      api.post<ScanGitHubSkillsResponse>('/api/skills-import/scan', { url }),
   });
 }
 
@@ -285,7 +285,7 @@ export function useImportSkills() {
     mutationFn: (payload: {
       source: { owner: string; repo: string; ref?: string };
       skills: Array<{ id: string; path: string }>;
-    }) => api.post<ImportSkillsResponse>('/api/skills/import', payload),
+    }) => api.post<ImportSkillsResponse>('/api/skills-import', payload),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['skills'] });
     },

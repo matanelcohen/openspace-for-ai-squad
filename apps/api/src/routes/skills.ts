@@ -584,7 +584,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
   // ── GitHub Import Routes ──────────────────────────────────────
 
   // POST /api/skills/import/scan — scan a GitHub URL for importable skills
-  app.post<{ Body: { url: string } }>('/skills/import/scan', async (request, reply) => {
+  app.post<{ Body: { url: string } }>('/skills-import/scan', async (request, reply) => {
     const { url } = (request.body as { url?: string }) ?? {};
     if (!url || typeof url !== 'string') {
       return sendError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Missing required field: url');
@@ -676,7 +676,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       source: { owner: string; repo: string; ref?: string };
       skills: Array<{ id: string; path: string }>;
     };
-  }>('/skills/import', async (request, reply) => {
+  }>('/skills-import', async (request, reply) => {
     const registry = app.skillRegistry;
     if (!registry) {
       return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
