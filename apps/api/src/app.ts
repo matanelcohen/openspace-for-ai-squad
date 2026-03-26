@@ -278,8 +278,8 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(teamMembersRoute, { prefix: '/api' });
   app.register(sandboxesRoute, { prefix: '/api' });
   app.register(tracesRoute, { prefix: '/api' });
-  // Terminal route disabled — node-pty native build broken on this Node version
-  // app.register(terminalRoute, { prefix: '/api' });
+  // Terminal route
+  app.register(terminalRoute, { prefix: '/api' });
 
   app.setErrorHandler((error, request, reply) => {
     const statusCode = (error as { statusCode?: number }).statusCode ?? 500;
