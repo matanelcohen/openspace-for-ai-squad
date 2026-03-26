@@ -465,4 +465,15 @@ export class TraceService {
       errorRate: row.total_traces > 0 ? row.error_count / row.total_traces : 0,
     };
   }
+
+  /** Delete all traces and spans. */
+  clearAll(): void {
+    this.db.exec('DELETE FROM spans; DELETE FROM traces;');
+  }
+
+  /** Delete a single trace and its spans. */
+  deleteTrace(traceId: string): void {
+    this.db.prepare('DELETE FROM spans WHERE trace_id = ?').run(traceId);
+    this.db.prepare('DELETE FROM traces WHERE id = ?').run(traceId);
+  }
 }

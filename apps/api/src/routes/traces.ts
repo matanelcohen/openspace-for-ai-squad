@@ -202,6 +202,18 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
       rootSpan,
     });
   });
+
+  // DELETE /api/traces — clear all traces
+  app.delete('/traces', async (_request, reply) => {
+    app.traceService.clearAll();
+    return reply.send({ message: 'All traces cleared' });
+  });
+
+  // DELETE /api/traces/:id — delete a single trace
+  app.delete<{ Params: { id: string } }>('/traces/:id', async (request, reply) => {
+    app.traceService.deleteTrace(request.params.id);
+    return reply.send({ message: 'Trace deleted' });
+  });
 };
 
 export default tracesRoute;
