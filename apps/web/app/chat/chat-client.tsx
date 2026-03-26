@@ -30,7 +30,7 @@ import {
   useDeleteChannel,
   useUpdateChannel,
 } from '@/hooks/use-channels';
-import { useChatMessages, useClearChat, useSendMessage } from '@/hooks/use-chat';
+import { useChatMessages, useClearChat, useSendMessage, useTypingIndicator } from '@/hooks/use-chat';
 import { useVoiceSession } from '@/hooks/use-voice-session';
 
 export function ChatClient() {
@@ -50,6 +50,7 @@ export function ChatClient() {
   const { error: fetchError } = useChatMessages(selectedChannel);
   const sendMessage = useSendMessage();
   const clearChat = useClearChat();
+  const typingAgents = useTypingIndicator();
   const runtime = useAssistantRuntime(selectedChannel);
   const voice = useVoiceSession();
 
@@ -166,6 +167,7 @@ export function ChatClient() {
             onClearChat={(channel) => clearChat.mutate(channel)}
             onClearAllChats={() => clearChat.mutate(undefined)}
             isClearingChat={clearChat.isPending}
+            typingAgents={typingAgents}
             channels={channels}
             onCreateChannel={handleCreateChannel}
             onEditChannel={handleEditChannel}

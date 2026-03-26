@@ -34,6 +34,8 @@ interface ChatSidebarProps {
   onClearChat?: (channel: string) => void;
   onClearAllChats?: () => void;
   isClearingChat?: boolean;
+  /** Which agents are currently typing */
+  typingAgents?: Map<string, string>;
   /** Custom channels */
   channels?: ChatChannel[];
   onCreateChannel?: () => void;
@@ -48,6 +50,7 @@ export function ChatSidebar({
   onClearChat,
   onClearAllChats,
   isClearingChat,
+  typingAgents,
   channels = [],
   onCreateChannel,
   onEditChannel,
@@ -162,7 +165,18 @@ export function ChatSidebar({
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium">Team</div>
-            <div className="truncate text-xs text-muted-foreground">All agents</div>
+            {typingAgents && typingAgents.size > 0 ? (
+              <div className="flex items-center gap-1 text-xs text-primary">
+                <span>{Array.from(typingAgents.values()).join(', ')}</span>
+                <span className="inline-flex gap-0.5">
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
+                  <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:300ms]" />
+                </span>
+              </div>
+            ) : (
+              <div className="truncate text-xs text-muted-foreground">All agents</div>
+            )}
           </div>
         </button>
 
@@ -290,7 +304,18 @@ export function ChatSidebar({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{agent.name}</div>
-                <div className="truncate text-xs text-muted-foreground">{agent.role}</div>
+                {typingAgents?.has(agent.id) ? (
+                  <div className="flex items-center gap-1 text-xs text-primary">
+                    <span>typing</span>
+                    <span className="inline-flex gap-0.5">
+                      <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:0ms]" />
+                      <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:150ms]" />
+                      <span className="h-1 w-1 animate-bounce rounded-full bg-primary [animation-delay:300ms]" />
+                    </span>
+                  </div>
+                ) : (
+                  <div className="truncate text-xs text-muted-foreground">{agent.role}</div>
+                )}
               </div>
             </button>
           ))}

@@ -66,6 +66,7 @@ export function useChatMessages(recipient: string) {
         return updated;
       });
     }
+    }
   });
 
   // Listen for chat:cleared events from other clients so every tab stays in sync
@@ -159,6 +160,21 @@ export function useClearChat() {
 /** Track which agents are currently typing via WebSocket events. */
 export function useTypingIndicator() {
   const [typingAgents, setTypingAgents] = useState<Map<string, string>>(new Map());
+
+  // Clear typing when agent's message arrives
+  useWsEvent(
+    'chat:message',
+    useCallback((envelope: WsEnvelope) => {
+      const msg = envelope.payload as unknown as ChatMessage;
+      if (!msg?.sender || msg.sender === 'user') return;
+      setTypingAgents((prev) => {
+        if (!prev.has(msg.sender)) return prev;
+        const next = new Map(prev);
+        next.delete(msg.sender);
+        return next;
+      });
+    }, []),
+  );
 
   useWsEvent(
     'chat:typing',
