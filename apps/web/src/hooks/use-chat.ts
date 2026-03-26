@@ -66,7 +66,6 @@ export function useChatMessages(recipient: string) {
         return updated;
       });
     }
-    }
   });
 
   // Listen for chat:cleared events from other clients so every tab stays in sync
