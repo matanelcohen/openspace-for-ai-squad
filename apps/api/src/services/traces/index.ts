@@ -70,6 +70,10 @@ export class TraceService {
   private readonly selectTraceById: Database.Statement;
   private readonly selectSpansByTrace: Database.Statement;
   private readonly selectTraceStats: Database.Statement;
+  // OTLP collector statements
+  private readonly insertTraceIfNotExists: Database.Statement;
+  private readonly upsertSpanStmt: Database.Statement;
+  private readonly refreshTraceAggregatesStmt: Database.Statement;
 
   constructor(private readonly db: Database.Database) {
     this.insertTrace = db.prepare(`
@@ -133,6 +137,58 @@ export class TraceService {
         COALESCE(SUM(total_tokens), 0) as total_tokens,
         COALESCE(SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END), 0) as error_count
       FROM traces
+    `);
+
+    // ── OTLP collector statements ──────────────────────────────────
+    this.insertTraceIfNotExists = db.prepare(`
+      INSERT OR IGNORE INTO traces
+        (id, root_span_name, agent_name, status, start_time, end_time, duration_ms,
+         span_count, total_tokens, prompt_tokens, completion_tokens, cost_usd,
+         error_message, created_at)
+      VALUES
+        (@id, @root_span_name, @agent_name, 'pending', @start_time, NULL, NULL,
+         0, 0, 0, 0, 0, NULL, @created_at)
+    `);
+
+    this.upsertSpanStmt = db.prepare(`
+      INSERT INTO spans (id, trace_id, parent_span_id, name, kind, status,
+        start_time, end_time, duration_ms, attributes, events)
+      VALUES (@id, @trace_id, @parent_span_id, @name, @kind, @status,
+        @start_time, @end_time, @duration_ms, @attributes, @events)
+      ON CONFLICT(id) DO UPDATE SET
+        name       = @name,
+        status     = @status,
+        end_time   = @end_time,
+        duration_ms= @duration_ms,
+        attributes = @attributes,
+        events     = @events
+    `);
+
+    this.refreshTraceAggregatesStmt = db.prepare(`
+      UPDATE traces SET
+        span_count  = (SELECT COUNT(*) FROM spans WHERE trace_id = @id),
+        start_time  = COALESCE(
+          (SELECT MIN(start_time) FROM spans WHERE trace_id = @id),
+          traces.start_time
+        ),
+        end_time    = (SELECT MAX(end_time) FROM spans WHERE trace_id = @id),
+        duration_ms = CASE
+          WHEN (SELECT MAX(end_time) FROM spans WHERE trace_id = @id) IS NOT NULL
+          THEN (SELECT MAX(end_time) FROM spans WHERE trace_id = @id)
+             - COALESCE(
+                 (SELECT MIN(start_time) FROM spans WHERE trace_id = @id),
+                 traces.start_time
+               )
+          ELSE traces.duration_ms
+        END,
+        status = CASE
+          WHEN (SELECT COUNT(*) FROM spans WHERE trace_id = @id AND status = 'error') > 0
+          THEN 'error'
+          WHEN (SELECT COUNT(*) FROM spans WHERE trace_id = @id AND (end_time IS NULL OR status = 'pending')) > 0
+          THEN 'pending'
+          ELSE 'completed'
+        END
+      WHERE id = @id
     `);
   }
 
@@ -266,6 +322,43 @@ export class TraceService {
       duration_ms: durationMs,
       attributes: JSON.stringify(existingAttrs),
     });
+  }
+
+  // ── OTLP ingestion methods ─────────────────────────────────────
+
+  /**
+   * Create a trace row if one does not already exist for this traceId.
+   * Called by the OTLP collector before inserting spans.
+   */
+  ensureTrace(input: {
+    traceId: string;
+    spanName: string;
+    startTime: number;
+    agentName: string | null;
+  }): void {
+    this.insertTraceIfNotExists.run({
+      id: input.traceId,
+      root_span_name: input.spanName,
+      agent_name: input.agentName,
+      start_time: input.startTime,
+      created_at: new Date(input.startTime).toISOString(),
+    });
+  }
+
+  /**
+   * Insert or update a span from OTLP data. Upserts so re-delivered
+   * spans are handled gracefully.
+   */
+  upsertSpan(span: SpanRecord): void {
+    this.upsertSpanStmt.run(span);
+  }
+
+  /**
+   * Recalculate trace-level aggregates (span_count, duration, status)
+   * from the current set of child spans.
+   */
+  refreshTraceAggregates(traceId: string): void {
+    this.refreshTraceAggregatesStmt.run({ id: traceId });
   }
 
   // ── Query methods ─────────────────────────────────────────────────

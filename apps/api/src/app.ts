@@ -14,6 +14,7 @@ import chatRoute from './routes/chat.js';
 import decisionsRoute from './routes/decisions.js';
 import healthRoute from './routes/health.js';
 import knowledgeRoute from './routes/knowledge.js';
+import otlpCollectorRoute from './routes/otlp-collector.js';
 import sandboxesRoute from './routes/sandboxes.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
@@ -263,6 +264,7 @@ export function buildApp(opts: AppOptions = {}) {
   // Routes
   app.register(healthRoute);
   app.register(a2aRoute);
+  app.register(otlpCollectorRoute); // OTLP collector at /v1/traces (no prefix)
   app.register(agentsRoute, { prefix: '/api' });
   app.register(tasksRoute, { prefix: '/api' });
   app.register(decisionsRoute, { prefix: '/api' });

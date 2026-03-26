@@ -166,7 +166,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
 
       const clientOpts: Record<string, unknown> = {
         autoStart: false,
-        otlpEndpoint: process.env.COPILOT_OTLP_ENDPOINT ?? 'http://localhost:4318',
+        otlpEndpoint:
+          process.env.COPILOT_OTLP_ENDPOINT ?? `http://localhost:${process.env.API_PORT ?? 3001}`,
       };
       if (token) clientOpts.githubToken = token;
       if (cliUrl) {
