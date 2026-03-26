@@ -2,7 +2,7 @@ const STORAGE_KEY = 'openspace:notifications';
 
 export interface Notification {
   id: string;
-  type: 'task_failure' | 'task_blocked' | 'agent_failed' | 'decision_added';
+  type: 'task_failure' | 'task_blocked' | 'agent_failed' | 'decision_added' | 'chat_message';
   title: string;
   description: string;
   agentId: string | null;
@@ -88,6 +88,19 @@ export function createNotificationFromEvent(
       timestamp,
       read: false,
       relatedEntityId: null,
+    };
+  }
+
+  if (type === 'chat:message' && payload.sender !== 'user') {
+    return {
+      id: generateId(),
+      type: 'chat_message',
+      title: `${payload.sender as string} sent a message`,
+      description: ((payload.content as string) ?? '').substring(0, 80),
+      agentId: (payload.sender as string) ?? null,
+      timestamp,
+      read: false,
+      relatedEntityId: (payload.recipient as string) ?? null,
     };
   }
 

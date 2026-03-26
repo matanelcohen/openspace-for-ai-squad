@@ -36,6 +36,8 @@ interface ChatSidebarProps {
   isClearingChat?: boolean;
   /** Which agents are currently typing */
   typingAgents?: Map<string, { name: string; recipient: string }>;
+  /** Unread message counts per channel */
+  unreadCounts?: Map<string, number>;
   /** Custom channels */
   channels?: ChatChannel[];
   onCreateChannel?: () => void;
@@ -51,6 +53,7 @@ export function ChatSidebar({
   onClearAllChats,
   isClearingChat,
   typingAgents,
+  unreadCounts,
   channels = [],
   onCreateChannel,
   onEditChannel,
@@ -164,7 +167,14 @@ export function ChatSidebar({
             👥
           </div>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">Team</div>
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-medium">Team</span>
+              {(unreadCounts?.get('team') ?? 0) > 0 && (
+                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                  {unreadCounts!.get('team')}
+                </span>
+              )}
+            </div>
             {(() => {
               const teamTyping = typingAgents ? Array.from(typingAgents.entries()).filter(([, info]) => info.recipient === 'team') : [];
               return teamTyping.length > 0 ? (
@@ -306,7 +316,14 @@ export function ChatSidebar({
                 />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">{agent.name}</div>
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-sm font-medium">{agent.name}</span>
+                  {(unreadCounts?.get(agent.id) ?? 0) > 0 && (
+                    <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                      {unreadCounts!.get(agent.id)}
+                    </span>
+                  )}
+                </div>
                 {typingAgents?.has(agent.id) && typingAgents.get(agent.id)?.recipient === agent.id ? (
                   <div className="flex items-center gap-1 text-xs text-primary">
                     <span>typing</span>

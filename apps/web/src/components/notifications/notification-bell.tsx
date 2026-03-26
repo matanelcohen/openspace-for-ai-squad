@@ -1,6 +1,6 @@
 'use client';
 
-import { AlertTriangle, Ban, Bell, BotOff, Lightbulb, Trash2 } from 'lucide-react';
+import { AlertTriangle, Ban, Bell, BotOff, Lightbulb, MessageSquare, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -26,6 +26,8 @@ function getNotificationIcon(type: Notification['type']) {
       return <BotOff className="h-4 w-4 text-destructive" />;
     case 'decision_added':
       return <Lightbulb className="h-4 w-4 text-blue-500" />;
+    case 'chat_message':
+      return <MessageSquare className="h-4 w-4 text-green-500" />;
   }
 }
 

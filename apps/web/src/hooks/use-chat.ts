@@ -207,3 +207,48 @@ export function useTypingIndicator() {
 
   return typingAgents;
 }
+
+/** Track unread message counts per channel. */
+export function useUnreadCounts(currentChannel: string) {
+  const [unread, setUnread] = useState<Map<string, number>>(new Map());
+
+  // Increment unread when a message arrives for a channel we're not viewing
+  useWsEvent(
+    'chat:message',
+    useCallback(
+      (envelope: WsEnvelope) => {
+        const msg = envelope.payload as unknown as ChatMessage;
+        if (!msg?.id || msg.sender === 'user') return;
+
+        // Determine the channel key for this message
+        const channelKey =
+          msg.recipient === 'team'
+            ? 'team'
+            : msg.sender === 'user'
+              ? msg.recipient
+              : msg.sender;
+
+        // Only count as unread if we're NOT viewing this channel
+        if (channelKey === currentChannel) return;
+
+        setUnread((prev) => {
+          const next = new Map(prev);
+          next.set(channelKey, (next.get(channelKey) ?? 0) + 1);
+          return next;
+        });
+      },
+      [currentChannel],
+    ),
+  );
+
+  const clearUnread = useCallback((channel: string) => {
+    setUnread((prev) => {
+      if (!prev.has(channel)) return prev;
+      const next = new Map(prev);
+      next.delete(channel);
+      return next;
+    });
+  }, []);
+
+  return { unread, clearUnread };
+}
