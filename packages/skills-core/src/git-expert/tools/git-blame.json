@@ -1,0 +1,58 @@
+{
+  "id": "git:blame",
+  "name": "Git Blame",
+  "description": "Trace line-level authorship for a file, showing who last modified each line and when. Useful for understanding code ownership and change history.",
+  "version": "1.0.0",
+  "tags": ["code-analysis"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "path",
+        "type": "string",
+        "description": "File path to blame (relative to repo root)",
+        "required": true
+      },
+      {
+        "name": "lineRange",
+        "type": "object",
+        "description": "Restrict blame to a line range",
+        "required": false,
+        "properties": [
+          {
+            "name": "start",
+            "type": "number",
+            "description": "Start line (1-indexed)",
+            "required": true
+          },
+          {
+            "name": "end",
+            "type": "number",
+            "description": "End line (inclusive)",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "rev",
+        "type": "string",
+        "description": "Blame at a specific revision instead of HEAD",
+        "required": false
+      },
+      {
+        "name": "ignoreRevs",
+        "type": "array",
+        "description": "Commits to ignore (e.g. bulk formatting changes)",
+        "required": false,
+        "items": {
+          "name": "sha",
+          "type": "string",
+          "description": "Commit SHA to ignore",
+          "required": true
+        }
+      }
+    ]
+  },
+  "outputDescription": "Per-line blame data: {line, sha, author, date, content} for each line in the range.",
+  "isEnabled": true,
+  "author": "openspace"
+}

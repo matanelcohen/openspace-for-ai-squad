@@ -4,6 +4,15 @@
  */
 
 import type {
+  A2AConflictResolutionStrategy,
+  A2ADelegationOutcome,
+  A2AHandoffReason,
+  A2AMessagePriority,
+  A2AMessageStatus,
+  A2AMessageType,
+  A2ANegotiationPhase,
+  A2AProgressStatus,
+  A2ARoutingStrategy,
   ActivityEventType,
   AgentStatus,
   TaskPriority,
@@ -102,6 +111,9 @@ export type AgentRole = (typeof AGENT_ROLES)[number];
 /** Special recipient value meaning "send to the whole team". */
 export const CHAT_TEAM_RECIPIENT = 'team' as const;
 
+/** Prefix for channel recipient values (e.g., "channel:abc123"). */
+export const CHAT_CHANNEL_PREFIX = 'channel:' as const;
+
 // ---------------------------------------------------------------------------
 // Team member statuses
 // ---------------------------------------------------------------------------
@@ -139,17 +151,54 @@ export const TEAM_MEMBER_RANK_LABELS: Record<TeamMemberRank, string> = {
 };
 
 // ---------------------------------------------------------------------------
+// Sandbox statuses & runtimes
+// ---------------------------------------------------------------------------
+
+export const SANDBOX_STATUSES = [
+  'creating',
+  'running',
+  'stopped',
+  'error',
+  'destroying',
+] as const satisfies readonly SandboxStatus[];
+
+export const SANDBOX_STATUS_LABELS: Record<SandboxStatus, string> = {
+  creating: 'Creating',
+  running: 'Running',
+  stopped: 'Stopped',
+  error: 'Error',
+  destroying: 'Destroying',
+};
+
+export const SANDBOX_RUNTIMES = ['node', 'python', 'go'] as const satisfies readonly SandboxRuntime[];
+
+export const SANDBOX_RUNTIME_LABELS: Record<SandboxRuntime, string> = {
+  node: 'Node.js',
+  python: 'Python',
+  go: 'Go',
+};
+
+export const SANDBOX_RUNTIME_IMAGES: Record<SandboxRuntime, string> = {
+  node: 'node:20-slim',
+  python: 'python:3.12-slim',
+  go: 'golang:1.22-alpine',
+};
+
+// ---------------------------------------------------------------------------
 // Common departments
 // ---------------------------------------------------------------------------
 
 export const DEPARTMENTS = [
   'Engineering',
+  'Leadership',
+  'Quality Assurance',
+  'Documentation',
+  'Operations',
   'Design',
   'Product',
-  'QA',
   'DevOps',
   'Data',
-  'Management',
+  'General',
 ] as const;
 
 export type Department = (typeof DEPARTMENTS)[number];

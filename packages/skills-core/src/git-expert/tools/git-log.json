@@ -1,0 +1,72 @@
+{
+  "id": "git:log",
+  "name": "Git Log",
+  "description": "Query commit history with flexible filtering by author, date range, paths, and message patterns. Returns structured commit metadata.",
+  "version": "1.0.0",
+  "tags": ["code-analysis"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "ref",
+        "type": "string",
+        "description": "Starting ref (branch, tag, SHA). Defaults to HEAD.",
+        "required": false,
+        "default": "HEAD"
+      },
+      {
+        "name": "maxCount",
+        "type": "number",
+        "description": "Maximum number of commits to return",
+        "required": false,
+        "default": 20
+      },
+      {
+        "name": "author",
+        "type": "string",
+        "description": "Filter by author name or email pattern",
+        "required": false
+      },
+      {
+        "name": "since",
+        "type": "string",
+        "description": "Only commits after this date (e.g. '2024-01-01', '2 weeks ago')",
+        "required": false
+      },
+      {
+        "name": "until",
+        "type": "string",
+        "description": "Only commits before this date",
+        "required": false
+      },
+      {
+        "name": "grep",
+        "type": "string",
+        "description": "Filter commits whose message matches this pattern",
+        "required": false
+      },
+      {
+        "name": "paths",
+        "type": "array",
+        "description": "Only commits touching these paths",
+        "required": false,
+        "items": {
+          "name": "path",
+          "type": "string",
+          "description": "File path or glob",
+          "required": true
+        }
+      },
+      {
+        "name": "format",
+        "type": "string",
+        "description": "Output format: 'oneline', 'short', 'full', 'json'",
+        "required": false,
+        "default": "json",
+        "enum": ["oneline", "short", "full", "json"]
+      }
+    ]
+  },
+  "outputDescription": "List of commits. In JSON format: array of {sha, author, date, message, files}. Other formats return git's native output.",
+  "isEnabled": true,
+  "author": "openspace"
+}

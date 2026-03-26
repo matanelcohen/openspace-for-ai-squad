@@ -30,6 +30,7 @@ title: Build auth endpoint
 status: in-progress
 priority: P1
 assignee: bender
+assigneeType: agent
 labels: [backend, auth]
 created: 2026-03-23T21:00:00Z
 updated: 2026-03-23T21:30:00Z
@@ -56,6 +57,7 @@ describe('parseTaskFile', () => {
       status: 'in-progress',
       priority: 'P1',
       assignee: 'bender',
+      assigneeType: 'agent',
       labels: ['backend', 'auth'],
       createdAt: '2026-03-23T21:00:00.000Z',
       updatedAt: '2026-03-23T21:30:00.000Z',
@@ -111,6 +113,46 @@ Body.
 `;
     const { task } = parseTaskFile(content, 'test.md');
     expect(task.assignee).toBeNull();
+  });
+
+  it('defaults assigneeType to agent when missing', () => {
+    const content = `---
+id: task-x
+title: No assigneeType
+assignee: someone
+---
+
+Body.
+`;
+    const { task } = parseTaskFile(content, 'test.md');
+    expect(task.assigneeType).toBe('agent');
+  });
+
+  it('accepts assigneeType member', () => {
+    const content = `---
+id: task-x
+title: Member task
+assignee: alice
+assigneeType: member
+---
+
+Body.
+`;
+    const { task } = parseTaskFile(content, 'test.md');
+    expect(task.assigneeType).toBe('member');
+  });
+
+  it('defaults assigneeType to agent for invalid value', () => {
+    const content = `---
+id: task-x
+title: Bad assigneeType
+assigneeType: robot
+---
+
+Body.
+`;
+    const { task } = parseTaskFile(content, 'test.md');
+    expect(task.assigneeType).toBe('agent');
   });
 
   it('handles empty labels', () => {
@@ -241,6 +283,7 @@ describe('parseAllTasks', () => {
       `---
 id: task-002
 title: Another task
+assigneeType: member
 sortIndex: 1
 ---
 

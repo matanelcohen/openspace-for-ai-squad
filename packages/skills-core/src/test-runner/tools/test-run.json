@@ -1,0 +1,55 @@
+{
+  "id": "test:run",
+  "name": "Test Run",
+  "description": "Run tests using the project's configured framework. Returns structured results with pass/fail/skip counts and failure details.",
+  "version": "1.0.0",
+  "tags": ["testing"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "target",
+        "type": "string",
+        "description": "What to run: a file path, test name pattern, or 'all'. Defaults to 'all'.",
+        "required": false,
+        "default": "all"
+      },
+      {
+        "name": "filter",
+        "type": "string",
+        "description": "Filter tests by name pattern (passed to framework's --grep or -t flag)",
+        "required": false
+      },
+      {
+        "name": "watch",
+        "type": "boolean",
+        "description": "Run in watch mode (re-run on file changes)",
+        "required": false,
+        "default": false
+      },
+      {
+        "name": "coverage",
+        "type": "boolean",
+        "description": "Collect code coverage data",
+        "required": false,
+        "default": false
+      },
+      {
+        "name": "bail",
+        "type": "boolean",
+        "description": "Stop on first failure",
+        "required": false,
+        "default": false
+      },
+      {
+        "name": "verbose",
+        "type": "boolean",
+        "description": "Include full test names and timing in output",
+        "required": false,
+        "default": true
+      }
+    ]
+  },
+  "outputDescription": "Object with {passed, failed, skipped, total, duration, failures: [{testName, file, error, stackTrace}], coverage?: {lines, branches, functions, statements}}.",
+  "isEnabled": true,
+  "author": "openspace"
+}

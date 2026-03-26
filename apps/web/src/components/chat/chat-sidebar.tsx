@@ -1,7 +1,7 @@
 'use client';
 
-import type { Agent } from '@openspace/shared';
-import { Trash2 } from 'lucide-react';
+import type { Agent, ChatChannel } from '@openspace/shared';
+import { Hash, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';
@@ -34,6 +34,11 @@ interface ChatSidebarProps {
   onClearChat?: (channel: string) => void;
   onClearAllChats?: () => void;
   isClearingChat?: boolean;
+  /** Custom channels */
+  channels?: ChatChannel[];
+  onCreateChannel?: () => void;
+  onEditChannel?: (channel: ChatChannel) => void;
+  onDeleteChannel?: (channel: ChatChannel) => void;
 }
 
 export function ChatSidebar({
@@ -43,6 +48,10 @@ export function ChatSidebar({
   onClearChat,
   onClearAllChats,
   isClearingChat,
+  channels = [],
+  onCreateChannel,
+  onEditChannel,
+  onDeleteChannel,
 }: ChatSidebarProps) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [clearTarget, setClearTarget] = useState<ClearTarget>('current');
@@ -50,7 +59,9 @@ export function ChatSidebar({
   const channelLabel =
     selectedChannel === 'team'
       ? 'Team'
-      : (agents.find((a) => a.id === selectedChannel)?.name ?? selectedChannel);
+      : (agents.find((a) => a.id === selectedChannel)?.name ??
+        channels.find((c) => `channel:${c.id}` === selectedChannel)?.name ??
+        selectedChannel);
 
   const handleClearRequest = (target: ClearTarget) => {
     setClearTarget(target);
@@ -155,35 +166,135 @@ export function ChatSidebar({
           </div>
         </button>
 
-        {/* Agent channels */}
-        {agents.map((agent) => (
-          <button
-            type="button"
-            key={agent.id}
-            className={cn(
-              'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-accent',
-              selectedChannel === agent.id && 'bg-accent',
-            )}
-            onClick={() => onSelectChannel(agent.id)}
-            data-testid={`channel-${agent.id}`}
-            aria-selected={selectedChannel === agent.id}
-          >
-            <div className="relative">
-              <AgentAvatar agentId={agent.id} name={agent.name} size="sm" />
-              <span
-                className={cn(
-                  'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background',
-                  agent.status === 'active' ? 'bg-green-500' : 'bg-muted-foreground/40',
-                )}
-                data-testid={`status-${agent.id}`}
-              />
+        {/* Custom channels section */}
+        {(channels.length > 0 || onCreateChannel) && (
+          <div className="mt-1">
+            <div className="flex items-center justify-between px-3 py-1.5">
+              <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Channels
+              </span>
+              {onCreateChannel && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5"
+                  onClick={onCreateChannel}
+                  aria-label="Create channel"
+                  data-testid="create-channel-btn"
+                >
+                  <Plus className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
+              )}
             </div>
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{agent.name}</div>
-              <div className="truncate text-xs text-muted-foreground">{agent.role}</div>
-            </div>
-          </button>
-        ))}
+            {channels.map((channel) => {
+              const channelKey = `channel:${channel.id}`;
+              const isActive = selectedChannel === channelKey;
+              return (
+                <div
+                  key={channel.id}
+                  className={cn(
+                    'group flex w-full items-center gap-2 px-3 py-2 transition-colors hover:bg-accent',
+                    isActive && 'bg-accent',
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    onClick={() => onSelectChannel(channelKey)}
+                    data-testid={`channel-custom-${channel.id}`}
+                    aria-selected={isActive}
+                  >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary text-sm text-muted-foreground">
+                      <Hash className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">{channel.name}</div>
+                      {channel.description && (
+                        <div className="truncate text-xs text-muted-foreground">
+                          {channel.description}
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                  {(onEditChannel || onDeleteChannel) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                          aria-label={`Channel ${channel.name} options`}
+                          data-testid={`channel-menu-${channel.id}`}
+                        >
+                          <MoreHorizontal className="h-3.5 w-3.5" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {onEditChannel && (
+                          <DropdownMenuItem
+                            onClick={() => onEditChannel(channel)}
+                            data-testid={`edit-channel-${channel.id}`}
+                          >
+                            <Pencil className="mr-2 h-4 w-4" />
+                            Edit channel
+                          </DropdownMenuItem>
+                        )}
+                        {onEditChannel && onDeleteChannel && <DropdownMenuSeparator />}
+                        {onDeleteChannel && (
+                          <DropdownMenuItem
+                            onClick={() => onDeleteChannel(channel)}
+                            className="text-destructive focus:text-destructive"
+                            data-testid={`delete-channel-${channel.id}`}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete channel
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Agent DM section */}
+        <div className="mt-1">
+          <div className="px-3 py-1.5">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Direct Messages
+            </span>
+          </div>
+          {agents.map((agent) => (
+            <button
+              type="button"
+              key={agent.id}
+              className={cn(
+                'flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-accent',
+                selectedChannel === agent.id && 'bg-accent',
+              )}
+              onClick={() => onSelectChannel(agent.id)}
+              data-testid={`channel-${agent.id}`}
+              aria-selected={selectedChannel === agent.id}
+            >
+              <div className="relative">
+                <AgentAvatar agentId={agent.id} name={agent.name} size="sm" />
+                <span
+                  className={cn(
+                    'absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full border-2 border-background',
+                    agent.status === 'active' ? 'bg-green-500' : 'bg-muted-foreground/40',
+                  )}
+                  data-testid={`status-${agent.id}`}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-medium">{agent.name}</div>
+                <div className="truncate text-xs text-muted-foreground">{agent.role}</div>
+              </div>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

@@ -1,0 +1,132 @@
+{
+  "manifestVersion": 1,
+  "id": "code-reviewer",
+  "name": "Code Reviewer",
+  "version": "1.0.0",
+  "description": "Automated code review focusing on quality, security, and maintainability. Reads source files, queries AST structure, and runs linters to surface actionable findings.",
+  "author": "openspace",
+  "license": "MIT",
+  "tags": ["code-analysis", "security"],
+  "icon": "shield-check",
+  "tools": [
+    {
+      "toolId": "file:read",
+      "reason": "Read source files for analysis"
+    },
+    {
+      "toolId": "ast:query",
+      "reason": "Query abstract syntax tree for structural patterns and anti-patterns"
+    },
+    {
+      "toolId": "lint:run",
+      "reason": "Run project linters and capture findings"
+    },
+    {
+      "toolId": "git:diff",
+      "optional": true,
+      "reason": "Review only changed code when doing incremental reviews"
+    },
+    {
+      "toolId": "file:list",
+      "optional": true,
+      "reason": "Discover project structure and file organization"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "system",
+      "name": "Code Reviewer System Prompt",
+      "role": "system",
+      "content": "You are {{agent.name}}, a senior code reviewer. You focus on issues that matter: bugs, security vulnerabilities, maintainability risks, and architectural concerns. You never waste time on style nitpicks that a formatter can handle. Every finding includes a clear explanation of why it matters and how to fix it."
+    },
+    {
+      "id": "code-quality",
+      "name": "Code Quality Review",
+      "role": "execution",
+      "content": "file://prompts/code-quality.md",
+      "variables": [
+        {
+          "name": "targetPath",
+          "description": "File or directory path to review",
+          "required": true
+        },
+        {
+          "name": "scope",
+          "description": "Review scope: 'full' for entire file, 'diff' for only changed lines",
+          "required": false,
+          "default": "full"
+        },
+        {
+          "name": "strictness",
+          "description": "Review strictness: 'relaxed', 'standard', 'strict'",
+          "required": false,
+          "default": "standard"
+        }
+      ]
+    },
+    {
+      "id": "security-check",
+      "name": "Security Check",
+      "role": "execution",
+      "content": "file://prompts/security-check.md",
+      "variables": [
+        {
+          "name": "targetPath",
+          "description": "File or directory path to audit",
+          "required": true
+        },
+        {
+          "name": "context",
+          "description": "Application context: 'web-api', 'cli', 'library', 'worker'",
+          "required": false,
+          "default": "web-api"
+        }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "type": "task-type",
+      "taskTypes": ["code-review", "security-audit", "quality-check"]
+    },
+    {
+      "type": "pattern",
+      "field": "title",
+      "pattern": "\\b(review|audit|quality|security scan|code smell|tech debt)\\b",
+      "flags": "i"
+    },
+    {
+      "type": "label",
+      "labels": ["needs-review"]
+    }
+  ],
+  "dependencies": [
+    {
+      "skillId": "git-expert",
+      "versionRange": "^1.0.0",
+      "optional": true,
+      "reason": "Enables diff-based incremental reviews"
+    }
+  ],
+  "config": [
+    {
+      "key": "severityThreshold",
+      "type": "string",
+      "description": "Minimum severity to report: 'info', 'warning', 'error', 'critical'",
+      "default": "warning"
+    },
+    {
+      "key": "maxFileSize",
+      "type": "number",
+      "description": "Skip files larger than this (bytes). 0 = no limit.",
+      "default": 100000
+    },
+    {
+      "key": "securityEnabled",
+      "type": "boolean",
+      "description": "Include security-focused checks in quality reviews",
+      "default": true
+    }
+  ],
+  "permissions": ["fs:read", "exec:lint"]
+}

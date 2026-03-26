@@ -6,7 +6,7 @@ vi.mock('@/hooks/use-tasks');
 vi.mock('@/hooks/use-agents');
 
 import { useAgents } from '@/hooks/use-agents';
-import { useCreateTask, useUpdateTask, useUpdateTaskPriority, useTasks, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useCreateTask, useTasks, useUpdateTask, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
 
 const mockedUseTasks = vi.mocked(useTasks);
 const mockedUseAgents = vi.mocked(useAgents);

@@ -100,6 +100,22 @@ export function useRealtimeDashboard(
       }),
     );
 
+    // agent:working — refresh agent status cache
+    removers.push(
+      addWsListener('agent:working', () => {
+        queryClient.invalidateQueries({ queryKey: ['agent-status'] });
+        triggerPulse();
+      }),
+    );
+
+    // agent:idle — refresh agent status cache
+    removers.push(
+      addWsListener('agent:idle', () => {
+        queryClient.invalidateQueries({ queryKey: ['agent-status'] });
+        triggerPulse();
+      }),
+    );
+
     return () => {
       removers.forEach((rm) => rm());
       if (pulseTimer.current) clearTimeout(pulseTimer.current);

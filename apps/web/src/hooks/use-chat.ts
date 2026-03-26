@@ -1,10 +1,18 @@
 import type { ChatMessage } from '@openspace/shared';
+import { CHAT_CHANNEL_PREFIX } from '@openspace/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 
 import { useWsEvent, useWsSend } from '@/components/providers/websocket-provider';
 import type { WsEnvelope } from '@/hooks/use-websocket';
 import { api } from '@/lib/api-client';
+
+/** Extract the channelId from a recipient string like "channel:abc123". */
+export function extractChannelId(recipient: string): string | undefined {
+  return recipient.startsWith(CHAT_CHANNEL_PREFIX)
+    ? recipient.slice(CHAT_CHANNEL_PREFIX.length)
+    : undefined;
+}
 
 /** Shape returned by GET /api/chat/messages (paginated envelope). */
 interface ChatMessagesResponse {
@@ -22,8 +30,13 @@ export function useChatMessages(recipient: string) {
     const msg = envelope.payload as unknown as ChatMessage;
     if (!msg?.id) return;
 
-    // Add the message to the cache if it belongs to this channel
-    const isRelevant = msg.sender === recipient || msg.recipient === recipient;
+    // Route the message to this channel view only if it belongs here.
+    // For channels (recipient starts with "channel:"), match on recipient.
+    // For DMs, match on sender (incoming) or recipient (outgoing).
+    const channelId = extractChannelId(recipient);
+    const isRelevant = channelId
+      ? msg.recipient === recipient
+      : msg.sender === recipient || msg.recipient === recipient;
 
     if (isRelevant) {
       queryClient.setQueryData<ChatMessage[]>(['chat', recipient], (old = []) => {

@@ -1,0 +1,40 @@
+{
+  "id": "ast:query",
+  "name": "AST Query",
+  "description": "Query the abstract syntax tree of a source file. Find functions, classes, imports, and structural patterns without regex fragility. Supports TypeScript, JavaScript, Python, and Go.",
+  "version": "1.0.0",
+  "tags": ["code-analysis"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "path",
+        "type": "string",
+        "description": "Source file path to parse",
+        "required": true
+      },
+      {
+        "name": "query",
+        "type": "string",
+        "description": "What to find: 'functions', 'classes', 'imports', 'exports', 'calls:<name>', 'pattern:<description>'",
+        "required": true
+      },
+      {
+        "name": "includeBody",
+        "type": "boolean",
+        "description": "Include the full body/implementation of matched nodes",
+        "required": false,
+        "default": false
+      },
+      {
+        "name": "language",
+        "type": "string",
+        "description": "Source language (auto-detected from extension if omitted)",
+        "required": false,
+        "enum": ["typescript", "javascript", "python", "go"]
+      }
+    ]
+  },
+  "outputDescription": "Array of matched AST nodes: [{name, type, startLine, endLine, body?, children?}]. Returns empty array if no matches.",
+  "isEnabled": true,
+  "author": "openspace"
+}

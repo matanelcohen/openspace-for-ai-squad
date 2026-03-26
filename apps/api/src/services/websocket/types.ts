@@ -9,12 +9,18 @@
 
 export const WS_EVENT_TYPES = [
   'agent:status',
+  'agent:working',
+  'agent:idle',
   'task:updated',
   'task:created',
   'decision:added',
   'activity:new',
   'chat:message',
   'chat:typing',
+  'chat:cleared',
+  'channel:created',
+  'channel:updated',
+  'channel:deleted',
   'voice:session',
   'voice:transcript',
   'voice:audio',
@@ -49,7 +55,51 @@ export interface WsPongMessage {
   action: 'pong';
 }
 
-export type WsClientMessage = WsSubscribeMessage | WsUnsubscribeMessage | WsPongMessage;
+/** Client → Server: send a chat message to a channel or agent. */
+export interface WsChatSendMessage {
+  action: 'chat:send';
+  sender: string;
+  recipient: string;
+  content: string;
+  threadId?: string | null;
+}
+
+/** Client → Server: join a channel to receive its messages. */
+export interface WsChannelJoinMessage {
+  action: 'channel:join';
+  channelId: string;
+}
+
+/** Client → Server: leave a channel to stop receiving its messages. */
+export interface WsChannelLeaveMessage {
+  action: 'channel:leave';
+  channelId: string;
+}
+
+/** Client → Server: bind a user/agent identity to this connection. */
+export interface WsIdentifyMessage {
+  action: 'identify';
+  userId: string;
+}
+
+export type WsClientMessage =
+  | WsSubscribeMessage
+  | WsUnsubscribeMessage
+  | WsPongMessage
+  | WsChatSendMessage
+  | WsChannelJoinMessage
+  | WsChannelLeaveMessage
+  | WsIdentifyMessage;
+
+// ── Error envelope ────────────────────────────────────────────────
+
+/** Server → Client: error response sent to a specific client. */
+export interface WsErrorEnvelope {
+  type: 'error';
+  code: string;
+  message: string;
+  timestamp: string;
+}
 
 // ── Connection info ───────────────────────────────────────────────
 

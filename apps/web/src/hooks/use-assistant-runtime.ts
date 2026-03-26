@@ -8,16 +8,9 @@ import {
   WebSpeechDictationAdapter,
 } from '@assistant-ui/react';
 import type { ChatMessage } from '@openspace/shared';
-import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 
-import { useChatMessages, useTypingIndicator } from '@/hooks/use-chat';
-
-const getApiBaseUrl = () =>
-  process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window !== 'undefined'
-    ? `${window.location.protocol}//${window.location.hostname}:3001`
-    : 'http://localhost:3001');
+import { useChatMessages, useSendMessage, useTypingIndicator } from '@/hooks/use-chat';
 
 function toThreadMessage(msg: ChatMessage): ThreadMessageLike {
   const isUser = msg.sender === 'user';
@@ -42,31 +35,12 @@ const SUGGESTIONS: readonly { prompt: string }[] = [
 export function useAssistantRuntime(channel: string) {
   const { data: messages = [] } = useChatMessages(channel);
   const typingAgents = useTypingIndicator();
-  const queryClient = useQueryClient();
+  const { mutateAsync: sendMessage } = useSendMessage();
 
-  const [streamState, setStreamState] = useState<{
-    isRunning: boolean;
-    messages: ThreadMessageLike[];
-  }>({ isRunning: false, messages: [] });
-
-  const abortRef = useRef<AbortController | null>(null);
   const channelRef = useRef(channel);
   channelRef.current = channel;
 
-  // Abort any in-flight stream when channel changes or component unmounts
-  useEffect(() => {
-    return () => {
-      abortRef.current?.abort();
-    };
-  }, [channel]);
-
   const threadMessages = useMemo(() => messages.map(toThreadMessage), [messages]);
-
-  // Combine persisted messages with in-flight streaming messages
-  const allMessages = useMemo(
-    () => [...threadMessages, ...streamState.messages],
-    [threadMessages, streamState.messages],
-  );
 
   const dictationAdapter = useMemo(
     () =>
@@ -83,116 +57,71 @@ export function useAssistantRuntime(channel: string) {
         .map((p) => p.text)
         .join('\n');
 
-      const ch = channelRef.current;
-
-      // Optimistically add the user message to the query cache
-      const optimistic: ChatMessage = {
-        id: `optimistic-${Date.now()}`,
+      await sendMessage({
         sender: 'user',
-        recipient: ch,
+        recipient: channelRef.current,
         content: text,
-        timestamp: new Date().toISOString(),
-        threadId: null,
-      };
-      queryClient.setQueryData<ChatMessage[]>(['chat', ch], (old = []) => [...old, optimistic]);
-
-      const controller = new AbortController();
-      abortRef.current = controller;
-      setStreamState({ isRunning: true, messages: [] });
-
-      try {
-        const apiBase = getApiBaseUrl();
-        const url = `${apiBase}/api/chat/stream?recipient=${encodeURIComponent(ch)}&content=${encodeURIComponent(text)}`;
-        const response = await fetch(url, { signal: controller.signal });
-
-        if (!response.ok || !response.body) {
-          throw new Error(`Stream failed: ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        const agentContents = new Map<string, string>();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split('\n\n');
-          buffer = parts.pop() ?? '';
-
-          for (const part of parts) {
-            const dataLine = part.split('\n').find((l) => l.startsWith('data: '));
-            if (!dataLine) continue;
-
-            try {
-              const data = JSON.parse(dataLine.slice(6)) as {
-                agentId: string;
-                chunk: string;
-                done: boolean;
-                fullContent?: string;
-              };
-
-              if (!data.done) {
-                const current = agentContents.get(data.agentId) ?? '';
-                agentContents.set(data.agentId, current + data.chunk);
-              } else {
-                agentContents.delete(data.agentId);
-              }
-
-              const streamMsgs: ThreadMessageLike[] = Array.from(agentContents.entries()).map(
-                ([agentId, content]) => ({
-                  id: `streaming-${agentId}`,
-                  role: 'assistant' as const,
-                  content: [{ type: 'text' as const, text: content }],
-                  createdAt: new Date(),
-                  metadata: { custom: { agentId } },
-                }),
-              );
-
-              setStreamState({ isRunning: true, messages: streamMsgs });
-            } catch {
-              // Skip malformed SSE data
-            }
-          }
-        }
-      } catch (err) {
-        if ((err as Error).name !== 'AbortError') {
-          console.error('[Chat] Stream error:', err);
-        }
-      } finally {
-        setStreamState({ isRunning: false, messages: [] });
-        abortRef.current = null;
-        // Refetch to pick up final persisted messages
-        queryClient.invalidateQueries({ queryKey: ['chat', ch] });
-      }
+      });
     },
-    [queryClient],
+    [sendMessage],
   );
 
-  const handleCancel = useCallback(async () => {
-    abortRef.current?.abort();
-  }, []);
+  // Reload = resend the last user message to get a fresh response
+  const handleReload = useCallback(
+    async (parentId: string | null) => {
+      if (!parentId) return;
+      const parentMsg = messages.find((m) => m.id === parentId);
+      if (!parentMsg) return;
+
+      // Find the user message that triggered this response
+      const idx = messages.indexOf(parentMsg);
+      let userMsg: ChatMessage | undefined;
+      for (let i = idx; i >= 0; i--) {
+        if (messages[i]?.sender === 'user') {
+          userMsg = messages[i];
+          break;
+        }
+      }
+
+      if (userMsg) {
+        await sendMessage({
+          sender: 'user',
+          recipient: channelRef.current,
+          content: userMsg.content,
+        });
+      }
+    },
+    [messages, sendMessage],
+  );
+
+  // Build typing indicator messages so the UI shows agent name instead of "assistant"
+  const typingMessages: ThreadMessageLike[] = useMemo(() => {
+    if (typingAgents.size === 0) return [];
+    return Array.from(typingAgents.entries()).map(([agentId, agentName]) => ({
+      id: `typing-${agentId}`,
+      role: 'assistant' as const,
+      content: [{ type: 'text' as const, text: `${agentName} is thinking...` }],
+      createdAt: new Date(),
+      metadata: { custom: { agentId } },
+    }));
+  }, [typingAgents]);
+
+  const allMessages = useMemo(
+    () => [...threadMessages, ...typingMessages],
+    [threadMessages, typingMessages],
+  );
 
   const adapter: ExternalStoreAdapter<ThreadMessageLike> = useMemo(
     () => ({
-      isRunning: streamState.isRunning || typingAgents.size > 0,
+      isRunning: typingAgents.size > 0,
       messages: allMessages,
       convertMessage: (msg: ThreadMessageLike) => msg,
       suggestions: SUGGESTIONS,
       adapters: dictationAdapter ? { dictation: dictationAdapter } : undefined,
       onNew: handleNew,
-      onCancel: handleCancel,
+      onReload: handleReload,
     }),
-    [
-      streamState.isRunning,
-      allMessages,
-      typingAgents.size,
-      handleNew,
-      handleCancel,
-      dictationAdapter,
-    ],
+    [typingAgents.size, allMessages, handleNew, handleReload, dictationAdapter],
   );
 
   return useExternalStoreRuntime(adapter);

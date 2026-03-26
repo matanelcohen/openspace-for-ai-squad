@@ -5,8 +5,8 @@
  * caches so agent cards and summary stats update without polling.
  */
 
-import type { WsEnvelope } from '@/hooks/use-websocket';
 import { useRealtimeDashboard } from '@/hooks/use-realtime-dashboard';
+import type { WsEnvelope } from '@/hooks/use-websocket';
 
 interface Props {
   addWsListener: (type: string, cb: (e: WsEnvelope) => void) => () => void;

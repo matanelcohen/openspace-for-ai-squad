@@ -8,17 +8,25 @@
  * Routes team messages through a simple Coordinator stub (echo-back).
  */
 
-import { existsSync, mkdirSync } from 'node:fs';
-import { appendFile, writeFile } from 'node:fs/promises';
+import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { appendFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { ChatMessage } from '@openspace/shared';
-import { CHAT_TEAM_RECIPIENT } from '@openspace/shared';
+import type { ChatChannel, ChatMessage } from '@openspace/shared';
+import { CHAT_CHANNEL_PREFIX, CHAT_TEAM_RECIPIENT } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 
 import type { ActivityFeed } from '../activity/index.js';
 import type { AIProvider } from '../ai/copilot-provider.js';
+import {
+  createChannel as writeChannelFile,
+  deleteChannel as deleteChannelFile,
+  generateChannelId,
+  getChannel as readChannelFile,
+  listChannels as listChannelFiles,
+  updateChannel as updateChannelFile,
+} from '../squad-writer/channel-writer.js';
 import type { WebSocketManager, WsEnvelope } from '../websocket/index.js';
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -47,11 +55,58 @@ export interface StreamEvent {
   fullContent?: string;
 }
 
+// ── Channel Validation ────────────────────────────────────────────
+
+export type ChannelValidationCode =
+  | 'DUPLICATE_NAME'
+  | 'NAME_REQUIRED'
+  | 'EMPTY_MEMBER_LIST';
+
+/**
+ * Thrown by channel CRUD methods when input validation fails.
+ * Route handlers catch this and map `code` to the appropriate HTTP status.
+ */
+export class ChannelValidationError extends Error {
+  public readonly code: ChannelValidationCode;
+
+  constructor(code: ChannelValidationCode, message: string) {
+    super(message);
+    this.name = 'ChannelValidationError';
+    this.code = code;
+  }
+}
+
+// ── Channel Membership Validation ─────────────────────────────────
+
+export type ChannelMembershipCode = 'CHANNEL_NOT_FOUND' | 'NOT_A_MEMBER';
+
+/**
+ * Thrown when a sender attempts to send a message to a channel they
+ * don't belong to, or when the target channel doesn't exist.
+ * Security-critical — prevents message leaks to non-members.
+ */
+export class ChannelMembershipError extends Error {
+  public readonly code: ChannelMembershipCode;
+
+  constructor(code: ChannelMembershipCode, message: string) {
+    super(message);
+    this.name = 'ChannelMembershipError';
+    this.code = code;
+  }
+}
+
+/** Result from deleteChannel, includes count of cleaned-up messages. */
+export interface DeleteChannelResult {
+  deleted: boolean;
+  deletedMessages: number;
+}
+
 // ── Chat Service ──────────────────────────────────────────────────
 
 export class ChatService {
   private readonly db: Database.Database | null;
   private readonly sessionsDir: string | null;
+  private readonly channelsDir: string | null;
   private wsManager: WebSocketManager | null = null;
   private aiProvider: AIProvider | null = null;
   private activityFeed: ActivityFeed | null = null;
@@ -60,11 +115,14 @@ export class ChatService {
     db?: Database.Database | null;
     /** .squad/sessions/ directory for markdown logs. */
     sessionsDir?: string | null;
+    /** .squad/channels/ directory for channel file persistence. */
+    channelsDir?: string | null;
     /** AI provider for generating agent responses. */
     aiProvider?: AIProvider | null;
   }) {
     this.db = opts.db ?? null;
     this.sessionsDir = opts.sessionsDir ?? null;
+    this.channelsDir = opts.channelsDir ?? null;
     this.aiProvider = opts.aiProvider ?? null;
 
     if (this.sessionsDir && !existsSync(this.sessionsDir)) {
@@ -92,8 +150,14 @@ export class ChatService {
   /**
    * Send a message: persist to both stores, emit via WebSocket,
    * and if it's a team message, generate a coordinator echo response.
+   *
+   * Throws ChannelMembershipError if the sender is not a member of the
+   * target channel (security-critical — no message should leak to non-members).
    */
   async send(input: SendMessageInput): Promise<ChatMessage> {
+    // Validate channel membership before persisting or broadcasting
+    this.validateChannelMembership(input.sender, input.recipient);
+
     const message: ChatMessage = {
       id: nanoid(12),
       sender: input.sender,
@@ -112,9 +176,12 @@ export class ChatService {
 
     // Route to agents — team messages go through routing, direct messages go to the specific agent
     if (input.recipient === CHAT_TEAM_RECIPIENT) {
-      this.coordinatorEcho(message).catch((err) => {
+      try {
+        const echo = await this.coordinatorEcho(message);
+        return echo;
+      } catch (err) {
         console.error('[Chat] coordinatorEcho failed:', err);
-      });
+      }
     } else {
       // Direct message to a specific agent
       const agent = ChatService.AGENTS.find((a) => a.id === input.recipient);
@@ -138,6 +205,9 @@ export class ChatService {
     input: SendMessageInput,
     onStreamEvent: (data: StreamEvent) => void,
   ): Promise<ChatMessage> {
+    // Validate channel membership before persisting or broadcasting
+    this.validateChannelMembership(input.sender, input.recipient);
+
     const message: ChatMessage = {
       id: nanoid(12),
       sender: input.sender,
@@ -200,7 +270,7 @@ export class ChatService {
     const countSql = `SELECT COUNT(*) as total FROM chat_messages ${whereClause}`;
     const totalRow = this.db.prepare(countSql).get(params) as { total: number };
 
-    const querySql = `SELECT * FROM chat_messages ${whereClause} ORDER BY timestamp ASC LIMIT @limit OFFSET @offset`;
+    const querySql = `SELECT * FROM chat_messages ${whereClause} ORDER BY timestamp DESC LIMIT @limit OFFSET @offset`;
     const rows = this.db.prepare(querySql).all({ ...params, limit, offset }) as Array<{
       id: string;
       sender: string;
@@ -220,6 +290,78 @@ export class ChatService {
     }));
 
     return { messages, total: totalRow.total };
+  }
+
+  /** Delete all messages, optionally filtered by agent/channel (thread). */
+  async clearMessages(opts: {
+    agent?: string;
+    channel?: string;
+  } = {}): Promise<{ deleted: number }> {
+    if (!this.db) return { deleted: 0 };
+
+    const { agent, channel } = opts;
+    const conditions: string[] = [];
+    const params: Record<string, string> = {};
+
+    if (agent) {
+      conditions.push('(sender = @agent OR recipient = @agent)');
+      params.agent = agent;
+    }
+    if (channel) {
+      conditions.push('thread_id = @channel');
+      params.channel = channel;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const result = this.db.prepare(`DELETE FROM chat_messages ${whereClause}`).run(params);
+
+    await this.clearSessionMarkdown(agent);
+
+    return { deleted: result.changes };
+  }
+
+  /**
+   * Remove chat entries from .squad/sessions/ markdown files.
+   * If agent is provided, strips matching lines; otherwise deletes all chat-*.md files.
+   */
+  private async clearSessionMarkdown(agent?: string): Promise<void> {
+    if (!this.sessionsDir) return;
+
+    let files: string[];
+    try {
+      files = readdirSync(this.sessionsDir).filter((f) => f.startsWith('chat-') && f.endsWith('.md'));
+    } catch {
+      return;
+    }
+
+    for (const file of files) {
+      const filePath = join(this.sessionsDir, file);
+      try {
+        if (!agent) {
+          await unlink(filePath);
+        } else {
+          const content = await readFile(filePath, 'utf-8');
+          const lines = content.split('\n');
+          const filtered = lines.filter((line) => {
+            // Keep header lines and lines that don't mention the agent
+            if (line.startsWith('# ')) return true;
+            const agentPattern = new RegExp(`\\b${agent}\\b`);
+            // Only drop message lines matching "SENDER → RECIPIENT" with the agent
+            if (line.includes('→') && agentPattern.test(line)) return false;
+            return true;
+          });
+          const result = filtered.join('\n').trim();
+          if (result === lines[0]?.trim()) {
+            // Only header remains — remove file
+            await unlink(filePath);
+          } else {
+            await writeFile(filePath, result + '\n', 'utf-8');
+          }
+        }
+      } catch {
+        // Best-effort cleanup
+      }
+    }
   }
 
   /** Get a single message by ID. */
@@ -247,6 +389,280 @@ export class ChatService {
       timestamp: row.timestamp,
       threadId: row.thread_id,
     };
+  }
+
+  // ── Channel CRUD ───────────────────────────────────────────────
+
+  /** List all custom channels. */
+  listChannels(): ChatChannel[] {
+    if (!this.db) return [];
+
+    const rows = this.db
+      .prepare('SELECT * FROM chat_channels ORDER BY created_at ASC')
+      .all() as Array<{
+      id: string;
+      name: string;
+      description: string;
+      member_agent_ids: string;
+      created_at: string;
+      updated_at: string;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      memberAgentIds: JSON.parse(row.member_agent_ids) as string[],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  }
+
+  /** Get a single channel by ID. */
+  getChannel(id: string): ChatChannel | null {
+    if (!this.db) return null;
+
+    const row = this.db.prepare('SELECT * FROM chat_channels WHERE id = ?').get(id) as
+      | {
+          id: string;
+          name: string;
+          description: string;
+          member_agent_ids: string;
+          created_at: string;
+          updated_at: string;
+        }
+      | undefined;
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      memberAgentIds: JSON.parse(row.member_agent_ids) as string[],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    };
+  }
+
+  /** Create a new channel. Validates name uniqueness, non-empty name, and non-empty member list. */
+  createChannel(input: {
+    name: string;
+    description?: string;
+    memberAgentIds?: string[];
+  }): ChatChannel {
+    // Validate name is provided and non-empty
+    if (!input.name || input.name.trim() === '') {
+      throw new ChannelValidationError('NAME_REQUIRED', 'Channel name is required');
+    }
+
+    // Validate memberAgentIds is not an explicit empty array
+    if (input.memberAgentIds !== undefined && input.memberAgentIds.length === 0) {
+      throw new ChannelValidationError(
+        'EMPTY_MEMBER_LIST',
+        'memberAgentIds must not be an empty array when provided',
+      );
+    }
+
+    // Validate unique name within the DB
+    if (this.db) {
+      const existing = this.db
+        .prepare('SELECT id FROM chat_channels WHERE name = ?')
+        .get(input.name.trim()) as { id: string } | undefined;
+      if (existing) {
+        throw new ChannelValidationError(
+          'DUPLICATE_NAME',
+          `A channel named "${input.name.trim()}" already exists`,
+        );
+      }
+    }
+
+    const now = new Date().toISOString();
+    const channel: ChatChannel = {
+      id: nanoid(12),
+      name: input.name.trim(),
+      description: input.description ?? '',
+      memberAgentIds: input.memberAgentIds ?? [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    if (this.db) {
+      this.db
+        .prepare(
+          `INSERT INTO chat_channels (id, name, description, member_agent_ids, created_at, updated_at)
+           VALUES (@id, @name, @description, @memberAgentIds, @createdAt, @updatedAt)`,
+        )
+        .run({
+          id: channel.id,
+          name: channel.name,
+          description: channel.description,
+          memberAgentIds: JSON.stringify(channel.memberAgentIds),
+          createdAt: channel.createdAt,
+          updatedAt: channel.updatedAt,
+        });
+    }
+
+    // Persist to .squad/channels/ markdown file
+    if (this.channelsDir) {
+      writeChannelFile(this.channelsDir, {
+        name: channel.name,
+        description: channel.description,
+        memberAgentIds: channel.memberAgentIds,
+      }).catch((err) => {
+        console.error('[Chat] Failed to write channel file:', err);
+      });
+    }
+
+    this.wsManager?.broadcast({
+      type: 'channel:created',
+      payload: channel as unknown as Record<string, unknown>,
+      timestamp: now,
+    });
+
+    return channel;
+  }
+
+  /** Update an existing channel. Validates name uniqueness and non-empty member list. */
+  updateChannel(
+    id: string,
+    input: { name?: string; description?: string; memberAgentIds?: string[] },
+  ): ChatChannel | null {
+    const existing = this.getChannel(id);
+    if (!existing) return null;
+
+    // Validate memberAgentIds is not an explicit empty array
+    if (input.memberAgentIds !== undefined && input.memberAgentIds.length === 0) {
+      throw new ChannelValidationError(
+        'EMPTY_MEMBER_LIST',
+        'memberAgentIds must not be an empty array when provided',
+      );
+    }
+
+    // Validate name uniqueness when renaming (exclude current channel)
+    if (input.name !== undefined && input.name.trim() !== existing.name && this.db) {
+      const conflict = this.db
+        .prepare('SELECT id FROM chat_channels WHERE name = ? AND id != ?')
+        .get(input.name.trim(), id) as { id: string } | undefined;
+      if (conflict) {
+        throw new ChannelValidationError(
+          'DUPLICATE_NAME',
+          `A channel named "${input.name.trim()}" already exists`,
+        );
+      }
+    }
+
+    const now = new Date().toISOString();
+    const updated: ChatChannel = {
+      ...existing,
+      name: input.name ?? existing.name,
+      description: input.description ?? existing.description,
+      memberAgentIds: input.memberAgentIds ?? existing.memberAgentIds,
+      updatedAt: now,
+    };
+
+    if (this.db) {
+      this.db
+        .prepare(
+          `UPDATE chat_channels
+           SET name = @name, description = @description, member_agent_ids = @memberAgentIds, updated_at = @updatedAt
+           WHERE id = @id`,
+        )
+        .run({
+          id: updated.id,
+          name: updated.name,
+          description: updated.description,
+          memberAgentIds: JSON.stringify(updated.memberAgentIds),
+          updatedAt: updated.updatedAt,
+        });
+    }
+
+    // Persist to .squad/channels/ markdown file
+    if (this.channelsDir) {
+      updateChannelFile(this.channelsDir, id, {
+        name: updated.name,
+        description: updated.description,
+        memberAgentIds: updated.memberAgentIds,
+      }).catch((err) => {
+        console.error('[Chat] Failed to update channel file:', err);
+      });
+    }
+
+    this.wsManager?.broadcast({
+      type: 'channel:updated',
+      payload: updated as unknown as Record<string, unknown>,
+      timestamp: now,
+    });
+
+    return updated;
+  }
+
+  /** Delete a channel and clean up associated messages. */
+  deleteChannel(id: string): DeleteChannelResult {
+    if (!this.db) return { deleted: false, deletedMessages: 0 };
+
+    const existing = this.getChannel(id);
+    if (!existing) return { deleted: false, deletedMessages: 0 };
+
+    // Clean up messages sent to this channel
+    const channelRecipient = `${CHAT_CHANNEL_PREFIX}${id}`;
+    const msgResult = this.db
+      .prepare('DELETE FROM chat_messages WHERE recipient = ?')
+      .run(channelRecipient);
+    const deletedMessages = msgResult.changes;
+
+    this.db.prepare('DELETE FROM chat_channels WHERE id = ?').run(id);
+
+    // Remove .squad/channels/ markdown file
+    if (this.channelsDir) {
+      deleteChannelFile(this.channelsDir, id).catch((err) => {
+        console.error('[Chat] Failed to delete channel file:', err);
+      });
+    }
+
+    const now = new Date().toISOString();
+    this.wsManager?.broadcast({
+      type: 'channel:deleted',
+      payload: { id, deletedMessages },
+      timestamp: now,
+    } as WsEnvelope);
+
+    return { deleted: true, deletedMessages };
+  }
+
+  // ── Private: Channel membership validation ─────────────────────
+
+  /**
+   * Validate that the sender is allowed to post to the target recipient.
+   * Only enforced for channel recipients (prefixed with CHAT_CHANNEL_PREFIX).
+   * The 'user' sender (the human operator) is always permitted.
+   *
+   * Throws ChannelMembershipError if the channel doesn't exist or the
+   * sender agent isn't in the channel's memberAgentIds.
+   */
+  private validateChannelMembership(sender: string, recipient: string): void {
+    // Only validate channel-targeted messages
+    if (!recipient.startsWith(CHAT_CHANNEL_PREFIX)) return;
+
+    // Human user can always send to any channel
+    if (sender === 'user') return;
+
+    const channelId = recipient.slice(CHAT_CHANNEL_PREFIX.length);
+    const channel = this.getChannel(channelId);
+
+    if (!channel) {
+      throw new ChannelMembershipError(
+        'CHANNEL_NOT_FOUND',
+        `Channel "${channelId}" does not exist`,
+      );
+    }
+
+    if (!channel.memberAgentIds.includes(sender)) {
+      throw new ChannelMembershipError(
+        'NOT_A_MEMBER',
+        `Agent "${sender}" is not a member of channel "${channel.name}"`,
+      );
+    }
   }
 
   // ── Private: Persistence ──────────────────────────────────────
@@ -301,7 +717,13 @@ export class ChatService {
       timestamp: msg.timestamp,
     };
 
-    this.wsManager.broadcast(envelope);
+    // Route channel messages only to clients that joined the channel
+    if (msg.recipient.startsWith(CHAT_CHANNEL_PREFIX)) {
+      const channelId = msg.recipient.slice(CHAT_CHANNEL_PREFIX.length);
+      this.wsManager.broadcastToChannel(channelId, envelope);
+    } else {
+      this.wsManager.broadcast(envelope);
+    }
   }
 
   private emitTyping(agentId: string, agentName: string): void {
@@ -339,6 +761,31 @@ export class ChatService {
       });
     } catch {
       // Best-effort — don't break chat if activity feed fails
+    }
+  }
+
+  /** Fetch recent chat history for context (last 10 messages in the channel). */
+  private getRecentHistory(
+    recipient: string,
+  ): Array<{ role: 'user' | 'assistant'; content: string }> {
+    if (!this.db) return [];
+
+    try {
+      const rows = this.db
+        .prepare(
+          `SELECT sender, content FROM chat_messages
+           WHERE recipient = @recipient OR sender = @recipient
+           ORDER BY timestamp DESC LIMIT 10`,
+        )
+        .all({ recipient }) as Array<{ sender: string; content: string }>;
+
+      // Reverse so oldest first (chronological order)
+      return rows.reverse().map((r) => ({
+        role: (r.sender === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
+        content: r.content,
+      }));
+    } catch {
+      return [];
     }
   }
 
@@ -409,12 +856,12 @@ export class ChatService {
       }
     }
 
-    // Fallback: simple echo from Leela
+    // Fallback: coordinator echo (no AI provider)
     const echo: ChatMessage = {
       id: nanoid(12),
-      sender: 'leela',
+      sender: 'coordinator',
       recipient: CHAT_TEAM_RECIPIENT,
-      content: 'The squad is here but the AI provider is not connected. Check the server logs.',
+      content: `📋 Received: "${original.content}" — routing to the squad. (AI provider not connected)`,
       timestamp: new Date().toISOString(),
       threadId: original.threadId,
     };
@@ -443,8 +890,14 @@ export class ChatService {
       return mentioned.map((a) => a.id);
     }
 
-    // No name mentioned — try LLM routing, fallback to all agents
-    if (!this.aiProvider) return ChatService.AGENTS.map((a) => a.id);
+    // Short messages or greetings → route to Leela (lead) as the default responder
+    const isGreeting = /^\s*(hi|hey|hello|yo|sup|howdy|hiya|greetings|good\s*(morning|afternoon|evening))\b/i.test(content);
+    if (isGreeting || content.trim().length < 20) {
+      return ['leela'];
+    }
+
+    // No name mentioned — try LLM routing, fallback to Leela (lead)
+    if (!this.aiProvider) return ['leela'];
 
     try {
       const profiles = ChatService.AGENTS.map((a) => ({
@@ -455,9 +908,16 @@ export class ChatService {
       }));
 
       const result = await this.aiProvider.route(content, profiles, []);
-      return result.agentIds.length > 0 ? result.agentIds : ChatService.AGENTS.map((a) => a.id);
+      // Always ensure at least Leela (lead) responds
+      if (result.agentIds.length > 0) {
+        if (!result.agentIds.includes('leela')) {
+          result.agentIds.unshift('leela');
+        }
+        return result.agentIds;
+      }
+      return ['leela'];
     } catch {
-      return ChatService.AGENTS.map((a) => a.id);
+      return ['leela'];
     }
   }
 
@@ -466,6 +926,9 @@ export class ChatService {
     agent: { id: string; name: string; role: string; personality: string },
     original: ChatMessage,
   ): Promise<ChatMessage> {
+    const history = this.getRecentHistory(original.recipient);
+    const messages = [...history, { role: 'user' as const, content: original.content }];
+
     const result = await this.aiProvider!.chatCompletion({
       systemPrompt:
         `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
@@ -474,7 +937,7 @@ export class ChatService {
         `IMPORTANT: Only speak for yourself. Never speak on behalf of other agents or summarize what they did. ` +
         `Other agents will respond separately in their own messages. ` +
         `Never prefix your response with your name or any other agent's name — the UI handles that.`,
-      messages: [{ role: 'user', content: original.content }],
+      messages,
     });
 
     return {
@@ -495,6 +958,9 @@ export class ChatService {
     try {
       this.emitTyping(agent.id, agent.name);
 
+      const history = this.getRecentHistory(agent.id);
+      const messages = [...history, { role: 'user' as const, content: original.content }];
+
       const result = await this.aiProvider!.chatCompletion({
         systemPrompt:
           `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
@@ -503,7 +969,7 @@ export class ChatService {
           `You can and should take action on requests — create files, write code, run commands. ` +
           `If the user asks you to do something, do it. Don't just talk about it. ` +
           `Never prefix your response with your name — the UI handles that.`,
-        messages: [{ role: 'user', content: original.content }],
+        messages,
       });
 
       this.emitTypingStop(agent.id);
@@ -640,9 +1106,12 @@ export class ChatService {
         `Other agents will respond separately in their own messages. ` +
         `Never prefix your response with your name or any other agent's name — the UI handles that.`;
 
+    const history = this.getRecentHistory(responseRecipient);
+    const messages = [...history, { role: 'user' as const, content: original.content }];
+
     const result = await this.aiProvider!.chatCompletion({
       systemPrompt,
-      messages: [{ role: 'user', content: original.content }],
+      messages,
       stream: true,
       onChunk,
     });

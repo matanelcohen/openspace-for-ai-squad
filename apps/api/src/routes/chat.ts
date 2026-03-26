@@ -1,9 +1,10 @@
 /**
  * Chat API — P3-4
  *
- * POST /api/chat/messages — send a message
- * GET  /api/chat/messages — retrieve message history (paginated, filterable)
- * GET  /api/chat/stream   — SSE streaming chat endpoint
+ * POST   /api/chat/messages — send a message
+ * GET    /api/chat/messages — retrieve message history (paginated, filterable)
+ * DELETE /api/chat/messages — clear chat history (filterable by agent/channel)
+ * GET    /api/chat/stream   — SSE streaming chat endpoint
  */
 
 import type { FastifyPluginAsync } from 'fastify';
@@ -11,6 +12,22 @@ import type { FastifyPluginAsync } from 'fastify';
 import type { ChatService, SendMessageInput } from '../services/chat/index.js';
 
 const chatRoute: FastifyPluginAsync = async (app) => {
+  // Allow DELETE (and other bodyless methods) to send Content-Type: application/json
+  // without a body — the default Fastify JSON parser rejects empty payloads.
+  app.addContentTypeParser(
+    'application/json',
+    { parseAs: 'string' },
+    (_req, body, done) => {
+      const str = typeof body === 'string' ? body : (body as Buffer).toString();
+      if (str.trim() === '') return done(null, undefined);
+      try {
+        done(null, JSON.parse(str));
+      } catch (err) {
+        done(err as Error, undefined);
+      }
+    },
+  );
+
   // POST /api/chat/messages — send a message
   app.post<{ Body: SendMessageInput }>('/chat/messages', async (request, reply) => {
     const body = request.body;
@@ -65,6 +82,16 @@ const chatRoute: FastifyPluginAsync = async (app) => {
     });
   });
 
+  // DELETE /api/chat/messages — clear chat history
+  app.delete<{
+    Querystring: { agent?: string; channel?: string };
+  }>('/chat/messages', async (request, reply) => {
+    const agent = request.query.agent || undefined;
+    const channel = request.query.channel || undefined;
+    const result = await app.chatService.clearMessages({ agent, channel });
+    return reply.status(200).send(result);
+  });
+
   // GET /api/chat/stream — SSE streaming chat endpoint
   app.get<{
     Querystring: { recipient?: string; content?: string };
@@ -107,6 +134,8 @@ const chatRoute: FastifyPluginAsync = async (app) => {
 
     reply.raw.end();
   });
+
+  // Channel CRUD routes are registered separately at /api/channels (see app.ts).
 };
 
 export default chatRoute;

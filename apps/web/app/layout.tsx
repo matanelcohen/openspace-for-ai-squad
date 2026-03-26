@@ -7,6 +7,7 @@ import { AppLayout } from '@/components/layout/app-layout';
 import { QueryProvider } from '@/components/providers/query-provider';
 import { ThemeProvider } from '@/components/providers/theme-provider';
 import { WebSocketProvider } from '@/components/providers/websocket-provider';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -30,7 +31,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         >
           <QueryProvider>
             <WebSocketProvider>
-              <AppLayout>{children}</AppLayout>
+              <TooltipProvider>
+                <AppLayout>{children}</AppLayout>
+              </TooltipProvider>
             </WebSocketProvider>
           </QueryProvider>
         </ThemeProvider>

@@ -28,31 +28,46 @@ import { cn } from '@/lib/utils';
 
 // --- Helpers ---
 
-const SPAN_ICONS: Record<SpanKind, React.ElementType> = {
+const SPAN_ICONS: Record<string, React.ElementType> = {
   agent: Bot,
   chain: Zap,
   tool: Wrench,
   llm: Cpu,
   retriever: SearchIcon,
   embedding: Brain,
+  internal: Zap,
+  server: Cpu,
+  client: Cpu,
+  producer: Zap,
+  consumer: Zap,
 };
 
-const SPAN_COLORS: Record<SpanKind, string> = {
+const SPAN_COLORS: Record<string, string> = {
   agent: 'bg-purple-500',
   chain: 'bg-blue-500',
   tool: 'bg-amber-500',
   llm: 'bg-green-500',
   retriever: 'bg-cyan-500',
   embedding: 'bg-pink-500',
+  internal: 'bg-blue-500',
+  server: 'bg-green-500',
+  client: 'bg-green-500',
+  producer: 'bg-blue-500',
+  consumer: 'bg-blue-500',
 };
 
-const SPAN_BG_COLORS: Record<SpanKind, string> = {
+const SPAN_BG_COLORS: Record<string, string> = {
   agent: 'bg-purple-500/20 border-purple-500/40',
   chain: 'bg-blue-500/20 border-blue-500/40',
   tool: 'bg-amber-500/20 border-amber-500/40',
   llm: 'bg-green-500/20 border-green-500/40',
   retriever: 'bg-cyan-500/20 border-cyan-500/40',
   embedding: 'bg-pink-500/20 border-pink-500/40',
+  internal: 'bg-blue-500/20 border-blue-500/40',
+  server: 'bg-green-500/20 border-green-500/40',
+  client: 'bg-green-500/20 border-green-500/40',
+  producer: 'bg-blue-500/20 border-blue-500/40',
+  consumer: 'bg-blue-500/20 border-blue-500/40',
 };
 
 const STATUS_COLORS: Record<TraceStatus, string> = {
@@ -134,8 +149,8 @@ function WaterfallRow({
   onSelect,
   onToggle,
 }: WaterfallRowProps) {
-  const Icon = SPAN_ICONS[span.kind];
-  const barColor = SPAN_COLORS[span.kind];
+  const Icon = SPAN_ICONS[span.kind] ?? Zap;
+  const barColor = SPAN_COLORS[span.kind] ?? 'bg-blue-500';
 
   const offsetPct = traceDuration > 0 ? ((span.startTime - traceStart) / traceDuration) * 100 : 0;
   const widthPct =
@@ -224,13 +239,13 @@ interface SpanDetailProps {
 }
 
 function SpanDetail({ span }: SpanDetailProps) {
-  const Icon = SPAN_ICONS[span.kind];
+  const Icon = SPAN_ICONS[span.kind] ?? Zap;
   const [activeTab, setActiveTab] = useState<'input' | 'output' | 'metadata'>('input');
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className={cn('border-b p-4', SPAN_BG_COLORS[span.kind])}>
+      <div className={cn('border-b p-4', SPAN_BG_COLORS[span.kind] ?? 'bg-blue-500/20 border-blue-500/40')}>
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" />
           <h3 className="font-semibold">{span.name}</h3>
@@ -436,7 +451,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
       {/* Legend */}
       <div className="flex flex-wrap items-center gap-3 text-xs">
         {(Object.entries(SPAN_COLORS) as [SpanKind, string][]).map(([kind, color]) => {
-          const Icon = SPAN_ICONS[kind];
+          const Icon = SPAN_ICONS[kind] ?? Zap;
           return (
             <div key={kind} className="flex items-center gap-1.5">
               <div className={cn('h-2.5 w-2.5 rounded-sm', color)} />

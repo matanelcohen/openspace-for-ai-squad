@@ -1,6 +1,6 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { fireEvent,render, screen } from '@testing-library/react';
+import { Activity, ClipboardList, Lightbulb,MessageSquare, Mic } from 'lucide-react';
 import { describe, expect, it, vi } from 'vitest';
-import { ClipboardList, MessageSquare, Activity, Mic, Lightbulb } from 'lucide-react';
 
 import { EmptyState } from '@/components/ui/empty-state';
 

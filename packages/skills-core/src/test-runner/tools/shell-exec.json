@@ -1,0 +1,40 @@
+{
+  "id": "shell:exec",
+  "name": "Shell Execute",
+  "description": "Execute a shell command and capture stdout, stderr, and exit code. Commands run in the project root with a configurable timeout.",
+  "version": "1.0.0",
+  "tags": ["testing"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "command",
+        "type": "string",
+        "description": "Shell command to execute",
+        "required": true
+      },
+      {
+        "name": "cwd",
+        "type": "string",
+        "description": "Working directory (defaults to project root)",
+        "required": false
+      },
+      {
+        "name": "timeout",
+        "type": "number",
+        "description": "Timeout in seconds. 0 means no timeout.",
+        "required": false,
+        "default": 60
+      },
+      {
+        "name": "env",
+        "type": "object",
+        "description": "Additional environment variables to set",
+        "required": false,
+        "properties": []
+      }
+    ]
+  },
+  "outputDescription": "Object with {stdout, stderr, exitCode, durationMs}. stdout and stderr are strings, exitCode is a number (0 = success).",
+  "isEnabled": true,
+  "author": "openspace"
+}

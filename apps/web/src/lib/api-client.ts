@@ -16,12 +16,14 @@ export class ApiError extends Error {
 
 export async function apiClient<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+  const headers: HeadersInit = {
+    ...(options?.body != null ? { 'Content-Type': 'application/json' } : {}),
+    ...options?.headers,
+  };
+
   const res = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers,
   });
 
   if (!res.ok) {

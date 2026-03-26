@@ -14,6 +14,7 @@ import { join, resolve } from 'node:path';
 import type {
   Agent,
   AgentDetail,
+  ChatChannel,
   Decision,
   SquadConfig,
   SquadOverview,
@@ -22,6 +23,7 @@ import type {
 } from '@openspace/shared';
 
 import { parseAgentCharter } from './agent-parser.js';
+import { parseAllChannels } from './channel-parser.js';
 import { parseConfigFile, type RawSquadConfig } from './config-parser.js';
 import { parseDecisionsFile } from './decision-parser.js';
 import { parseAllTasks } from './task-parser.js';
@@ -66,6 +68,17 @@ export class SquadParser {
   /** Get the tasks directory path. */
   getTasksDir(): string {
     return join(this.squadDir, 'tasks');
+  }
+
+  /** Get the channels directory path. */
+  getChannelsDir(): string {
+    return join(this.squadDir, 'channels');
+  }
+
+  /** Parse all channels from .squad/channels/. */
+  async getChannels(): Promise<ChatChannel[]> {
+    const { channels } = await parseAllChannels(this.getChannelsDir());
+    return channels.map((c) => c.channel);
   }
 
   /** Parse all tasks from .squad/tasks/. */
@@ -136,6 +149,7 @@ export {
   parseCharterContent,
   parseHistoryContent,
 } from './agent-parser.js';
+export { parseAllChannels, parseChannelFile } from './channel-parser.js';
 export { parseConfigContent, parseConfigFile, type RawSquadConfig } from './config-parser.js';
 export { parseDecisionsContent, parseDecisionsFile } from './decision-parser.js';
 export { parseAllTasks, parseTaskFile } from './task-parser.js';

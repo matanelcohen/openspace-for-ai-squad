@@ -2,7 +2,7 @@
 
 import type { TaskStatus } from '@openspace/shared';
 import { TASK_STATUS_LABELS,TASK_STATUSES } from '@openspace/shared';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { ArrowLeft, Pencil, RotateCcw } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -23,13 +23,14 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
 
 export default function TaskDetailPage() {
   const params = useParams();
   const id = params.id as string;
   const { data: task, isLoading, error } = useTask(id);
   const updateStatus = useUpdateTaskStatus();
+  const updateTask = useUpdateTask();
   const [editOpen, setEditOpen] = useState(false);
 
   if (isLoading) {
@@ -62,6 +63,34 @@ export default function TaskDetailPage() {
     }
   }
 
+  function handleRetryTask() {
+    if (!task) return;
+    // Clear the failed attempts from description and reset to backlog
+    const cleanDesc = task.description
+      .replace(/\n---\n\*\*\[.*?\]\*\* 🚀.*?started working.*$/gm, '')
+      .replace(/\n---\n\*\*\[.*?\]\*\* 🛑.*?Permanently blocked.*$/gm, '')
+      .replace(/\n---\n\*\*\[.*?\]\*\* ❌.*$/gm, '')
+      .replace(/\n\n---\n\*\*Diagnosis:.*$/gm, '')
+      .replace(/\n\n---\n\*\*Last known error:.*$/gm, '')
+      .replace(/\n\n---\n\*\*Execution log:[\s\S]*?(?=\n\n---|$)/g, '')
+      .replace(/\n\n\*\*Error:\*\*[\s\S]*?(?=\n\n---|$)/g, '')
+      .replace(/\n\n\*\*Stack:\*\*[\s\S]*?(?=\n\n---|$)/g, '')
+      .trimEnd();
+
+    updateTask.mutate({
+      taskId: task.id,
+      title: task.title,
+      description: cleanDesc + `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🔄 Task reset and re-queued by user.`,
+      assignee: task.assignee,
+      priority: task.priority,
+      labels: task.labels,
+    }, {
+      onSuccess: () => {
+        updateStatus.mutate({ taskId: task.id, status: 'backlog' });
+      },
+    });
+  }
+
   return (
     <div className="mx-auto max-w-3xl space-y-6" data-testid="task-detail-page">
       {/* Back nav */}
@@ -91,6 +120,27 @@ export default function TaskDetailPage() {
           Edit
         </Button>
       </div>
+
+      {/* Blocked task banner with retry button */}
+      {task.status === 'blocked' && (
+        <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900 dark:bg-red-950" data-testid="blocked-banner">
+          <div>
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">⚠️ This task is blocked</p>
+            <p className="text-xs text-red-600 dark:text-red-400">The agent failed to complete this task. You can reset and retry it.</p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRetryTask}
+            disabled={updateTask.isPending || updateStatus.isPending}
+            className="gap-1.5 border-red-300 text-red-700 hover:bg-red-100 dark:border-red-800 dark:text-red-300 dark:hover:bg-red-900"
+            data-testid="retry-task-btn"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {updateTask.isPending ? 'Resetting...' : 'Retry Task'}
+          </Button>
+        </div>
+      )}
 
       {/* Controls row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

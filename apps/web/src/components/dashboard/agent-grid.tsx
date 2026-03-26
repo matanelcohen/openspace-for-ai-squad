@@ -2,6 +2,7 @@
 
 import { AgentCard } from '@/components/dashboard/agent-card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAgentStatus } from '@/hooks/use-agent-status';
 import { useAgents } from '@/hooks/use-agents';
 
 function AgentCardSkeleton() {
@@ -30,6 +31,7 @@ function AgentCardSkeleton() {
 
 export function AgentGrid() {
   const { data: agents, isLoading, error } = useAgents();
+  const { data: agentStatus } = useAgentStatus();
 
   if (isLoading) {
     return (
@@ -62,7 +64,11 @@ export function AgentGrid() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" data-testid="agent-grid">
       {agents.map((agent) => (
-        <AgentCard key={agent.id} agent={agent} />
+        <AgentCard
+          key={agent.id}
+          agent={agent}
+          workStatus={agentStatus?.agents[agent.id]}
+        />
       ))}
     </div>
   );

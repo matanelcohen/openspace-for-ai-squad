@@ -171,4 +171,46 @@ describe('Chat Routes', () => {
       expect(body.messages).toHaveLength(2); // sent to bender + sent by bender
     });
   });
+
+  describe('DELETE /api/chat/messages', () => {
+    it('should clear all messages and return deleted count', async () => {
+      // Seed a message first
+      await app.inject({
+        method: 'POST',
+        url: '/api/chat/messages',
+        payload: { sender: 'user', recipient: 'fry', content: 'hello' },
+      });
+
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/chat/messages?agent=fry',
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body).toHaveProperty('deleted');
+      expect(body.deleted).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should return 200 with Content-Type: application/json header (empty body)', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/chat/messages?agent=fry',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toHaveProperty('deleted');
+    });
+
+    it('should return 200 when no messages match', async () => {
+      const res = await app.inject({
+        method: 'DELETE',
+        url: '/api/chat/messages?agent=nobody',
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ deleted: 0 });
+    });
+  });
 });

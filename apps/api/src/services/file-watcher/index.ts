@@ -31,7 +31,10 @@ export type FileWatcherEventType =
   | 'task:updated'
   | 'decision:added'
   | 'config:changed'
-  | 'team:updated';
+  | 'team:updated'
+  | 'channel:created'
+  | 'channel:updated'
+  | 'channel:deleted';
 
 export interface FileWatcherEvent {
   type: FileWatcherEventType;
@@ -211,6 +214,14 @@ export class FileWatcher extends EventEmitter {
     // tasks/*
     if (relPath.startsWith('tasks/')) {
       const type: FileWatcherEventType = changeType === 'add' ? 'task:created' : 'task:updated';
+      return { type, path: relPath, timestamp: now };
+    }
+
+    // channels/*.md
+    if (relPath.startsWith('channels/') && relPath.endsWith('.md')) {
+      const type: FileWatcherEventType =
+        changeType === 'add' ? 'channel:created' :
+        changeType === 'unlink' ? 'channel:deleted' : 'channel:updated';
       return { type, path: relPath, timestamp: now };
     }
 

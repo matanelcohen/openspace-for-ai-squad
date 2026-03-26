@@ -1,0 +1,116 @@
+{
+  "manifestVersion": 1,
+  "id": "git-expert",
+  "name": "Git Expert",
+  "version": "1.0.0",
+  "description": "Deep git analysis — commit inspection, diff review, blame tracing, and PR evaluation. Understands repository history and helps agents reason about code changes.",
+  "author": "openspace",
+  "license": "MIT",
+  "tags": ["code-analysis"],
+  "icon": "git-branch",
+  "tools": [
+    {
+      "toolId": "git:diff",
+      "reason": "Compare file changes between commits, branches, or working tree"
+    },
+    {
+      "toolId": "git:log",
+      "reason": "Query commit history with filtering and formatting"
+    },
+    {
+      "toolId": "git:blame",
+      "reason": "Trace line-level authorship and change history"
+    },
+    {
+      "toolId": "git:show",
+      "optional": true,
+      "reason": "Inspect individual commit contents"
+    },
+    {
+      "toolId": "file:read",
+      "optional": true,
+      "reason": "Read full file context when diffs are insufficient"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "system",
+      "name": "Git Expert System Prompt",
+      "role": "system",
+      "content": "You are {{agent.name}}, a git analysis specialist. You examine repository history, diffs, and blame data to provide precise, evidence-based insights about code changes. Always cite specific commits, line ranges, and authors when relevant."
+    },
+    {
+      "id": "commit-analysis",
+      "name": "Commit Analysis",
+      "role": "execution",
+      "content": "file://prompts/commit-analysis.md",
+      "variables": [
+        {
+          "name": "commitRef",
+          "description": "The commit SHA, branch, or ref to analyze",
+          "required": true
+        },
+        {
+          "name": "depth",
+          "description": "How many parent commits to include for context",
+          "required": false,
+          "default": "5"
+        }
+      ]
+    },
+    {
+      "id": "pr-review",
+      "name": "Pull Request Review",
+      "role": "review",
+      "content": "file://prompts/pr-review.md",
+      "variables": [
+        {
+          "name": "baseBranch",
+          "description": "The target branch being merged into",
+          "required": true
+        },
+        {
+          "name": "headBranch",
+          "description": "The source branch with changes",
+          "required": true
+        },
+        {
+          "name": "focusAreas",
+          "description": "Comma-separated areas to focus review on (e.g. 'security,performance')",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "type": "task-type",
+      "taskTypes": ["git-analysis", "commit-review", "pr-review"]
+    },
+    {
+      "type": "pattern",
+      "field": "title",
+      "pattern": "\\b(commit|diff|blame|merge|rebase|cherry-pick|git history)\\b",
+      "flags": "i"
+    },
+    {
+      "type": "label",
+      "labels": ["needs-review", "git"]
+    }
+  ],
+  "config": [
+    {
+      "key": "maxDiffLines",
+      "type": "number",
+      "description": "Maximum diff lines to include before summarizing",
+      "default": 500
+    },
+    {
+      "key": "includeStats",
+      "type": "boolean",
+      "description": "Include file change statistics in analysis",
+      "default": true
+    }
+  ],
+  "permissions": ["fs:read", "exec:git"]
+}

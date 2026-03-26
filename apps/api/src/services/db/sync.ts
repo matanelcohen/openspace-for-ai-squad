@@ -9,7 +9,7 @@
  * If they conflict, files win.
  */
 
-import type { Task } from '@openspace/shared';
+import type { ChatChannel, Task } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 
 import type { FileWatcherEvent, FileWatcherEventType } from '../file-watcher/index.js';
@@ -20,6 +20,7 @@ import type { SquadParser } from '../squad-parser/index.js';
 export interface FullSyncResult {
   tasks: number;
   decisions: number;
+  channels: number;
   durationMs: number;
 }
 
@@ -33,9 +34,10 @@ export async function fullSync(
 ): Promise<FullSyncResult> {
   const start = Date.now();
 
-  const [decisions, tasks] = await Promise.all([
+  const [decisions, tasks, channels] = await Promise.all([
     parser.getDecisions(),
     loadTasks(parser),
+    parser.getChannels(),
   ]);
 
   // Run the sync in a transaction for atomicity
@@ -43,6 +45,7 @@ export async function fullSync(
     // Clear existing data (FTS triggers will handle cleanup)
     db.prepare('DELETE FROM decisions').run();
     db.prepare('DELETE FROM tasks').run();
+    db.prepare('DELETE FROM chat_channels').run();
 
     // Re-insert decisions
     const insertDecision = db.prepare(`
@@ -83,6 +86,23 @@ export async function fullSync(
       });
     }
 
+    // Re-insert channels
+    const insertChannel = db.prepare(`
+      INSERT INTO chat_channels (id, name, description, member_agent_ids, created_at, updated_at)
+      VALUES (@id, @name, @description, @memberAgentIds, @createdAt, @updatedAt)
+    `);
+
+    for (const c of channels) {
+      insertChannel.run({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        memberAgentIds: JSON.stringify(c.memberAgentIds),
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      });
+    }
+
     // Update sync timestamp
     db.prepare(
       `INSERT OR REPLACE INTO _meta (key, value) VALUES ('last_full_sync', @ts)`,
@@ -94,6 +114,7 @@ export async function fullSync(
   return {
     tasks: tasks.length,
     decisions: decisions.length,
+    channels: channels.length,
     durationMs: Date.now() - start,
   };
 }
@@ -127,6 +148,14 @@ export async function incrementalSync(
     case 'task:created':
     case 'task:updated': {
       await syncTasks(db, parser);
+      updated.push(event.type);
+      break;
+    }
+
+    case 'channel:created':
+    case 'channel:updated':
+    case 'channel:deleted': {
+      await syncChannels(db, parser);
       updated.push(event.type);
       break;
     }
@@ -225,6 +254,36 @@ async function syncTasks(
         createdAt: t.createdAt,
         updatedAt: t.updatedAt,
         sortIndex: t.sortIndex,
+      });
+    }
+  });
+
+  transaction();
+}
+
+/** Re-sync all channels from files → db. */
+async function syncChannels(
+  db: Database.Database,
+  parser: SquadParser,
+): Promise<void> {
+  const channels = await parser.getChannels();
+
+  const transaction = db.transaction(() => {
+    db.prepare('DELETE FROM chat_channels').run();
+
+    const insert = db.prepare(`
+      INSERT INTO chat_channels (id, name, description, member_agent_ids, created_at, updated_at)
+      VALUES (@id, @name, @description, @memberAgentIds, @createdAt, @updatedAt)
+    `);
+
+    for (const c of channels) {
+      insert.run({
+        id: c.id,
+        name: c.name,
+        description: c.description,
+        memberAgentIds: JSON.stringify(c.memberAgentIds),
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
       });
     }
   });

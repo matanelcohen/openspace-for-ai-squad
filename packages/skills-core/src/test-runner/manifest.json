@@ -1,0 +1,126 @@
+{
+  "manifestVersion": 1,
+  "id": "test-runner",
+  "name": "Test Runner",
+  "version": "1.0.0",
+  "description": "Discovers, runs, and analyzes tests across frameworks. Generates test cases from source code and diagnoses failures with root-cause analysis.",
+  "author": "openspace",
+  "license": "MIT",
+  "tags": ["testing"],
+  "icon": "flask",
+  "tools": [
+    {
+      "toolId": "shell:exec",
+      "reason": "Execute test commands and capture output"
+    },
+    {
+      "toolId": "test:discover",
+      "reason": "Scan project for test files, suites, and individual test cases"
+    },
+    {
+      "toolId": "test:run",
+      "reason": "Run tests with framework-specific options and structured result output"
+    },
+    {
+      "toolId": "file:read",
+      "reason": "Read source and test files for analysis"
+    },
+    {
+      "toolId": "file:write",
+      "optional": true,
+      "reason": "Write generated test files"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "system",
+      "name": "Test Runner System Prompt",
+      "role": "system",
+      "content": "You are {{agent.name}}, a testing specialist. You write reliable, focused tests that catch real bugs without being brittle. You analyze failures methodically — reading stack traces, checking test isolation, and identifying root causes before suggesting fixes. Prefer testing behavior over implementation details."
+    },
+    {
+      "id": "test-generation",
+      "name": "Test Generation",
+      "role": "execution",
+      "content": "file://prompts/test-generation.md",
+      "variables": [
+        {
+          "name": "sourceFile",
+          "description": "Path to the source file to generate tests for",
+          "required": true
+        },
+        {
+          "name": "framework",
+          "description": "Test framework to use (e.g. 'vitest', 'jest', 'pytest', 'go-test')",
+          "required": false
+        },
+        {
+          "name": "coverage",
+          "description": "Coverage target: 'critical-paths', 'comprehensive', 'edge-cases'",
+          "required": false,
+          "default": "critical-paths"
+        }
+      ]
+    },
+    {
+      "id": "failure-analysis",
+      "name": "Failure Analysis",
+      "role": "execution",
+      "content": "file://prompts/failure-analysis.md",
+      "variables": [
+        {
+          "name": "testOutput",
+          "description": "Raw test runner output including failures and stack traces",
+          "required": true
+        },
+        {
+          "name": "testFile",
+          "description": "Path to the failing test file",
+          "required": false
+        },
+        {
+          "name": "recentChanges",
+          "description": "Git diff or description of recent code changes that may have caused failures",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "type": "task-type",
+      "taskTypes": ["test-generation", "test-fix", "test-run", "tdd"]
+    },
+    {
+      "type": "pattern",
+      "field": "title",
+      "pattern": "\\b(test|spec|coverage|failing|broken test|flaky)\\b",
+      "flags": "i"
+    },
+    {
+      "type": "file",
+      "patterns": ["**/*.test.*", "**/*.spec.*", "**/__tests__/**"]
+    }
+  ],
+  "config": [
+    {
+      "key": "defaultFramework",
+      "type": "string",
+      "description": "Default test framework when not auto-detected",
+      "default": "vitest"
+    },
+    {
+      "key": "timeout",
+      "type": "number",
+      "description": "Test execution timeout in seconds",
+      "default": 60
+    },
+    {
+      "key": "retryFlaky",
+      "type": "boolean",
+      "description": "Automatically retry tests that appear flaky",
+      "default": false
+    }
+  ],
+  "permissions": ["fs:read", "fs:write", "exec:shell"]
+}

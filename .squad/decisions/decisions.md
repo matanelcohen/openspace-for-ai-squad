@@ -140,3 +140,33 @@ All type consumers (apps/web, apps/api, and future packages) should follow this 
 - Pre-commit hooks via Husky + lint-staged enforce formatting on every commit.
 
 *Last updated: 2026-03-24*
+
+---
+
+# Decision: Channel Storage — Dual Persistence with `.squad/channels/*.md`
+
+**By:** Leela (Lead)
+**Date:** 2026-03-25
+**Task:** P1 — Channel storage schema and CRUD API contract
+**Status:** Active
+
+## What
+
+Channels use the same dual-persistence pattern as tasks and decisions: `.squad/channels/*.md` (YAML frontmatter + markdown body) is the source of truth, with SQLite `chat_channels` table as a cache/query layer. Channel files are named `{channel-id}.md` (e.g., `chan-Abc12345.md`). IDs are generated via `chan-{nanoid(8)}`.
+
+## Why
+
+Consistency with the existing `.squad/`-as-source-of-truth architecture. Channels survive DB corruption (rebuilt from files on startup), are git-diffable and version-controlled, and external tools can create channels by dropping `.md` files into `.squad/channels/`. SQLite provides fast queries and real-time filtering without parsing files on every request.
+
+## Key Decisions
+
+- **Per-workspace scoping:** Each `.squad/channels/` directory is independent. No cross-workspace channel sharing in v1.
+- **Conflict resolution:** Files win. `fullSync()` on startup rebuilds DB from files. File watcher triggers `incrementalSync()` on changes.
+- **Validation:** Name uniqueness (409), non-blank name (400), non-empty memberAgentIds when provided (400) — enforced at the API layer only.
+- **Delete cascades:** Deleting a channel removes associated chat messages from SQLite.
+
+## Impact
+
+All channel CRUD flows through `ChatService` methods which write to both SQLite and `.squad/channels/`. The file watcher and sync pipeline handle `channels/` events. Full ADR: `.squad/decisions/adr-channel-storage.md`.
+
+*Last updated: 2026-03-25*

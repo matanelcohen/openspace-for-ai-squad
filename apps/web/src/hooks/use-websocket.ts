@@ -4,16 +4,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type WsEventType =
   | 'agent:status'
+  | 'agent:working'
+  | 'agent:idle'
   | 'task:updated'
   | 'task:created'
   | 'decision:added'
   | 'activity:new'
   | 'chat:message'
   | 'chat:typing'
+  | 'chat:cleared'
+  | 'channel:created'
+  | 'channel:updated'
+  | 'channel:deleted'
   | 'voice:session'
   | 'voice:transcript'
   | 'voice:audio'
-  | 'voice:speaking';
+  | 'voice:speaking'
+  | 'escalation:created'
+  | 'escalation:updated';
 
 export interface WsEnvelope {
   type: string;

@@ -1,8 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import type { Decision } from '@openspace/shared';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+
 import { DecisionCard } from '../decision-card';
-import type { Decision } from '@openspace/shared';
 
 vi.mock('@/components/agent-avatar', () => ({
   AgentAvatar: ({ agentId }: { agentId: string }) => (

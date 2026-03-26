@@ -1,0 +1,53 @@
+{
+  "id": "git:diff",
+  "name": "Git Diff",
+  "description": "Compare file changes between commits, branches, or the working tree. Supports unified diff format with configurable context lines.",
+  "version": "1.0.0",
+  "tags": ["code-analysis"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "target",
+        "type": "string",
+        "description": "Diff target — a commit SHA, branch name, tag, or range (e.g. 'main..feature', 'HEAD~3'). Omit for unstaged changes.",
+        "required": false
+      },
+      {
+        "name": "paths",
+        "type": "array",
+        "description": "Limit diff to specific file paths or glob patterns",
+        "required": false,
+        "items": {
+          "name": "path",
+          "type": "string",
+          "description": "File path or glob pattern",
+          "required": true
+        }
+      },
+      {
+        "name": "staged",
+        "type": "boolean",
+        "description": "Show staged (cached) changes instead of unstaged",
+        "required": false,
+        "default": false
+      },
+      {
+        "name": "contextLines",
+        "type": "number",
+        "description": "Number of surrounding context lines in unified diff output",
+        "required": false,
+        "default": 3
+      },
+      {
+        "name": "stat",
+        "type": "boolean",
+        "description": "Include diffstat summary (files changed, insertions, deletions)",
+        "required": false,
+        "default": false
+      }
+    ]
+  },
+  "outputDescription": "Unified diff text. When stat is true, includes a summary line with files changed, insertions (+), and deletions (-).",
+  "isEnabled": true,
+  "author": "openspace"
+}

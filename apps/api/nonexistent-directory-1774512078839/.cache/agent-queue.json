@@ -1,0 +1,14 @@
+{
+  "queues": {
+    "leela": [],
+    "fry": [],
+    "bender": [],
+    "zoidberg": []
+  },
+  "active": {
+    "leela": null,
+    "fry": null,
+    "bender": null,
+    "zoidberg": null
+  }
+}

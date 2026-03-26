@@ -53,6 +53,7 @@ export type {
   ExecutionContext,
   ExpressionPredicate,
   HITLGateNodeConfig,
+  InterruptResolutionPayload,
   LogicalPredicate,
   NodeHandler,
   NodeOutput,
@@ -83,7 +84,41 @@ export type {
   EscalationReason,
   EscalationStatus,
 } from './escalation.js';
-export type { Memory, MemoryConsolidationResult, MemorySettings, MemoryType } from './memory.js';
+export type {
+  ContextSnapshotConfig,
+  EnhancedHITLGateConfig,
+  InterruptableNodeConfig,
+  InterruptChoice,
+  InterruptEvent,
+  InterruptEventPayload,
+  InterruptHandler,
+  InterruptPolicy,
+  InterruptReason,
+  InterruptRequest,
+  InterruptResolution,
+  InterruptResolutionAction,
+  InterruptResolver,
+  InterruptState,
+  InterruptStore,
+  InterruptTimeoutPolicy,
+} from './interrupt.js';
+export type {
+  ExtractedMemory,
+  Memory,
+  MemoryAttribution,
+  MemoryConsolidationResult,
+  MemoryCreateInput,
+  MemoryExtractionInput,
+  MemoryRecallResult,
+  MemorySearchRequest,
+  MemorySearchResponse,
+  MemorySearchResult,
+  MemorySettings,
+  MemoryStoreStats,
+  MemoryType,
+  MemoryUpdateInput,
+  MemoryWithMeta,
+} from './memory.js';
 export type {
   Chunk,
   ChunkFilter,
@@ -187,3 +222,11 @@ export type {
   WorkflowExecutionStatus,
   WorkflowNodeType,
 } from './workflow.js';
+export type {
+  Sandbox,
+  SandboxCommand,
+  SandboxOutputLine,
+  SandboxResources,
+  SandboxRuntime,
+  SandboxStatus,
+} from './sandbox.js';

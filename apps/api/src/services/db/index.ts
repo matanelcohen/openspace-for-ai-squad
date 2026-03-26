@@ -16,6 +16,7 @@ import type Database from 'better-sqlite3';
 import BetterSqlite3 from 'better-sqlite3';
 
 import { initializeSchema } from './schema.js';
+import { applyMigrations } from './migrations.js';
 
 export type { Database };
 
@@ -38,7 +39,7 @@ export interface OpenDbOptions {
 
 /**
  * Open the SQLite database, ensure parent directories exist,
- * and apply the schema.
+ * apply the base schema, and run any pending migrations.
  */
 export function openDatabase(opts: OpenDbOptions): Database.Database {
   let db: Database.Database;
@@ -57,6 +58,7 @@ export function openDatabase(opts: OpenDbOptions): Database.Database {
   db.pragma('foreign_keys = ON');
 
   initializeSchema(db);
+  applyMigrations(db);
 
   return db;
 }

@@ -28,6 +28,9 @@ export function MessageInput({
   const [focused, setFocused] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // ChatGPT-style: input is "open" when focused or has content
+  const isOpen = focused || value.length > 0;
+
   const autoResize = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
@@ -72,7 +75,10 @@ export function MessageInput({
   return (
     <TooltipProvider delayDuration={300}>
       <div
-        className="border-t bg-background/80 backdrop-blur-sm px-4 pb-4 pt-2"
+        className={cn(
+          'border-t bg-background/80 backdrop-blur-sm pb-4 pt-2 transition-all duration-300 ease-in-out',
+          isOpen ? 'px-4' : 'px-4 sm:px-16 md:px-28 lg:px-40',
+        )}
         data-testid="message-input"
       >
         {isTyping && (
@@ -91,7 +97,10 @@ export function MessageInput({
 
         <div
           className={cn(
-            'flex w-full flex-col gap-2 rounded-2xl border bg-background p-2.5 transition-all duration-200',
+            'mx-auto flex flex-col rounded-2xl border bg-background transition-all duration-300 ease-in-out',
+            isOpen
+              ? 'w-full gap-2 p-2.5 scale-100'
+              : 'w-full max-w-2xl gap-0 p-2 scale-[0.98]',
             focused && !disabled
               ? 'border-ring/75 ring-2 ring-ring/20 shadow-sm'
               : 'border-input hover:border-ring/40',
@@ -107,12 +116,20 @@ export function MessageInput({
             onBlur={() => setFocused(false)}
             placeholder={isActivelyRecording ? 'Listening...' : 'Send a message...'}
             disabled={disabled || isActivelyRecording}
-            className="max-h-40 min-h-[40px] w-full resize-none bg-transparent px-1.5 py-1 text-sm outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed"
+            className={cn(
+              'w-full resize-none bg-transparent text-sm outline-none placeholder:text-muted-foreground/70 disabled:cursor-not-allowed transition-all duration-300 ease-in-out',
+              isOpen ? 'max-h-40 min-h-[40px] px-1.5 py-1' : 'max-h-10 min-h-[36px] px-1.5 py-1',
+            )}
             rows={1}
             data-testid="message-textarea"
           />
 
-          <div className="flex items-center justify-between">
+          <div
+            className={cn(
+              'flex items-center justify-between overflow-hidden transition-all duration-300 ease-in-out',
+              isOpen ? 'max-h-12 opacity-100' : 'max-h-0 opacity-0',
+            )}
+          >
             <div className="flex items-center gap-1">
               {onVoiceRecord && (
                 <Tooltip>
@@ -164,7 +181,12 @@ export function MessageInput({
           </div>
         </div>
 
-        <p className="mt-1.5 text-center text-[10px] text-muted-foreground/50">
+        <p
+          className={cn(
+            'mt-1.5 text-center text-[10px] text-muted-foreground/50 transition-all duration-300 ease-in-out',
+            isOpen ? 'max-h-6 opacity-100' : 'max-h-0 opacity-0 overflow-hidden',
+          )}
+        >
           Press{' '}
           <kbd className="rounded border border-border/50 px-1 py-0.5 font-mono text-[10px]">
             Enter

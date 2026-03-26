@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { DecisionList } from '../decision-list';
 import type { Decision } from '@openspace/shared';
+import { render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
+import { DecisionList } from '../decision-list';
 
 vi.mock('../decision-card', () => ({
   DecisionCard: ({ decision }: { decision: Decision }) => (

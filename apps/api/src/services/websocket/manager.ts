@@ -14,11 +14,31 @@ import { nanoid } from 'nanoid';
 import type { WebSocket } from 'ws';
 
 import type {
+  WsChannelJoinMessage,
+  WsChannelLeaveMessage,
   WsClientInfo,
   WsClientMessage,
   WsEnvelope,
+  WsErrorEnvelope,
+  WsIdentifyMessage,
 } from './types.js';
 import { WS_EVENT_TYPES } from './types.js';
+
+// ── Chat handler type ─────────────────────────────────────────────
+
+/**
+ * Callback invoked when a client sends a `chat:send` message.
+ * The handler is responsible for membership validation, persistence,
+ * and broadcasting. It should throw on validation failures
+ * (e.g. ChannelMembershipError) so the manager can relay the error
+ * back to the sender.
+ */
+export type ChatSendHandler = (input: {
+  sender: string;
+  recipient: string;
+  content: string;
+  threadId?: string | null;
+}) => Promise<void>;
 
 // ── Defaults ──────────────────────────────────────────────────────
 
@@ -31,6 +51,12 @@ export class WebSocketManager {
   /** Map from client-id → { ws, info }. */
   private clients = new Map<string, { ws: WebSocket; info: WsClientInfo }>();
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  /** Map from agent-id → client-id (for channel-aware routing). */
+  private agentToClient = new Map<string, Set<string>>();
+  /** Map from client-id → set of channel IDs the client has joined. */
+  private clientChannels = new Map<string, Set<string>>();
+  /** Handler invoked when a client sends a chat:send message. */
+  private chatSendHandler: ChatSendHandler | null = null;
 
   readonly heartbeatIntervalMs: number;
   readonly pongTimeoutMs: number;
@@ -38,6 +64,15 @@ export class WebSocketManager {
   constructor(opts?: { heartbeatIntervalMs?: number; pongTimeoutMs?: number }) {
     this.heartbeatIntervalMs = opts?.heartbeatIntervalMs ?? HEARTBEAT_INTERVAL_MS;
     this.pongTimeoutMs = opts?.pongTimeoutMs ?? PONG_TIMEOUT_MS;
+  }
+
+  /**
+   * Register a handler for incoming `chat:send` messages.
+   * The handler should call ChatService.send() which validates
+   * channel membership before persisting or broadcasting.
+   */
+  setChatSendHandler(handler: ChatSendHandler): void {
+    this.chatSendHandler = handler;
   }
 
   // ── Connection lifecycle ──────────────────────────────────────
@@ -60,10 +95,12 @@ export class WebSocketManager {
 
     ws.on('close', () => {
       this.clients.delete(id);
+      this.clientChannels.delete(id);
     });
 
     ws.on('error', () => {
       this.clients.delete(id);
+      this.clientChannels.delete(id);
     });
 
     // Send welcome with client ID
@@ -122,6 +159,44 @@ export class WebSocketManager {
         // best-effort delivery
       }
     }
+  }
+
+  /**
+   * Send a channel-scoped event only to clients that have joined the
+   * specified channel (via the `channel:join` action). Respects event
+   * subscription filters the same way `broadcast()` does.
+   */
+  broadcastToChannel(channelId: string, envelope: WsEnvelope): void {
+    const data = JSON.stringify(envelope);
+
+    for (const [clientId, { ws, info }] of this.clients) {
+      if (ws.readyState !== 1 /* WebSocket.OPEN */) continue;
+
+      // Subscription filter (same as broadcast)
+      if (info.subscriptions.size > 0 && !info.subscriptions.has(envelope.type)) {
+        continue;
+      }
+
+      // Channel membership filter — skip clients that haven't joined this channel
+      const channels = this.clientChannels.get(clientId);
+      if (!channels?.has(channelId)) continue;
+
+      try {
+        ws.send(data);
+      } catch {
+        // best-effort delivery
+      }
+    }
+  }
+
+  /** Check whether a client has joined a specific channel. */
+  isClientInChannel(clientId: string, channelId: string): boolean {
+    return this.clientChannels.get(clientId)?.has(channelId) ?? false;
+  }
+
+  /** Get the set of channel IDs a client has joined. */
+  getClientChannels(clientId: string): ReadonlySet<string> {
+    return this.clientChannels.get(clientId) ?? new Set();
   }
 
   // ── Heartbeat ─────────────────────────────────────────────────
@@ -216,6 +291,99 @@ export class WebSocketManager {
         entry.info.alive = true;
         entry.info.lastPong = Date.now();
         break;
+
+      case 'chat:send':
+        this.handleChatSend(clientId, entry.ws, msg);
+        break;
+
+      case 'channel:join':
+        this.handleChannelJoin(clientId, msg);
+        break;
+
+      case 'channel:leave':
+        this.handleChannelLeave(clientId, msg);
+        break;
+
+      case 'identify':
+        this.handleIdentify(clientId, msg);
+        break;
+    }
+  }
+
+  /** Track which channels a client has joined. */
+  private handleChannelJoin(clientId: string, msg: WsChannelJoinMessage): void {
+    let channels = this.clientChannels.get(clientId);
+    if (!channels) {
+      channels = new Set();
+      this.clientChannels.set(clientId, channels);
+    }
+    channels.add(msg.channelId);
+  }
+
+  /** Remove a channel from a client's joined set. */
+  private handleChannelLeave(clientId: string, msg: WsChannelLeaveMessage): void {
+    const channels = this.clientChannels.get(clientId);
+    if (channels) {
+      channels.delete(msg.channelId);
+    }
+  }
+
+  /** Bind a user/agent identity to a client connection. */
+  private handleIdentify(clientId: string, msg: WsIdentifyMessage): void {
+    let clientSet = this.agentToClient.get(msg.userId);
+    if (!clientSet) {
+      clientSet = new Set();
+      this.agentToClient.set(msg.userId, clientSet);
+    }
+    clientSet.add(clientId);
+  }
+
+  /**
+   * Handle a `chat:send` message from a client.
+   * Delegates to the registered chatSendHandler (which validates
+   * channel membership). On failure, sends a WsErrorEnvelope back
+   * to the originating client only — no broadcast, no leak.
+   */
+  private async handleChatSend(
+    clientId: string,
+    ws: WebSocket,
+    msg: { sender: string; recipient: string; content: string; threadId?: string | null },
+  ): Promise<void> {
+    if (!this.chatSendHandler) {
+      this.sendError(ws, 'NO_HANDLER', 'Chat send handler not configured');
+      return;
+    }
+
+    try {
+      await this.chatSendHandler({
+        sender: msg.sender,
+        recipient: msg.recipient,
+        content: msg.content,
+        threadId: msg.threadId,
+      });
+    } catch (err: unknown) {
+      const error = err as Error & { code?: string };
+      const code = error.code ?? 'SEND_FAILED';
+      const message = error.message ?? 'Failed to send message';
+      this.sendError(ws, code, message);
+    }
+  }
+
+  /** Send a WsErrorEnvelope to a single client. */
+  private sendError(ws: WebSocket, code: string, message: string): void {
+    if (ws.readyState !== 1 /* OPEN */) return;
+
+    const envelope: WsErrorEnvelope = {
+      type: 'error',
+      code,
+      message,
+      timestamp: new Date().toISOString(),
+    };
+
+    try {
+      ws.send(JSON.stringify(envelope));
+    } catch {
+      // best-effort
     }
   }
 

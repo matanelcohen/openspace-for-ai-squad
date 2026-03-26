@@ -1,0 +1,48 @@
+{
+  "id": "file:read",
+  "name": "File Read",
+  "description": "Read file contents with optional line range selection. Supports text files of any type. Returns content with line numbers for easy reference.",
+  "version": "1.0.0",
+  "tags": ["file-system"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "path",
+        "type": "string",
+        "description": "File path (relative to project root or absolute)",
+        "required": true
+      },
+      {
+        "name": "lineRange",
+        "type": "object",
+        "description": "Optional line range to read",
+        "required": false,
+        "properties": [
+          {
+            "name": "start",
+            "type": "number",
+            "description": "Start line (1-indexed)",
+            "required": true
+          },
+          {
+            "name": "end",
+            "type": "number",
+            "description": "End line (inclusive, -1 for end of file)",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "encoding",
+        "type": "string",
+        "description": "File encoding",
+        "required": false,
+        "default": "utf-8",
+        "enum": ["utf-8", "ascii", "latin1", "base64"]
+      }
+    ]
+  },
+  "outputDescription": "Object with {content, totalLines, path}. Content includes line numbers prefixed to each line.",
+  "isEnabled": true,
+  "author": "openspace"
+}

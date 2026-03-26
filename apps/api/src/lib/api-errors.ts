@@ -3,6 +3,7 @@ import type { FastifyReply } from 'fastify';
 export interface ApiErrorResponse {
   error: string;
   code: string;
+  statusCode: number;
   details?: Record<string, unknown>;
 }
 
@@ -20,9 +21,11 @@ export function sendError(
   message: string,
   details?: Record<string, unknown>,
 ): void {
-  reply.status(statusCode).send({
+  const body: ApiErrorResponse = {
     error: message,
     code,
+    statusCode,
     ...(details ? { details } : {}),
-  });
+  };
+  reply.status(statusCode).send(body);
 }

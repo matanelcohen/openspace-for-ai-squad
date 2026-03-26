@@ -1,0 +1,33 @@
+{
+  "id": "test:discover",
+  "name": "Test Discover",
+  "description": "Scan a project for test files and extract test suite/case structure. Auto-detects framework from config files (vitest.config, jest.config, pytest.ini, etc.).",
+  "version": "1.0.0",
+  "tags": ["testing"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "rootDir",
+        "type": "string",
+        "description": "Root directory to scan for tests (defaults to project root)",
+        "required": false
+      },
+      {
+        "name": "pattern",
+        "type": "string",
+        "description": "Glob pattern to match test files (e.g. '**/*.test.ts'). Auto-detected from framework config if omitted.",
+        "required": false
+      },
+      {
+        "name": "framework",
+        "type": "string",
+        "description": "Force a specific framework: 'vitest', 'jest', 'mocha', 'pytest', 'go-test', 'rspec'",
+        "required": false,
+        "enum": ["vitest", "jest", "mocha", "pytest", "go-test", "rspec"]
+      }
+    ]
+  },
+  "outputDescription": "Object with {framework, configFile, testFiles: [{path, suites: [{name, tests: [string]}]}], totalFiles, totalTests}.",
+  "isEnabled": true,
+  "author": "openspace"
+}

@@ -6,13 +6,16 @@
  * On startup, recovers in-progress tasks back into the queue.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import type { Task } from '@openspace/shared';
+import type { MemoryAttribution, Task } from '@openspace/shared';
 
 import type { ActivityFeed } from '../activity/index.js';
 import type { AIProvider } from '../ai/copilot-provider.js';
+import type { MemoryExtractor } from '../memory/memory-extractor.js';
+import type { MemoryRecallEngine } from '../memory/memory-recall.js';
+import type { MemoryStore } from '../memory/memory-store.js';
 import { getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
 
@@ -114,6 +117,15 @@ export class AgentWorkerService {
     return status;
   }
 
+  /** Return a shallow copy of each agent's queued task IDs. */
+  getQueuedTaskIds(): Record<string, string[]> {
+    const result: Record<string, string[]> = {};
+    for (const agent of this.config.agents) {
+      result[agent.id] = [...(this.queues.get(agent.id) ?? [])];
+    }
+    return result;
+  }
+
   // ── Recovery ───────────────────────────────────────────────────
 
   /** Recover queue state from disk + re-enqueue in-progress tasks. */
@@ -138,15 +150,21 @@ export class AgentWorkerService {
             // Check retry count from description
             const retryCount = (task.description.match(/🚀.*started working/g) ?? []).length;
             if (retryCount >= 3) {
-              // Too many retries — mark as blocked permanently
+              // Too many retries — mark as blocked permanently with reason
+              const lastError = task.description.match(/\*\*Error:\*\*\s*(.+)/g)?.pop() ?? 'Unknown — server likely crashed before error could be captured';
               await updateTask(this.config.tasksDir, taskId, {
                 status: 'blocked',
                 description:
                   task.description +
-                  `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Permanently blocked after ${retryCount} failed attempts.`,
+                  `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Permanently blocked after ${retryCount} failed attempts.\n\n**Last known error:** ${lastError}\n\n**Diagnosis:** Task was found in-progress after server restart. The agent likely crashed or the copilot-sdk session failed. Check server logs for details.`,
               });
+              // Remove from queue to prevent infinite retry loop
+              if (queue) {
+                const idx = queue.indexOf(task.id);
+                if (idx >= 0) queue.splice(idx, 1);
+              }
               console.log(
-                `[AgentWorker] Task ${taskId} permanently blocked after ${retryCount} retries`,
+                `[AgentWorker] Task ${taskId} permanently blocked after ${retryCount} retries — removed from queue`,
               );
               continue;
             }
@@ -241,6 +259,32 @@ export class AgentWorkerService {
 
     try {
       const task = await getTask(this.config.tasksDir, taskId);
+
+      // Skip tasks that are already blocked (shouldn't be in queue but safety check)
+      if (task.status === 'blocked') {
+        console.log(`[AgentWorker] Skipping blocked task ${taskId}`);
+        this.activeTask.delete(agentId);
+        this.persistQueue();
+        setTimeout(() => this.processNext(agentId), 1000);
+        return;
+      }
+
+      // Check retry count — don't even start if too many retries
+      const retryCount = (task.description.match(/🚀.*started working/g) ?? []).length;
+      if (retryCount >= 5) {
+        console.log(`[AgentWorker] Task ${taskId} has ${retryCount} retries — marking blocked`);
+        await updateTask(this.config.tasksDir, taskId, {
+          status: 'blocked',
+          description:
+            task.description +
+            `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Permanently blocked after ${retryCount} failed attempts.`,
+        });
+        this.activeTask.delete(agentId);
+        this.persistQueue();
+        setTimeout(() => this.processNext(agentId), 1000);
+        return;
+      }
+
       const agent = this.config.agents.find((a) => a.id === agentId);
       if (!agent) {
         this.activeTask.delete(agentId);
@@ -257,6 +301,7 @@ export class AgentWorkerService {
           `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.`,
       });
       this.broadcastTaskUpdate(taskId, 'in-progress');
+      this.broadcastAgentWorking(agentId, taskId, task.title);
       this.emitActivity(agentId, 'started', `Started working on: ${task.title}`);
       this.persistQueue();
 
@@ -266,6 +311,8 @@ export class AgentWorkerService {
       const progressLog: string[] = [];
 
       const result = await this.config.aiProvider.chatCompletion({
+        taskTitle: task.title,
+        agentId: agent.id,
         systemPrompt:
           `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
           `Personality: ${agent.personality}\n\n` +
@@ -336,8 +383,16 @@ export class AgentWorkerService {
       console.log(`[AgentWorker] ${agent.name} completed: ${task.title}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const stack = err instanceof Error ? err.stack?.substring(0, 300) : '';
+      const stack = err instanceof Error ? err.stack?.substring(0, 500) : '';
       console.error(`[AgentWorker] ${agentId} failed on ${taskId}:`, message);
+
+      // Persist error to a crash-safe log file (survives server restarts)
+      try {
+        const logDir = dirname(this.queueFilePath);
+        if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
+        const logLine = `[${new Date().toISOString()}] ${agentId} | ${taskId} | ${message}\n`;
+        appendFileSync(join(logDir, 'agent-errors.log'), logLine, 'utf-8');
+      } catch { /* best effort */ }
 
       try {
         const currentTask = await getTask(this.config.tasksDir, taskId).catch(() => null);
@@ -356,6 +411,10 @@ export class AgentWorkerService {
     } finally {
       this.activeTask.delete(agentId);
       this.persistQueue();
+      // Broadcast idle if the agent has no more queued tasks
+      if ((this.queues.get(agentId)?.length ?? 0) === 0) {
+        this.broadcastAgentIdle(agentId);
+      }
       // Wait before picking next task to let resources settle
       setTimeout(() => this.processNext(agentId), 3000);
     }
@@ -367,6 +426,22 @@ export class AgentWorkerService {
     this.config.wsManager?.broadcast({
       type: 'task:updated',
       payload: { id: taskId, taskId, status },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private broadcastAgentWorking(agentId: string, taskId: string, taskTitle: string): void {
+    this.config.wsManager?.broadcast({
+      type: 'agent:working',
+      payload: { agentId, taskId, taskTitle },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  private broadcastAgentIdle(agentId: string): void {
+    this.config.wsManager?.broadcast({
+      type: 'agent:idle',
+      payload: { agentId },
       timestamp: new Date().toISOString(),
     });
   }

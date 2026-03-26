@@ -1,0 +1,45 @@
+{
+  "id": "lint:run",
+  "name": "Lint Run",
+  "description": "Run the project's configured linter(s) and return structured findings. Auto-detects ESLint, Prettier, Pylint, golangci-lint, etc. from project config.",
+  "version": "1.0.0",
+  "tags": ["code-analysis"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "paths",
+        "type": "array",
+        "description": "Files or directories to lint. Defaults to entire project.",
+        "required": false,
+        "items": {
+          "name": "path",
+          "type": "string",
+          "description": "File or directory path",
+          "required": true
+        }
+      },
+      {
+        "name": "fix",
+        "type": "boolean",
+        "description": "Automatically fix fixable issues",
+        "required": false,
+        "default": false
+      },
+      {
+        "name": "rules",
+        "type": "array",
+        "description": "Only check specific rules (linter-specific rule IDs)",
+        "required": false,
+        "items": {
+          "name": "rule",
+          "type": "string",
+          "description": "Rule identifier (e.g. 'no-unused-vars', 'security/detect-sql-injection')",
+          "required": true
+        }
+      }
+    ]
+  },
+  "outputDescription": "Object with {findings: [{file, line, column, severity, ruleId, message, fix?}], totalErrors, totalWarnings, fixedCount}.",
+  "isEnabled": true,
+  "author": "openspace"
+}
