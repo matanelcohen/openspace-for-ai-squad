@@ -1,5 +1,6 @@
 import { AgentGrid } from '@/components/dashboard/agent-grid';
 import { SummaryStats } from '@/components/dashboard/summary-stats';
+import { SystemStatus } from '@/components/dashboard/system-status';
 import { TeamSummaryStats } from '@/components/dashboard/team-summary-stats';
 
 export default function DashboardPage() {
@@ -10,6 +11,7 @@ export default function DashboardPage() {
         <p className="text-muted-foreground">Your squad at a glance.</p>
       </div>
       <SummaryStats />
+      <SystemStatus />
       <div>
         <h2 className="mb-4 text-xl font-semibold">Team Overview</h2>
         <TeamSummaryStats />

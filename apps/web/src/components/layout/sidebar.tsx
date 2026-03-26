@@ -3,12 +3,14 @@
 import {
   BookOpen,
   Brain,
+  Clock,
   LayoutDashboard,
   ListTodo,
   MessageSquare,
   Puzzle,
   Scale,
   Scan,
+  Settings,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -27,6 +29,8 @@ const navItems = [
   { href: '/skills', label: 'Skills', icon: Puzzle },
   { href: '/memories', label: 'Memories', icon: Brain },
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+  { href: '/cron', label: 'Cron', icon: Clock },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 interface SidebarProps {

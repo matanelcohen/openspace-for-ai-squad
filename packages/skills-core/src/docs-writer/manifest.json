@@ -1,0 +1,125 @@
+{
+  "manifestVersion": 1,
+  "id": "docs-writer",
+  "name": "Docs Writer",
+  "version": "1.0.0",
+  "description": "Generates and updates project documentation — READMEs, API references, architecture guides, and inline doc comments. Reads existing files for context and writes well-structured documentation that stays in sync with the codebase.",
+  "author": "openspace",
+  "license": "MIT",
+  "tags": ["documentation"],
+  "icon": "book",
+  "tools": [
+    {
+      "toolId": "file:read",
+      "reason": "Read source files and existing documentation for context"
+    },
+    {
+      "toolId": "file:write",
+      "reason": "Create and update documentation files"
+    },
+    {
+      "toolId": "file:list",
+      "optional": true,
+      "reason": "Discover project structure and find existing docs"
+    },
+    {
+      "toolId": "git:log",
+      "optional": true,
+      "reason": "Check recent changes to determine what documentation needs updating"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "system",
+      "name": "Docs Writer System Prompt",
+      "role": "system",
+      "content": "You are {{agent.name}}, a technical documentation specialist. You produce clear, accurate, and well-structured documentation that helps developers understand and use the codebase. Always base documentation on actual source code — never invent APIs or behaviors."
+    },
+    {
+      "id": "generate-docs",
+      "name": "Generate Documentation",
+      "role": "execution",
+      "content": "file://prompts/generate-docs.md",
+      "variables": [
+        {
+          "name": "targetPath",
+          "description": "File or directory to generate documentation for",
+          "required": true
+        },
+        {
+          "name": "docType",
+          "description": "Type of documentation to generate (readme, api-reference, architecture, guide)",
+          "required": false,
+          "default": "readme"
+        },
+        {
+          "name": "audience",
+          "description": "Target audience (contributor, end-user, maintainer)",
+          "required": false,
+          "default": "contributor"
+        }
+      ]
+    },
+    {
+      "id": "update-docs",
+      "name": "Update Documentation",
+      "role": "execution",
+      "content": "file://prompts/update-docs.md",
+      "variables": [
+        {
+          "name": "docPath",
+          "description": "Path to the documentation file to update",
+          "required": true
+        },
+        {
+          "name": "changeSummary",
+          "description": "Description of code changes that require doc updates",
+          "required": true
+        },
+        {
+          "name": "preserveStructure",
+          "description": "Whether to keep the existing document structure intact",
+          "required": false,
+          "default": "true"
+        }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "type": "task-type",
+      "taskTypes": ["documentation", "docs-generation", "docs-update"]
+    },
+    {
+      "type": "pattern",
+      "field": "title",
+      "pattern": "\\b(document|readme|docs|api reference|architecture guide|jsdoc|tsdoc)\\b",
+      "flags": "i"
+    },
+    {
+      "type": "label",
+      "labels": ["needs-docs", "documentation"]
+    }
+  ],
+  "config": [
+    {
+      "key": "maxFileReadSize",
+      "type": "number",
+      "description": "Maximum number of lines to read from a single source file",
+      "default": 1000
+    },
+    {
+      "key": "includeExamples",
+      "type": "boolean",
+      "description": "Include usage examples in generated documentation",
+      "default": true
+    },
+    {
+      "key": "outputFormat",
+      "type": "string",
+      "description": "Output format for documentation (markdown, html, jsdoc)",
+      "default": "markdown"
+    }
+  ],
+  "permissions": ["fs:read", "fs:write"]
+}

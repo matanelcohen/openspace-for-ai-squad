@@ -17,6 +17,8 @@ export interface SkillSummary {
   tags?: string[];
   phase: SkillPhase;
   activeAgentCount: number;
+  matchedRoles?: string[];
+  requiredBins?: string[];
 }
 
 export interface SkillDetail extends SkillRegistryEntry {

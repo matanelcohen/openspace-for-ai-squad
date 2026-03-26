@@ -1,0 +1,47 @@
+{
+  "id": "file:read",
+  "name": "File Read",
+  "description": "Read the contents of a file at a given path. Returns the full text content with optional line range filtering for large files.",
+  "version": "1.0.0",
+  "tags": ["documentation", "filesystem"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "path",
+        "type": "string",
+        "description": "File path to read (relative to project root or absolute)",
+        "required": true
+      },
+      {
+        "name": "lineRange",
+        "type": "object",
+        "description": "Restrict output to a specific line range",
+        "required": false,
+        "properties": [
+          {
+            "name": "start",
+            "type": "number",
+            "description": "Start line (1-indexed)",
+            "required": true
+          },
+          {
+            "name": "end",
+            "type": "number",
+            "description": "End line (inclusive). Use -1 for end of file.",
+            "required": true
+          }
+        ]
+      },
+      {
+        "name": "encoding",
+        "type": "string",
+        "description": "File encoding (utf-8, ascii, base64)",
+        "required": false,
+        "default": "utf-8"
+      }
+    ]
+  },
+  "outputDescription": "File content as a string. When lineRange is specified, only the requested lines are returned with line numbers prefixed.",
+  "isEnabled": true,
+  "author": "openspace"
+}

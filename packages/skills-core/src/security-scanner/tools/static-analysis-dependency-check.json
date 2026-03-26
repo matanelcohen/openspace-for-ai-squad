@@ -1,0 +1,42 @@
+{
+  "id": "static-analysis:dependency-check",
+  "name": "Dependency Vulnerability Check",
+  "description": "Scan project dependency manifests for known CVEs and security advisories. Checks package.json, requirements.txt, go.mod, Cargo.toml, and other package files.",
+  "version": "1.0.0",
+  "tags": ["security", "dependencies"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "manifestPath",
+        "type": "string",
+        "description": "Path to the dependency manifest file (package.json, requirements.txt, etc.)",
+        "required": true
+      },
+      {
+        "name": "includeDev",
+        "type": "boolean",
+        "description": "Include development dependencies in the check",
+        "required": false,
+        "default": false
+      },
+      {
+        "name": "severity",
+        "type": "string",
+        "description": "Minimum severity threshold for reported vulnerabilities",
+        "required": false,
+        "default": "low",
+        "enum": ["critical", "high", "medium", "low"]
+      },
+      {
+        "name": "includeTransitive",
+        "type": "boolean",
+        "description": "Check transitive (indirect) dependencies as well",
+        "required": false,
+        "default": true
+      }
+    ]
+  },
+  "outputDescription": "Array of vulnerable dependencies: {package, installedVersion, vulnerableRange, severity, cve, advisory, fixedVersion, isDirect}. Empty array if no vulnerabilities found.",
+  "isEnabled": true,
+  "author": "openspace"
+}

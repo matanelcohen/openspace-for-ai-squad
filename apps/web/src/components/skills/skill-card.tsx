@@ -1,6 +1,6 @@
 'use client';
 
-import { Users } from 'lucide-react';
+import { Terminal, Users } from 'lucide-react';
 import Link from 'next/link';
 
 import { Badge } from '@/components/ui/badge';
@@ -33,25 +33,42 @@ export function SkillCard({ skill }: SkillCardProps) {
         <CardContent className="pb-3">
           <p className="text-sm text-muted-foreground line-clamp-2">{skill.description}</p>
         </CardContent>
-        <CardFooter className="flex items-center justify-between pt-0">
-          <div className="flex flex-wrap gap-1">
-            {skill.tags?.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-xs">
-                {tag}
-              </Badge>
-            ))}
-            {(skill.tags?.length ?? 0) > 3 && (
-              <Badge variant="secondary" className="text-xs">
-                +{(skill.tags?.length ?? 0) - 3}
-              </Badge>
-            )}
-          </div>
-          {skill.activeAgentCount > 0 && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground" title="Active agents">
-              <Users className="h-3 w-3" />
-              <span>{skill.activeAgentCount}</span>
+        <CardFooter className="flex flex-col items-start gap-2 pt-0">
+          {(skill.matchedRoles?.length || skill.requiredBins?.length) && (
+            <div className="flex flex-wrap gap-1">
+              {skill.matchedRoles?.map((role) => (
+                <Badge key={role} variant="outline" className="text-xs">
+                  {role}
+                </Badge>
+              ))}
+              {skill.requiredBins?.map((bin) => (
+                <Badge key={bin} variant="secondary" className="gap-1 text-xs">
+                  <Terminal className="h-3 w-3" />
+                  {bin}
+                </Badge>
+              ))}
             </div>
           )}
+          <div className="flex w-full items-center justify-between">
+            <div className="flex flex-wrap gap-1">
+              {skill.tags?.slice(0, 3).map((tag) => (
+                <Badge key={tag} variant="secondary" className="text-xs">
+                  {tag}
+                </Badge>
+              ))}
+              {(skill.tags?.length ?? 0) > 3 && (
+                <Badge variant="secondary" className="text-xs">
+                  +{(skill.tags?.length ?? 0) - 3}
+                </Badge>
+              )}
+            </div>
+            {skill.activeAgentCount > 0 && (
+              <div className="flex items-center gap-1 text-xs text-muted-foreground" title="Active agents">
+                <Users className="h-3 w-3" />
+                <span>{skill.activeAgentCount}</span>
+              </div>
+            )}
+          </div>
         </CardFooter>
       </Card>
     </Link>

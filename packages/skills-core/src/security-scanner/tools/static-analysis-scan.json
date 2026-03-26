@@ -1,0 +1,65 @@
+{
+  "id": "static-analysis:scan",
+  "name": "Static Analysis Scan",
+  "description": "Run static analysis rules against source files to detect security vulnerability patterns. Checks for injection flaws, auth issues, data exposure, and unsafe coding patterns.",
+  "version": "1.0.0",
+  "tags": ["security", "code-analysis"],
+  "inputSchema": {
+    "parameters": [
+      {
+        "name": "paths",
+        "type": "array",
+        "description": "File paths or directories to scan",
+        "required": true,
+        "items": {
+          "name": "path",
+          "type": "string",
+          "description": "File path or glob pattern to scan",
+          "required": true
+        }
+      },
+      {
+        "name": "rules",
+        "type": "array",
+        "description": "Specific rule categories to enable. Omit for all rules.",
+        "required": false,
+        "items": {
+          "name": "rule",
+          "type": "string",
+          "description": "Rule category (injection, auth, crypto, data-exposure, xss, csrf, path-traversal)",
+          "required": true
+        }
+      },
+      {
+        "name": "severity",
+        "type": "string",
+        "description": "Minimum severity threshold for reported findings",
+        "required": false,
+        "default": "low",
+        "enum": ["critical", "high", "medium", "low", "info"]
+      },
+      {
+        "name": "exclude",
+        "type": "array",
+        "description": "Paths or patterns to exclude from scanning",
+        "required": false,
+        "items": {
+          "name": "pattern",
+          "type": "string",
+          "description": "Exclusion glob pattern (e.g. 'node_modules/**', '**/*.test.ts')",
+          "required": true
+        }
+      },
+      {
+        "name": "language",
+        "type": "string",
+        "description": "Target language for language-specific rules. Auto-detected if omitted.",
+        "required": false,
+        "enum": ["javascript", "typescript", "python", "go", "java", "csharp", "rust", "auto"]
+      }
+    ]
+  },
+  "outputDescription": "Array of findings: {ruleId, severity, message, file, line, column, snippet, category, cwe}. Empty array if no issues found.",
+  "isEnabled": true,
+  "author": "openspace"
+}

@@ -1,0 +1,129 @@
+{
+  "manifestVersion": 1,
+  "id": "security-scanner",
+  "name": "Security Scanner",
+  "version": "1.0.0",
+  "description": "Analyzes source code for security vulnerabilities using static analysis — injection flaws, auth bypasses, secret exposure, insecure dependencies, and unsafe patterns. Produces actionable findings with severity ratings and remediation guidance.",
+  "author": "openspace",
+  "license": "MIT",
+  "tags": ["security", "code-analysis"],
+  "icon": "shield",
+  "tools": [
+    {
+      "toolId": "static-analysis:scan",
+      "reason": "Run static analysis rules against source files to detect vulnerability patterns"
+    },
+    {
+      "toolId": "static-analysis:dependency-check",
+      "reason": "Check project dependencies for known CVEs and advisories"
+    },
+    {
+      "toolId": "static-analysis:secret-detect",
+      "reason": "Scan files for hardcoded secrets, API keys, and credentials"
+    },
+    {
+      "toolId": "file:read",
+      "optional": true,
+      "reason": "Read source files for manual inspection when automated rules need context"
+    },
+    {
+      "toolId": "file:list",
+      "optional": true,
+      "reason": "Discover project structure and identify files to scan"
+    }
+  ],
+  "prompts": [
+    {
+      "id": "system",
+      "name": "Security Scanner System Prompt",
+      "role": "system",
+      "content": "You are {{agent.name}}, a security analysis specialist. You identify vulnerabilities in source code through static analysis, dependency auditing, and pattern matching. Report findings with specific file locations, severity ratings (critical/high/medium/low/info), and actionable remediation steps. Never report false positives as confirmed — clearly state confidence levels."
+    },
+    {
+      "id": "vulnerability-scan",
+      "name": "Vulnerability Scan",
+      "role": "execution",
+      "content": "file://prompts/vulnerability-scan.md",
+      "variables": [
+        {
+          "name": "targetPath",
+          "description": "File or directory to scan for vulnerabilities",
+          "required": true
+        },
+        {
+          "name": "scanScope",
+          "description": "Scope of the scan (full, changed-only, dependencies-only)",
+          "required": false,
+          "default": "full"
+        },
+        {
+          "name": "severityThreshold",
+          "description": "Minimum severity to report (critical, high, medium, low, info)",
+          "required": false,
+          "default": "low"
+        }
+      ]
+    },
+    {
+      "id": "threat-model",
+      "name": "Threat Model Analysis",
+      "role": "execution",
+      "content": "file://prompts/threat-model.md",
+      "variables": [
+        {
+          "name": "componentPath",
+          "description": "Path to the component or module to model threats for",
+          "required": true
+        },
+        {
+          "name": "attackSurface",
+          "description": "Comma-separated attack surfaces to focus on (e.g. 'api,auth,file-upload')",
+          "required": false
+        },
+        {
+          "name": "framework",
+          "description": "Threat modeling framework to use (stride, dread, attack-tree)",
+          "required": false,
+          "default": "stride"
+        }
+      ]
+    }
+  ],
+  "triggers": [
+    {
+      "type": "task-type",
+      "taskTypes": ["security-review", "vulnerability-scan", "threat-model"]
+    },
+    {
+      "type": "pattern",
+      "field": "title",
+      "pattern": "\\b(security|vulnerability|CVE|injection|XSS|CSRF|auth bypass|secret leak|OWASP)\\b",
+      "flags": "i"
+    },
+    {
+      "type": "label",
+      "labels": ["security", "needs-security-review"]
+    }
+  ],
+  "config": [
+    {
+      "key": "maxFilesToScan",
+      "type": "number",
+      "description": "Maximum number of files to scan in a single run",
+      "default": 200
+    },
+    {
+      "key": "includeRemediation",
+      "type": "boolean",
+      "description": "Include remediation guidance with each finding",
+      "default": true
+    },
+    {
+      "key": "checkDependencies",
+      "type": "boolean",
+      "description": "Include dependency vulnerability checks in scan",
+      "default": true
+    }
+  ],
+  "permissions": ["fs:read", "exec:static-analysis"]
+}
