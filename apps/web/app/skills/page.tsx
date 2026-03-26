@@ -4,6 +4,7 @@ import type { SkillPhase } from '@openspace/shared';
 import { Store } from 'lucide-react';
 import { useState } from 'react';
 
+import { SkillCreationWizard } from '@/components/skills/skill-creation-wizard';
 import { SkillFiltersToolbar } from '@/components/skills/skill-filters-toolbar';
 import { SkillGrid } from '@/components/skills/skill-grid';
 import { useAllSkillTags, useSkills } from '@/hooks/use-skills';
@@ -36,6 +37,7 @@ export default function SkillStorePage() {
             Browse, discover, and manage skills for your AI agents.
           </p>
         </div>
+        <SkillCreationWizard />
       </div>
 
       <SkillFiltersToolbar
