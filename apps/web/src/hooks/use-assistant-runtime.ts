@@ -100,17 +100,24 @@ export function useAssistantRuntime(channel: string) {
     [messages, sendMessage],
   );
 
-  // Build typing indicator messages so the UI shows agent name instead of "assistant"
+  // Build typing indicator messages — only for agents relevant to this channel
   const typingMessages: ThreadMessageLike[] = useMemo(() => {
     if (typingAgents.size === 0) return [];
-    return Array.from(typingAgents.entries()).map(([agentId, agentName]) => ({
-      id: `typing-${agentId}`,
-      role: 'assistant' as const,
-      content: [{ type: 'text' as const, text: `${agentName} is thinking...` }],
-      createdAt: new Date(),
-      metadata: { custom: { agentId } },
-    }));
-  }, [typingAgents]);
+    return Array.from(typingAgents.entries())
+      .filter(([agentId]) => {
+        // Team channel: show all typing agents
+        if (channel === 'team') return true;
+        // DM channel: only show the agent you're chatting with
+        return agentId === channel;
+      })
+      .map(([agentId, agentName]) => ({
+        id: `typing-${agentId}`,
+        role: 'assistant' as const,
+        content: [{ type: 'text' as const, text: `${agentName} is thinking...` }],
+        createdAt: new Date(),
+        metadata: { custom: { agentId } },
+      }));
+  }, [typingAgents, channel]);
 
   const allMessages = useMemo(
     () => [...threadMessages, ...typingMessages],
@@ -119,7 +126,7 @@ export function useAssistantRuntime(channel: string) {
 
   const adapter: ExternalStoreAdapter<ThreadMessageLike> = useMemo(
     () => ({
-      isRunning: typingAgents.size > 0,
+      isRunning: typingMessages.length > 0,
       messages: allMessages,
       convertMessage: (msg: ThreadMessageLike) => msg,
       suggestions: SUGGESTIONS,
