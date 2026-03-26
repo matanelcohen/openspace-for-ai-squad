@@ -172,6 +172,127 @@ openspace.ai/
 
 ---
 
+## 🔌 MCP Server
+
+openspace.ai exposes a [Model Context Protocol](https://modelcontextprotocol.io/) (MCP) server so external AI tools — Claude Desktop, Cursor, VS Code Copilot — can interact with your squad directly.
+
+### Connecting to the MCP Server
+
+#### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "openspace": {
+      "command": "npx",
+      "args": ["--yes", "-w", "packages/mcp-server", "openspace-mcp"],
+      "env": {
+        "OPENSPACE_API_URL": "http://localhost:3001"
+      }
+    }
+  }
+}
+```
+
+#### Cursor
+
+Add to `.cursor/mcp.json` in your project root:
+
+```json
+{
+  "mcpServers": {
+    "openspace": {
+      "command": "npx",
+      "args": ["--yes", "-w", "packages/mcp-server", "openspace-mcp"],
+      "env": {
+        "OPENSPACE_API_URL": "http://localhost:3001"
+      }
+    }
+  }
+}
+```
+
+#### VS Code (GitHub Copilot)
+
+Add to `.vscode/mcp.json` or `.copilot/mcp-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "openspace-stdio": {
+      "command": "npx",
+      "args": ["--yes", "-w", "packages/mcp-server", "openspace-mcp"],
+      "env": {
+        "OPENSPACE_API_URL": "http://localhost:3001"
+      }
+    }
+  }
+}
+```
+
+#### SSE Transport (Remote / Shared)
+
+For remote or multi-client setups, start the SSE server and point clients at it:
+
+```bash
+# Start SSE server (default port 3002)
+pnpm --filter @openspace/mcp-server start:sse
+
+# Or with a custom port
+MCP_PORT=8080 pnpm --filter @openspace/mcp-server start:sse
+```
+
+Then configure clients with the SSE URL:
+
+```json
+{
+  "mcpServers": {
+    "openspace": {
+      "type": "sse",
+      "url": "http://localhost:3002/sse"
+    }
+  }
+}
+```
+
+### Available Tools
+
+| Tool | Description | Example |
+|------|-------------|---------|
+| `list_agents` | List all squad agents with status and current tasks | "Show me the squad" |
+| `get_agent` | Get detailed info about a specific agent | "What is Bender working on?" |
+| `list_tasks` | List tasks, filter by status or assignee | "Show all in-progress tasks" |
+| `get_task` | Get task details | "Get details on task-ABC123" |
+| `create_task` | Create and assign a new task | "Create a P1 task for Fry to fix the dashboard" |
+| `update_task_status` | Change task status | "Mark task-ABC123 as done" |
+| `list_decisions` | List or search squad decisions | "Find decisions about auth" |
+| `send_chat_message` | Send a message to an agent or the team | "Tell Leela we're ready for review" |
+| `get_squad_status` | High-level squad overview | "What's the team status?" |
+
+### Available Resources
+
+| URI | Description |
+|-----|-------------|
+| `openspace://squad` | Current squad overview |
+| `openspace://agents` | Full agent roster |
+| `openspace://tasks` | Current task board |
+| `openspace://decisions` | Squad decision log |
+
+### Configuration Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENSPACE_API_URL` | `http://localhost:3001` | URL of the openspace.ai API server |
+| `MCP_PORT` | `3002` | Port for the SSE transport server |
+
+**Transport modes:**
+- **stdio** (default) — launched by the client as a subprocess. Best for local, single-user setups (Claude Desktop, Cursor, VS Code).
+- **SSE** — runs as an HTTP server. Best for remote access, shared environments, or multi-client setups.
+
+---
+
 ## 📡 API Reference
 
 All endpoints are prefixed with `/api`. The API runs on port `3001` by default.

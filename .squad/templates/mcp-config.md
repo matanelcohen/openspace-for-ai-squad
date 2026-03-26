@@ -12,6 +12,47 @@ Users configure MCP servers at these locations (checked in priority order):
 3. **User-level:** `~/.copilot/mcp-config.json` (personal)
 4. **CLI override:** `--additional-mcp-config` flag (session-specific)
 
+## Sample Config — openspace.ai (This Squad)
+
+The squad's own MCP server. Exposes squad tools (tasks, agents, decisions, chat) to external AI clients.
+
+### stdio transport (recommended for local dev)
+
+```json
+{
+  "mcpServers": {
+    "openspace": {
+      "command": "npx",
+      "args": ["--yes", "-w", "packages/mcp-server", "openspace-mcp"],
+      "env": {
+        "OPENSPACE_API_URL": "http://localhost:3001"
+      }
+    }
+  }
+}
+```
+
+### SSE transport (remote / multi-client)
+
+First start the SSE server: `pnpm --filter @openspace/mcp-server start:sse`
+
+```json
+{
+  "mcpServers": {
+    "openspace": {
+      "type": "sse",
+      "url": "http://localhost:3002/sse"
+    }
+  }
+}
+```
+
+**Available tools:** `list_agents`, `get_agent`, `list_tasks`, `get_task`, `create_task`, `update_task_status`, `list_decisions`, `send_chat_message`, `get_squad_status`
+
+**Available resources:** `openspace://squad`, `openspace://agents`, `openspace://tasks`, `openspace://decisions`
+
+**Environment variables:** `OPENSPACE_API_URL` (default `http://localhost:3001`), `MCP_PORT` (SSE only, default `3002`)
+
 ## Sample Config — Trello
 
 ```json

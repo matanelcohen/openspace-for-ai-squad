@@ -3,6 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "description": "Human-AI squad management tool",
+  "bin": {
+    "openspace-mcp": "./packages/mcp-server/dist/cli.js"
+  },
   "packageManager": "pnpm@9.15.4",
   "engines": {
     "node": ">=22"
