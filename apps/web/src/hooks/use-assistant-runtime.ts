@@ -32,9 +32,13 @@ const SUGGESTIONS: readonly { prompt: string }[] = [
   { prompt: 'Create a new task' },
 ];
 
-export function useAssistantRuntime(channel: string) {
+export function useAssistantRuntime(
+  channel: string,
+  typingAgents?: Map<string, { name: string; recipient: string }>,
+) {
   const { data: messages = [] } = useChatMessages(channel);
-  const typingAgents = useTypingIndicator();
+  const localTyping = useTypingIndicator();
+  const activeTyping = typingAgents ?? localTyping;
   const { mutateAsync: sendMessage } = useSendMessage();
 
   const channelRef = useRef(channel);
@@ -102,8 +106,8 @@ export function useAssistantRuntime(channel: string) {
 
   // Build typing indicator messages — only for agents typing in THIS channel
   const typingMessages: ThreadMessageLike[] = useMemo(() => {
-    if (typingAgents.size === 0) return [];
-    return Array.from(typingAgents.entries())
+    if (activeTyping.size === 0) return [];
+    return Array.from(activeTyping.entries())
       .filter(([, info]) => {
         // Show typing only if the agent is typing in this channel
         return info.recipient === channel;
@@ -132,7 +136,7 @@ export function useAssistantRuntime(channel: string) {
       onNew: handleNew,
       onReload: handleReload,
     }),
-    [typingAgents.size, allMessages, handleNew, handleReload, dictationAdapter],
+    [activeTyping.size, allMessages, handleNew, handleReload, dictationAdapter],
   );
 
   return useExternalStoreRuntime(adapter);

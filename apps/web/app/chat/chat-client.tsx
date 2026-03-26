@@ -51,7 +51,7 @@ export function ChatClient() {
   const sendMessage = useSendMessage();
   const clearChat = useClearChat();
   const typingAgents = useTypingIndicator();
-  const runtime = useAssistantRuntime(selectedChannel);
+  const runtime = useAssistantRuntime(selectedChannel, typingAgents);
   const voice = useVoiceSession();
 
   const createChannel = useCreateChannel();
