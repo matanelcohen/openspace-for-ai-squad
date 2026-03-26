@@ -49,7 +49,8 @@ async function createSkillViaApi(
       tags: overrides.tags ?? ['e2e', 'testing'],
       agentMatch: { roles: ['*'] },
       requires: { bins: [], env: [] },
-      instructions: overrides.instructions ?? '## E2E Test\nA skill created by E2E test automation.',
+      instructions:
+        overrides.instructions ?? '## E2E Test\nA skill created by E2E test automation.',
     },
   });
   return res;
@@ -125,10 +126,7 @@ test.describe('Skill creation via form dialog', () => {
     expect(countAfter).toBe(countBefore);
   });
 
-  test('successfully creating a skill via form adds it to the grid', async ({
-    page,
-    request,
-  }) => {
+  test('successfully creating a skill via form adds it to the grid', async ({ page, request }) => {
     const skillName = uniqueId('e2e-form-skill');
 
     await page.goto('/skills');
@@ -150,8 +148,12 @@ test.describe('Skill creation via form dialog', () => {
 
     // Fill required fields
     await page.getByTestId('skill-field-name').fill(skillName);
-    await page.getByTestId('skill-field-description').fill('A skill created by E2E form dialog test');
-    await page.getByTestId('skill-field-instructions').fill('## E2E Test\nInstructions for the test skill.');
+    await page
+      .getByTestId('skill-field-description')
+      .fill('A skill created by E2E form dialog test');
+    await page
+      .getByTestId('skill-field-instructions')
+      .fill('## E2E Test\nInstructions for the test skill.');
 
     // Add a tag (type + Enter)
     await page.getByTestId('skill-field-tags').fill('e2e-test');
@@ -169,7 +171,9 @@ test.describe('Skill creation via form dialog', () => {
 
       // Grid should have one more skill after refresh
       await page.reload();
-      await expect(page.locator('[data-testid^="skill-card"]').first()).toBeVisible({ timeout: 15_000 });
+      await expect(page.locator('[data-testid^="skill-card"]').first()).toBeVisible({
+        timeout: 15_000,
+      });
 
       const countAfter = await page.locator('[data-testid^="skill-card"]').count();
       expect(countAfter).toBeGreaterThan(countBefore);
@@ -290,9 +294,9 @@ test.describe('Skill detail page tabs', () => {
   test('non-existent skill shows error state with back link', async ({ page }) => {
     await page.goto('/skills/nonexistent-skill-abc-12345');
 
-    await expect(
-      page.getByText(/not found/i).or(page.getByText(/error/i)),
-    ).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/not found/i).or(page.getByText(/error/i))).toBeVisible({
+      timeout: 10_000,
+    });
 
     await expect(page.getByText('Back to Skill Store')).toBeVisible();
   });
@@ -469,9 +473,7 @@ test.describe('Agent skill toggle via team member page', () => {
 test.describe('Agent-skill assignment (API + UI)', () => {
   test.setTimeout(30_000);
 
-  test('PATCH /agents/:id/skills toggles skill and GET reflects change', async ({
-    request,
-  }) => {
+  test('PATCH /agents/:id/skills toggles skill and GET reflects change', async ({ request }) => {
     // Get list of agents
     const agentsRes = await request.get(`${API}/agents`);
     expect(agentsRes.ok()).toBe(true);
@@ -501,9 +503,7 @@ test.describe('Agent-skill assignment (API + UI)', () => {
     // Verify via GET
     const afterRes = await request.get(`${API}/agents/${agentId}/skills`);
     const after = await afterRes.json();
-    const updatedSkill = after.skills.find(
-      (s: { id: string }) => s.id === targetSkill.id,
-    );
+    const updatedSkill = after.skills.find((s: { id: string }) => s.id === targetSkill.id);
     expect(updatedSkill.enabled).toBe(!originalEnabled);
 
     // Restore original state
@@ -778,12 +778,10 @@ test.describe('Drag-and-drop skill reordering', () => {
       // Get the new order — it should have changed
       const after = await getBadgeTexts();
 
-      // The first item should no longer be first (it was dragged to the end)
+      // After dragging first to third's position, first should be after third
+      // or at least the order should have changed
       if (after.length >= 3) {
         const firstIdx = after.indexOf('drag-first');
-        const thirdIdx = after.indexOf('drag-third');
-        // After dragging first to third's position, first should be after third
-        // or at least the order should have changed
         expect(firstIdx).not.toBe(0);
       }
     }
@@ -866,7 +864,9 @@ test.describe('Skill store filters — edge cases', () => {
       await expect(grid).toBeVisible({ timeout: 15_000 });
 
       // Search for our unique skill
-      const searchInput = page.getByPlaceholder(/search/i).or(page.getByTestId('skill-search-input'));
+      const searchInput = page
+        .getByPlaceholder(/search/i)
+        .or(page.getByTestId('skill-search-input'));
       if (await searchInput.isVisible({ timeout: 3_000 }).catch(() => false)) {
         // Convert kebab-case to display name for search
         const displayName = skillName
