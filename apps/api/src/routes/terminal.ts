@@ -12,8 +12,9 @@
  *   { type: "output", data: string }           — PTY stdout data
  */
 
-import * as pty from 'node-pty';
 import type { FastifyPluginAsync } from 'fastify';
+import * as pty from 'node-pty';
+import { WebSocket } from 'ws';
 
 interface InputMessage {
   type: 'input';
@@ -64,14 +65,14 @@ const terminalRoute: FastifyPluginAsync = async (app) => {
 
     // PTY stdout → WebSocket
     term.onData((data: string) => {
-      if (socket.readyState === 1 /* WebSocket.OPEN */) {
+      if (socket.readyState === WebSocket.OPEN) {
         socket.send(JSON.stringify({ type: 'output', data }));
       }
     });
 
     term.onExit(({ exitCode, signal }) => {
       app.log.info({ exitCode, signal }, 'PTY exited');
-      if (socket.readyState === 1) {
+      if (socket.readyState === WebSocket.OPEN) {
         socket.close(1000, 'PTY process exited');
       }
     });

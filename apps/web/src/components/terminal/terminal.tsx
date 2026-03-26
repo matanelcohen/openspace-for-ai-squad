@@ -22,8 +22,9 @@ const WS_BASE =
 
 const RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 30000;
+const MAX_RECONNECT_ATTEMPTS = 5;
 
-type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
+type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
 export function Terminal() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -32,9 +33,11 @@ export function Terminal() {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectDelayRef = useRef(RECONNECT_DELAY_MS);
+  const reconnectAttemptRef = useRef(0);
   const mountedRef = useRef(true);
 
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
+  const [reconnectAttempt, setReconnectAttempt] = useState(0);
 
   const sendResize = useCallback((cols: number, rows: number) => {
     const ws = wsRef.current;
@@ -72,6 +75,8 @@ export function Terminal() {
       if (!mountedRef.current) return;
       setStatus('connected');
       reconnectDelayRef.current = RECONNECT_DELAY_MS;
+      reconnectAttemptRef.current = 0;
+      setReconnectAttempt(0);
 
       // Send initial size
       const fitAddon = fitAddonRef.current;
@@ -103,8 +108,16 @@ export function Terminal() {
 
     ws.onclose = () => {
       if (!mountedRef.current) return;
-      setStatus('disconnected');
-      scheduleReconnect();
+      const attempt = reconnectAttemptRef.current + 1;
+      reconnectAttemptRef.current = attempt;
+      setReconnectAttempt(attempt);
+
+      if (attempt > MAX_RECONNECT_ATTEMPTS) {
+        setStatus('failed');
+      } else {
+        setStatus('reconnecting');
+        scheduleReconnect();
+      }
     };
 
     ws.onerror = () => {
@@ -234,6 +247,13 @@ export function Terminal() {
     };
   }, [connect, sendResize]);
 
+  const handleManualRetry = useCallback(() => {
+    reconnectAttemptRef.current = 0;
+    setReconnectAttempt(0);
+    reconnectDelayRef.current = RECONNECT_DELAY_MS;
+    connect();
+  }, [connect]);
+
   return (
     <div className="relative flex h-full flex-col">
       {/* Status indicator */}
@@ -243,14 +263,25 @@ export function Terminal() {
             'h-2 w-2 rounded-full',
             status === 'connected' && 'bg-green-500',
             status === 'connecting' && 'animate-pulse bg-yellow-500',
-            status === 'disconnected' && 'bg-red-500',
+            status === 'reconnecting' && 'animate-pulse bg-yellow-500',
+            status === 'failed' && 'bg-red-500',
           )}
         />
         <span className="text-xs text-muted-foreground">
           {status === 'connected' && 'Connected'}
           {status === 'connecting' && 'Connecting…'}
-          {status === 'disconnected' && 'Disconnected — reconnecting…'}
+          {status === 'reconnecting' &&
+            `Reconnecting… (attempt ${reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS})`}
+          {status === 'failed' && 'Connection failed'}
         </span>
+        {status === 'failed' && (
+          <button
+            onClick={handleManualRetry}
+            className="ml-2 rounded border border-border bg-background px-2 py-0.5 text-xs text-foreground transition-colors hover:bg-muted"
+          >
+            Retry
+          </button>
+        )}
       </div>
 
       {/* Terminal container */}
