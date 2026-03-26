@@ -1,12 +1,19 @@
 /**
  * Skills API routes
  *
- * GET  /api/skills          — List all registered skills
- * GET  /api/skills/:id      — Skill detail
- * POST /api/agents/:id/skills — Attach (activate) a skill for an agent
+ * GET    /api/skills                  — List all registered skills
+ * POST   /api/skills                  — Register a new skill
+ * GET    /api/skills/:id              — Skill detail
+ * PUT    /api/skills/:id              — Update skill manifest
+ * DELETE /api/skills/:id              — Unregister (unload) a skill
+ * GET    /api/skills/:id/agents       — List agents using a skill
+ * POST   /api/agents/:id/skills       — Attach (activate) a skill for an agent
+ * DELETE /api/agents/:id/skills/:skillId — Detach (deactivate) a skill for an agent
  */
 
 import type { FastifyPluginAsync } from 'fastify';
+
+import type { SkillManifest } from '@openspace/shared';
 
 import { ErrorCodes, sendError } from '../lib/api-errors.js';
 import type { SkillRegistryImpl } from '../services/skill-registry/index.js';
@@ -28,7 +35,7 @@ function serialiseEntry(entry: ReturnType<SkillRegistryImpl['get']>) {
     error: entry.error ?? null,
     tools: entry.manifest.tools,
     triggers: entry.manifest.triggers,
-    prompts: entry.manifest.prompts.map((p) => ({
+    prompts: entry.manifest.prompts.map((p: { id: string; name: string; role: string }) => ({
       id: p.id,
       name: p.name,
       role: p.role,
@@ -37,6 +44,18 @@ function serialiseEntry(entry: ReturnType<SkillRegistryImpl['get']>) {
     config: entry.manifest.config ?? [],
     permissions: entry.manifest.permissions ?? [],
   };
+}
+
+/** Type guard: does the body look like a minimal SkillManifest? */
+function isManifestLike(body: unknown): body is SkillManifest {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Record<string, unknown>;
+  return (
+    typeof b.id === 'string' &&
+    typeof b.name === 'string' &&
+    typeof b.version === 'string' &&
+    typeof b.description === 'string'
+  );
 }
 
 const skillsRoute: FastifyPluginAsync = async (app) => {
@@ -52,6 +71,37 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     return reply.send({ skills });
   });
 
+  // POST /api/skills — register a new skill
+  app.post<{ Body: SkillManifest }>('/skills', async (request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
+
+    const body = request.body;
+    if (!isManifestLike(body)) {
+      return sendError(
+        reply,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'Request body must be a valid skill manifest (id, name, version, description required)',
+      );
+    }
+
+    const result = await registry.register(body as SkillManifest);
+    if (!result.valid) {
+      return sendError(
+        reply,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        result.errors.map((e: { message: string }) => e.message).join('; '),
+      );
+    }
+
+    const entry = registry.get(body.id);
+    return reply.status(201).send(serialiseEntry(entry));
+  });
+
   // GET /api/skills/:id — skill detail
   app.get<{ Params: { id: string } }>('/skills/:id', async (request, reply) => {
     const registry = app.skillRegistry;
@@ -65,6 +115,83 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     }
 
     return reply.send(serialiseEntry(entry));
+  });
+
+  // PUT /api/skills/:id — update skill manifest
+  app.put<{ Params: { id: string }; Body: Partial<SkillManifest> }>(
+    '/skills/:id',
+    async (request, reply) => {
+      const registry = app.skillRegistry;
+      if (!registry) {
+        return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+      }
+
+      const skillId = request.params.id;
+      const entry = registry.get(skillId);
+      if (!entry) {
+        return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
+      }
+
+      const body = request.body;
+      if (!body || typeof body !== 'object') {
+        return sendError(reply, 400, ErrorCodes.VALIDATION_ERROR, 'Request body must be a JSON object');
+      }
+
+      const result = await registry.updateManifest(skillId, body as Partial<SkillManifest>);
+      if (!result.valid) {
+        return sendError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          result.errors.map((e: { message: string }) => e.message).join('; '),
+        );
+      }
+
+      const updated = registry.get(skillId);
+      return reply.send(serialiseEntry(updated));
+    },
+  );
+
+  // DELETE /api/skills/:id — unregister (unload) a skill
+  app.delete<{ Params: { id: string } }>('/skills/:id', async (request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
+
+    const skillId = request.params.id;
+    const entry = registry.get(skillId);
+    if (!entry) {
+      return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
+    }
+
+    try {
+      await registry.unload(skillId);
+      return reply.status(204).send();
+    } catch (err) {
+      return sendError(
+        reply,
+        409,
+        ErrorCodes.CONFLICT,
+        `Cannot unregister skill: ${(err as Error).message}`,
+      );
+    }
+  });
+
+  // GET /api/skills/:id/agents — list agents using a skill
+  app.get<{ Params: { id: string } }>('/skills/:id/agents', async (request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
+
+    const skillId = request.params.id;
+    const entry = registry.get(skillId);
+    if (!entry) {
+      return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
+    }
+
+    return reply.send({ skillId, agents: [...entry.activeAgents] });
   });
 
   // POST /api/agents/:id/skills — attach skill to agent
@@ -90,7 +217,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     }
 
     try {
-      const ctx = await registry.activate(skillId, agentId, taskContext as any);
+      await registry.activate(skillId, agentId, taskContext as any);
       return reply.status(200).send({
         success: true,
         skillId,
@@ -106,6 +233,46 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       );
     }
   });
+
+  // DELETE /api/agents/:id/skills/:skillId — detach (deactivate) a skill for an agent
+  app.delete<{ Params: { id: string; skillId: string } }>(
+    '/agents/:id/skills/:skillId',
+    async (request, reply) => {
+      const registry = app.skillRegistry;
+      if (!registry) {
+        return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+      }
+
+      const agentId = request.params.id;
+      const { skillId } = request.params;
+
+      const entry = registry.get(skillId);
+      if (!entry) {
+        return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
+      }
+
+      if (!entry.activeAgents.has(agentId)) {
+        return sendError(
+          reply,
+          404,
+          ErrorCodes.NOT_FOUND,
+          `Skill "${skillId}" is not active for agent "${agentId}"`,
+        );
+      }
+
+      try {
+        await registry.deactivate(skillId, agentId);
+        return reply.status(204).send();
+      } catch (err) {
+        return sendError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          `Failed to deactivate skill: ${(err as Error).message}`,
+        );
+      }
+    },
+  );
 };
 
 export default skillsRoute;

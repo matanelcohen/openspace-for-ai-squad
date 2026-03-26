@@ -530,4 +530,78 @@ describe('SkillRegistryImpl', () => {
       expect(registry.get('app-skill')!.phase).toBe('loaded');
     });
   });
+
+  // ── register (programmatic) ────────────────────────────────
+
+  describe('register', () => {
+    it('registers a skill directly from a manifest', async () => {
+      const manifest = makeManifest({ id: 'api-skill' });
+      const result = await registry.register(manifest);
+      expect(result.valid).toBe(true);
+
+      const entry = registry.get('api-skill');
+      expect(entry).toBeDefined();
+      expect(entry!.phase).toBe('loaded');
+      expect(entry!.activeAgents.size).toBe(0);
+    });
+
+    it('rejects duplicate skill ID', async () => {
+      const manifest = makeManifest({ id: 'dup-skill' });
+      await registry.register(manifest);
+
+      const result = await registry.register(makeManifest({ id: 'dup-skill' }));
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].code).toBe('DUPLICATE_ID');
+    });
+
+    it('rejects invalid manifest', async () => {
+      const bad = makeManifest({ id: 'bad', description: '' });
+      const result = await registry.register(bad);
+      expect(result.valid).toBe(false);
+    });
+
+    it('allows activation after register', async () => {
+      await registry.register(makeManifest({ id: 'activatable' }));
+      const ctx = await registry.activate('activatable', 'agent-1');
+      expect(ctx).toBeDefined();
+      expect(registry.get('activatable')!.phase).toBe('active');
+    });
+  });
+
+  // ── updateManifest ─────────────────────────────────────────
+
+  describe('updateManifest', () => {
+    it('updates a registered skill manifest', async () => {
+      await registry.register(makeManifest({ id: 'updatable', name: 'Old Name' }));
+      const result = await registry.updateManifest('updatable', { name: 'New Name' });
+      expect(result.valid).toBe(true);
+
+      const entry = registry.get('updatable');
+      expect(entry!.manifest.name).toBe('New Name');
+      expect(entry!.phase).toBe('loaded');
+    });
+
+    it('rejects update on non-existent skill', async () => {
+      const result = await registry.updateManifest('ghost', { name: 'nope' });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].code).toBe('NOT_FOUND');
+    });
+
+    it('rejects update while skill is active', async () => {
+      await registry.register(makeManifest({ id: 'busy-skill' }));
+      await registry.activate('busy-skill', 'agent-1');
+
+      const result = await registry.updateManifest('busy-skill', { name: 'Updated' });
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].code).toBe('SKILL_ACTIVE');
+    });
+
+    it('preserves skill ID even if patch tries to change it', async () => {
+      await registry.register(makeManifest({ id: 'pinned-id' }));
+      await registry.updateManifest('pinned-id', { id: 'hacked' } as any);
+
+      expect(registry.get('pinned-id')).toBeDefined();
+      expect(registry.get('hacked')).toBeUndefined();
+    });
+  });
 });

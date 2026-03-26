@@ -455,6 +455,93 @@ export class SkillRegistryImpl implements SkillRegistry {
     return this.contexts.get(`${skillId}:${agentId}`);
   }
 
+  // ── Registration (programmatic) ───────────────────────────────
+
+  /**
+   * Register a skill from a manifest object (no filesystem discovery).
+   * Validates the manifest, resolves it, and transitions straight to 'loaded'.
+   */
+  async register(manifest: SkillManifest): Promise<SkillValidationResult> {
+    if (this.entries.has(manifest.id)) {
+      return {
+        valid: false,
+        errors: [
+          { path: '/id', message: `Skill "${manifest.id}" already registered`, code: 'DUPLICATE_ID' },
+        ],
+        warnings: [],
+      };
+    }
+
+    const knownIds = new Set(this.entries.keys());
+    const result = validateSkillManifest(manifest, 'api:register', knownIds);
+    if (!result.valid) return result;
+
+    const resolved = resolveManifest(manifest, 'api:register', new Map());
+    this.entries.set(manifest.id, {
+      manifest: resolved,
+      phase: 'loaded',
+      hooks: null,
+      activeAgents: new Set(),
+      lastTransition: Date.now(),
+    });
+
+    this.emit('skill:discovered', manifest.id);
+    this.emit('skill:loaded', manifest.id);
+    return result;
+  }
+
+  /**
+   * Update the manifest of an already-registered skill.
+   * The skill must not be active for any agents.
+   */
+  async updateManifest(
+    skillId: string,
+    patch: Partial<SkillManifest>,
+  ): Promise<SkillValidationResult> {
+    const entry = this.entries.get(skillId);
+    if (!entry) {
+      return {
+        valid: false,
+        errors: [{ path: '/', message: `Skill "${skillId}" not found`, code: 'NOT_FOUND' }],
+        warnings: [],
+      };
+    }
+
+    if (entry.activeAgents.size > 0) {
+      return {
+        valid: false,
+        errors: [
+          {
+            path: '/',
+            message: `Cannot update "${skillId}": still active for ${entry.activeAgents.size} agent(s)`,
+            code: 'SKILL_ACTIVE',
+          },
+        ],
+        warnings: [],
+      };
+    }
+
+    // Merge patch onto current manifest (strip resolved-only fields first)
+    const { sourcePath, resolvedDependencies: _rd, toolAvailability: _ta, compiledPrompts: _cp, ...base } = entry.manifest;
+    const merged = { ...base, ...patch, id: skillId } as SkillManifest;
+
+    const knownIds = new Set([...this.entries.keys()].filter((id) => id !== skillId));
+    const result = validateSkillManifest(merged, sourcePath, knownIds);
+    if (!result.valid) return result;
+
+    const loadedManifests = new Map<string, SkillManifest>();
+    for (const [id, e] of this.entries) {
+      loadedManifests.set(id, e.manifest);
+    }
+
+    entry.manifest = resolveManifest(merged, sourcePath, loadedManifests);
+    entry.phase = 'loaded';
+    entry.lastTransition = Date.now();
+    delete entry.error;
+
+    return result;
+  }
+
   // ── Lifecycle Management ─────────────────────────────────────
 
   async unload(skillId: string): Promise<void> {

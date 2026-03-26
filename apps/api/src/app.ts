@@ -16,6 +16,7 @@ import healthRoute from './routes/health.js';
 import knowledgeRoute from './routes/knowledge.js';
 import otlpCollectorRoute from './routes/otlp-collector.js';
 import sandboxesRoute from './routes/sandboxes.js';
+import skillsRoute from './routes/skills.js';
 import squadRoute from './routes/squad.js';
 import terminalRoute from './routes/terminal.js';
 import tasksRoute from './routes/tasks.js';
@@ -24,6 +25,7 @@ import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
+import { SkillRegistryImpl } from './services/skill-registry/index.js';
 import { ActivityFeed } from './services/activity/index.js';
 import { AgentWorkerService } from './services/agent-worker/index.js';
 import type { AIProvider } from './services/ai/copilot-provider.js';
@@ -278,6 +280,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(teamMembersRoute, { prefix: '/api' });
   app.register(sandboxesRoute, { prefix: '/api' });
   app.register(tracesRoute, { prefix: '/api' });
+  app.register(skillsRoute, { prefix: '/api' });
   // Terminal route
   app.register(terminalRoute, { prefix: '/api' });
 
