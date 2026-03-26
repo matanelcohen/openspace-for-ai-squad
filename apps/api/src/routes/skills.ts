@@ -622,7 +622,9 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
         dirs.map(async (dir) => {
           const dirContentsUrl = `https://api.github.com/repos/${source.owner}/${source.repo}/contents/${dir.path}?ref=${ref}`;
           const dirEntries = await githubApiFetch<GitHubContentEntry[]>(dirContentsUrl);
-          const skillMdEntry = dirEntries.find((e) => e.name === 'SKILL.md' && e.type === 'file');
+          const skillMdEntry = dirEntries.find(
+            (e) => (e.name === 'SKILL.md' || e.name === 'AGENTS.md') && e.type === 'file',
+          );
 
           if (!skillMdEntry?.download_url) return null;
 
@@ -717,21 +719,70 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        // Fetch SKILL.md raw content
-        const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${skill.path}/SKILL.md`;
-        const rawRes = await fetch(rawUrl, { headers: githubHeaders() });
-        if (!rawRes.ok) {
-          throw new Error(`Failed to fetch SKILL.md: HTTP ${rawRes.status}`);
+        // Fetch all files in the skill directory recursively
+        const dirUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${skill.path}?ref=${ref}`;
+        const dirRes = await fetch(dirUrl, { headers: githubHeaders() });
+        if (!dirRes.ok) {
+          throw new Error(`Failed to list skill directory: HTTP ${dirRes.status}`);
         }
-        const rawContent = await rawRes.text();
+        const dirItems = (await dirRes.json()) as Array<{
+          name: string;
+          type: string;
+          path: string;
+          download_url: string | null;
+        }>;
 
-        // Save to local .squad/skills/{id}/SKILL.md
+        // Create local skill directory
         const skillDir = join(skillsDir, skill.id);
         if (!existsSync(skillDir)) {
           mkdirSync(skillDir, { recursive: true });
         }
-        const skillFile = join(skillDir, 'SKILL.md');
-        writeFileSync(skillFile, rawContent, 'utf-8');
+
+        // Download all files (SKILL.md, AGENTS.md, README.md, metadata.json, etc.)
+        let rawContent = '';
+        for (const item of dirItems) {
+          if (item.type === 'file' && item.download_url) {
+            const fileRes = await fetch(item.download_url, { headers: githubHeaders() });
+            if (fileRes.ok) {
+              const fileContent = await fileRes.text();
+              writeFileSync(join(skillDir, item.name), fileContent, 'utf-8');
+              if (item.name === 'SKILL.md' || item.name === 'AGENTS.md') {
+                rawContent = fileContent;
+              }
+            }
+          } else if (item.type === 'dir') {
+            // Download subdirectory (rules/, patterns/, etc.)
+            const subDirUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${item.path}?ref=${ref}`;
+            const subRes = await fetch(subDirUrl, { headers: githubHeaders() });
+            if (subRes.ok) {
+              const subItems = (await subRes.json()) as Array<{
+                name: string;
+                type: string;
+                download_url: string | null;
+              }>;
+              const subDir = join(skillDir, item.name);
+              if (!existsSync(subDir)) mkdirSync(subDir, { recursive: true });
+              for (const subItem of subItems) {
+                if (subItem.type === 'file' && subItem.download_url) {
+                  const subFileRes = await fetch(subItem.download_url, { headers: githubHeaders() });
+                  if (subFileRes.ok) {
+                    writeFileSync(join(subDir, subItem.name), await subFileRes.text(), 'utf-8');
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Fallback: if no SKILL.md/AGENTS.md found, try fetching SKILL.md directly
+        if (!rawContent) {
+          const rawUrl = `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${skill.path}/SKILL.md`;
+          const rawRes = await fetch(rawUrl, { headers: githubHeaders() });
+          if (rawRes.ok) {
+            rawContent = await rawRes.text();
+            writeFileSync(join(skillDir, 'SKILL.md'), rawContent, 'utf-8');
+          }
+        }
 
         // Parse and register
         const { data, content } = matter(rawContent);
@@ -777,7 +828,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
           activeAgents: new Set<string>(),
           lastTransition: Date.now(),
           error: null,
-          sourcePath: skillFile,
+          sourcePath: join(skillDir, 'SKILL.md'),
           retryState: null,
           circuitBreaker: null,
         });
