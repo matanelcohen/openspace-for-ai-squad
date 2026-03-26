@@ -2,7 +2,7 @@ const STORAGE_KEY = 'openspace:notifications';
 
 export interface Notification {
   id: string;
-  type: 'task_failure' | 'task_blocked' | 'agent_failed' | 'decision_added' | 'chat_message';
+  type: 'task_failure' | 'task_blocked' | 'task_completed' | 'task_started' | 'agent_failed' | 'decision_added' | 'chat_message';
   title: string;
   description: string;
   agentId: string | null;
@@ -44,6 +44,45 @@ export function createNotificationFromEvent(
       title: 'Task Blocked',
       description: (payload.title as string) || 'A task has been blocked',
       agentId: (payload.agentId as string) ?? null,
+      timestamp,
+      read: false,
+      relatedEntityId: (payload.id as string) ?? (payload.taskId as string) ?? null,
+    };
+  }
+
+  if (type === 'task:updated' && payload.status === 'done') {
+    return {
+      id: generateId(),
+      type: 'task_completed',
+      title: 'Task Completed ✅',
+      description: (payload.title as string) || 'A task has been completed',
+      agentId: (payload.agentId as string) ?? null,
+      timestamp,
+      read: false,
+      relatedEntityId: (payload.id as string) ?? (payload.taskId as string) ?? null,
+    };
+  }
+
+  if (type === 'task:updated' && payload.status === 'in-progress') {
+    return {
+      id: generateId(),
+      type: 'task_started',
+      title: 'Task Started 🚀',
+      description: (payload.title as string) || 'An agent started working on a task',
+      agentId: (payload.agentId as string) ?? null,
+      timestamp,
+      read: false,
+      relatedEntityId: (payload.id as string) ?? (payload.taskId as string) ?? null,
+    };
+  }
+
+  if (type === 'task:created') {
+    return {
+      id: generateId(),
+      type: 'task_started',
+      title: 'Task Created',
+      description: (payload.title as string) || 'A new task was created',
+      agentId: null,
       timestamp,
       read: false,
       relatedEntityId: (payload.id as string) ?? null,
