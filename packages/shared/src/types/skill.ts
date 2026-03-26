@@ -724,3 +724,19 @@ export interface SkillMatchResult {
   /** Which trigger(s) matched. */
   matchedTriggers?: SkillTrigger[];
 }
+
+// ── Retry Policy ─────────────────────────────────────────────────
+
+export interface SkillRetryPolicy {
+  maxRetries: number;
+  baseDelayMs: number;
+  maxDelayMs: number;
+  ttlMs: number;
+}
+
+export const DEFAULT_RETRY_POLICY: Readonly<SkillRetryPolicy> = {
+  maxRetries: 3,
+  baseDelayMs: 1000,
+  maxDelayMs: 15000,
+  ttlMs: 60000,
+};
