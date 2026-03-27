@@ -174,7 +174,7 @@ function githubHeaders(): Record<string, string> {
     Accept: 'application/vnd.github.v3+json',
     'User-Agent': 'openspace-skill-importer',
   };
-  const token = process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
+  const token = process.env.GITHUB_API_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_TOKEN;
   if (token) {
     headers['Authorization'] = `token ${token}`;
   }

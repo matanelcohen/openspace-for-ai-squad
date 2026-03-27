@@ -192,7 +192,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
         otlpEndpoint:
           process.env.COPILOT_OTLP_ENDPOINT ?? `http://localhost:${process.env.API_PORT ?? 3001}`,
       };
-      if (token) clientOpts.githubToken = token;
+      if (token && !cliUrl) clientOpts.githubToken = token;
       if (cliUrl) {
         clientOpts.cliUrl = cliUrl;
         console.log(`[AI] Connecting to Copilot CLI server at ${cliUrl}`);
