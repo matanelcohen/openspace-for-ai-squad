@@ -180,7 +180,9 @@ export class ChatService {
   /** Get the current agent list from the registry, falling back to FALLBACK_AGENTS. */
   private getAgents(): ReadonlyArray<{ id: string; name: string; role: string; personality: string }> {
     if (this.agentRegistry) {
-      const agents = this.agentRegistry.getAll();
+      const agents = this.agentRegistry.getAll().filter(
+        (a) => !['scribe', 'ralph', 'squad'].includes(a.id),
+      );
       if (agents.length > 0) return agents;
     }
     return ChatService.FALLBACK_AGENTS;
