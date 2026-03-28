@@ -50,12 +50,50 @@ const workspacesRoute: FastifyPluginAsync = async (app) => {
     return reply.send({ success: true });
   });
 
-  /** Activate a workspace. */
+  /** Activate a workspace — reloads services from the new .squad/ directory. */
   app.post<{ Params: { id: string } }>('/workspaces/:id/activate', async (request, reply) => {
     const workspace = app.workspaceService.setActive(request.params.id);
     if (!workspace) {
       return reply.status(404).send({ error: 'Workspace not found' });
     }
+
+    // Re-initialize services with the new workspace's .squad/ directory
+    try {
+      const { resolve } = await import('node:path');
+      const { existsSync, mkdirSync } = await import('node:fs');
+      const newSquadDir = workspace.squadDir;
+
+      // Ensure .squad/ exists
+      if (!existsSync(newSquadDir)) {
+        mkdirSync(newSquadDir, { recursive: true });
+      }
+
+      // Re-point the squad parser
+      if (app.squadParser && typeof app.squadParser.setSquadDir === 'function') {
+        app.squadParser.setSquadDir(newSquadDir);
+      }
+
+      // Re-seed team members from new workspace
+      const { seedTeamMembers } = await import('../services/db/seed-team.js');
+      seedTeamMembers(app.db, newSquadDir);
+
+      // Re-load agent registry from new DB
+      if (app.agentRegistry) {
+        app.agentRegistry.loadFromDatabase();
+      }
+
+      // Re-load skills from new workspace
+      const { loadSkillsFromDirectory } = await import('../services/seed-skills.js');
+      const skillsDir = resolve(newSquadDir, 'skills');
+      if (existsSync(skillsDir)) {
+        loadSkillsFromDirectory(skillsDir);
+      }
+
+      app.log.info(`Switched to workspace: ${workspace.name} (${newSquadDir})`);
+    } catch (err) {
+      app.log.warn(`Workspace switch partial: ${(err as Error).message}`);
+    }
+
     return reply.send(workspace);
   });
 

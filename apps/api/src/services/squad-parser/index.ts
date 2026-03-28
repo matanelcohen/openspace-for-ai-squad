@@ -36,7 +36,7 @@ function resolveSquadDir(): string {
 }
 
 export class SquadParser {
-  private readonly squadDir: string;
+  private squadDir: string;
   /** Config-driven capabilities mapped by agent name (lowercase). */
   private capabilitiesMap = new Map<string, AgentCapability[]>();
 
@@ -47,6 +47,11 @@ export class SquadParser {
   /** Get the configured .squad/ directory path. */
   getSquadDir(): string {
     return this.squadDir;
+  }
+
+  /** Switch to a different .squad/ directory (workspace switch). */
+  setSquadDir(newDir: string): void {
+    this.squadDir = newDir;
   }
 
   /** Set agent capabilities from squad.config.ts. */
