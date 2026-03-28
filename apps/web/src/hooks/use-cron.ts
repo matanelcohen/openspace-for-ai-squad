@@ -107,6 +107,9 @@ export function useCreateCronJob() {
       channel?: string;
       title?: string;
       description?: string;
+      type?: string;
+      participants?: string[];
+      agenda?: string;
     }) => api.post<{ job: CronJob }>('/api/cron', input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['cron-jobs'] });

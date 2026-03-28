@@ -160,6 +160,9 @@ function CronJobRow({
       <TableCell>{job.agentName ?? job.agentId ?? '—'}</TableCell>
       <TableCell>
         <Badge variant="outline">{job.actionType}</Badge>
+        {job.type && (
+          <Badge variant="secondary" className="ml-1 text-[10px]">{job.type}</Badge>
+        )}
       </TableCell>
       <TableCell>
         <Switch
@@ -377,9 +380,13 @@ function CreateCronJobDialog({
   const [jobName, setJobName] = useState('');
   const [message, setMessage] = useState('');
   const [channel, setChannel] = useState('team');
+  const [ceremonyType, setCeremonyType] = useState<'standup' | 'retro' | 'custom' | ''>('');
+  const [participants, setParticipants] = useState('');
+  const [agenda, setAgenda] = useState('');
 
   // Ceremony template presets
   const applyTemplate = (template: 'standup' | 'retro' | 'custom') => {
+    setCeremonyType(template);
     if (template === 'standup') {
       setJobName('daily-standup');
       setSchedule('0 9 * * 1-5');
@@ -388,6 +395,8 @@ function CreateCronJobDialog({
         'Good morning team! Time for standup.\n\n**Yesterday:** What did you accomplish?\n**Today:** What are you working on?\n**Blockers:** Anything blocking your progress?',
       );
       setChannel('team');
+      setParticipants(agents.filter((a) => !['scribe', 'ralph'].includes(a.id)).map((a) => a.id).join(', '));
+      setAgenda('1. Yesterday recap\n2. Today\'s plan\n3. Blockers');
     } else if (template === 'retro') {
       setJobName('weekly-retro');
       setSchedule('0 15 * * 5');
@@ -396,8 +405,13 @@ function CreateCronJobDialog({
         'Time for our weekly retrospective!\n\n**What went well:** Share your wins\n**What to improve:** What could be better?\n**Action items:** What should we change?',
       );
       setChannel('team');
+      setParticipants(agents.filter((a) => !['scribe', 'ralph'].includes(a.id)).map((a) => a.id).join(', '));
+      setAgenda('1. Wins\n2. Improvements\n3. Action items');
+    } else {
+      // 'custom' clears ceremony fields
+      setParticipants('');
+      setAgenda('');
     }
-    // 'custom' leaves form empty
   };
 
   const nextRuns = useMemo(() => {
@@ -427,6 +441,9 @@ function CreateCronJobDialog({
           action === 'chat' ? channel || (form.get('channel') as string) || 'team' : undefined,
         title: action === 'task' ? (form.get('title') as string) : undefined,
         description: action === 'task' ? (form.get('description') as string) : undefined,
+        type: ceremonyType || undefined,
+        participants: participants ? participants.split(',').map((p) => p.trim()).filter(Boolean) : undefined,
+        agenda: agenda || undefined,
       },
       { onSuccess: () => onOpenChange(false) },
     );
@@ -524,6 +541,32 @@ function CreateCronJobDialog({
               </SelectContent>
             </Select>
           </div>
+          {/* Ceremony fields (only for standup/retro templates) */}
+          {ceremonyType && ceremonyType !== 'custom' && (
+            <div className="space-y-3 rounded-md border bg-muted/30 p-3" data-testid="ceremony-fields">
+              <p className="text-xs font-medium text-muted-foreground">
+                Ceremony Details ({ceremonyType})
+              </p>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Participants</label>
+                <Input
+                  placeholder="leela, fry, bender, zoidberg"
+                  value={participants}
+                  onChange={(e) => setParticipants(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Comma-separated agent IDs</p>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Agenda</label>
+                <Textarea
+                  placeholder={'1. Topic one\n2. Topic two'}
+                  rows={3}
+                  value={agenda}
+                  onChange={(e) => setAgenda(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
           {action === 'chat' ? (
             <>
               <div className="space-y-2">
