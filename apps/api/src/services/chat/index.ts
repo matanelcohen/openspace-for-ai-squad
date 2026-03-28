@@ -204,6 +204,9 @@ export class ChatService {
     // Validate channel membership before persisting or broadcasting
     this.validateChannelMembership(input.sender, input.recipient);
 
+    // Capture workspace at send time — async responses must use this, not current
+    const messageWorkspaceId = this.workspaceId;
+
     const message: ChatMessage = {
       id: nanoid(12),
       sender: input.sender,
@@ -218,12 +221,12 @@ export class ChatService {
     await this.persistToMarkdown(message);
 
     // Broadcast via WebSocket
-    this.emitChatMessage(message);
+    this.emitChatMessage(message, messageWorkspaceId);
 
     // Route to agents — team messages go through routing, direct messages go to the specific agent
     if (input.recipient === CHAT_TEAM_RECIPIENT) {
       try {
-        const echo = await this.coordinatorEcho(message);
+        const echo = await this.coordinatorEcho(message, messageWorkspaceId);
         return echo;
       } catch (err) {
         console.error('[Chat] coordinatorEcho failed:', err);
@@ -232,7 +235,7 @@ export class ChatService {
       // Direct message to a specific agent
       const agent = this.getAgents().find((a) => a.id === input.recipient);
       if (agent && this.aiProvider) {
-        this.handleDirectMessage(agent, message).catch((err) => {
+        this.handleDirectMessage(agent, message, messageWorkspaceId).catch((err) => {
           console.error(`[Chat] Direct message to ${agent.name} failed:`, err);
         });
       }
@@ -861,12 +864,12 @@ export class ChatService {
 
   // ── Private: WebSocket emission ───────────────────────────────
 
-  private emitChatMessage(msg: ChatMessage): void {
+  private emitChatMessage(msg: ChatMessage, wsId?: string): void {
     if (!this.wsManager) return;
 
     const envelope: WsEnvelope = {
       type: 'chat:message',
-      payload: { ...msg, workspaceId: this.workspaceId } as unknown as Record<string, unknown>,
+      payload: { ...msg, workspaceId: wsId ?? this.workspaceId } as unknown as Record<string, unknown>,
       timestamp: msg.timestamp,
     };
 
@@ -976,7 +979,7 @@ export class ChatService {
    * Route a team message to relevant agents. Each agent responds
    * individually as a separate chat message sent via WebSocket.
    */
-  private async coordinatorEcho(original: ChatMessage): Promise<ChatMessage> {
+  private async coordinatorEcho(original: ChatMessage, wsId?: string): Promise<ChatMessage> {
     if (this.aiProvider) {
       try {
         // First, determine which agents should respond
@@ -992,7 +995,7 @@ export class ChatService {
             this.emitTypingStop(agent.id, CHAT_TEAM_RECIPIENT);
             this.persistToSqlite(response);
             await this.persistToMarkdown(response);
-            this.emitChatMessage(response);
+            this.emitChatMessage(response, wsId);
             this.emitChatActivity(agent.id, `${agent.name} responded in chat`);
             responses.push(response);
           } catch (err) {
@@ -1021,7 +1024,7 @@ export class ChatService {
 
     this.persistToSqlite(echo);
     await this.persistToMarkdown(echo);
-    this.emitChatMessage(echo);
+    this.emitChatMessage(echo, wsId);
 
     return echo;
   }
@@ -1130,6 +1133,7 @@ export class ChatService {
   private async handleDirectMessage(
     agent: { id: string; name: string; role: string; personality: string },
     original: ChatMessage,
+    wsId?: string,
   ): Promise<void> {
     try {
       this.emitTyping(agent.id, agent.name, agent.id);
@@ -1162,7 +1166,7 @@ export class ChatService {
 
       this.persistToSqlite(response);
       await this.persistToMarkdown(response);
-      this.emitChatMessage(response);
+      this.emitChatMessage(response, wsId);
       this.emitChatActivity(agent.id, `${agent.name} responded to direct message`);
     } catch (err) {
       this.emitTypingStop(agent.id, agent.id);
@@ -1196,7 +1200,7 @@ export class ChatService {
             this.emitTypingStop(agent.id, CHAT_TEAM_RECIPIENT);
             this.persistToSqlite(response);
             await this.persistToMarkdown(response);
-            this.emitChatMessage(response);
+            this.emitChatMessage(response, wsId);
             this.emitChatActivity(agent.id, `${agent.name} responded in chat`);
             onStreamEvent({
               agentId: agent.id,
@@ -1228,7 +1232,7 @@ export class ChatService {
 
     this.persistToSqlite(echo);
     await this.persistToMarkdown(echo);
-    this.emitChatMessage(echo);
+    this.emitChatMessage(echo, wsId);
     onStreamEvent({ agentId: 'leela', chunk: echo.content, done: false });
     onStreamEvent({ agentId: 'leela', chunk: '', done: true, fullContent: echo.content });
   }
@@ -1247,7 +1251,7 @@ export class ChatService {
       this.emitTypingStop(agent.id, agent.id);
       this.persistToSqlite(response);
       await this.persistToMarkdown(response);
-      this.emitChatMessage(response);
+      this.emitChatMessage(response, wsId);
       this.emitChatActivity(agent.id, `${agent.name} responded to direct message`);
       onStreamEvent({
         agentId: agent.id,
