@@ -45,10 +45,24 @@ export function useCronExecutions() {
   return useQuery<CronExecution[]>({
     queryKey: ['cron-executions'],
     queryFn: async () => {
-      const res = await api.get<{ executions: CronExecution[] } | CronExecution[]>(
+      const res = await api.get<{ executions: unknown[] } | unknown[]>(
         '/api/cron/executions',
       );
-      return Array.isArray(res) ? res : res.executions;
+      const raw = Array.isArray(res) ? res : (res as { executions: unknown[] }).executions ?? [];
+      // Map API shape to frontend shape
+      return raw.map((e: unknown, i: number) => {
+        const exec = e as Record<string, unknown>;
+        return {
+          id: (exec.id as string) ?? `exec-${i}`,
+          jobId: (exec.jobId as string) ?? '',
+          jobName: (exec.jobName as string) ?? (exec.jobId as string) ?? '',
+          status: ((exec.status as string) ?? (exec.result as string) ?? 'success') as 'success' | 'failure' | 'running',
+          startedAt: (exec.startedAt as string) ?? (exec.executedAt as string) ?? '',
+          completedAt: exec.completedAt as string | undefined,
+          durationMs: exec.durationMs as number | undefined,
+          error: exec.error as string | undefined,
+        };
+      });
     },
     refetchInterval: 15_000,
   });
