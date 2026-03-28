@@ -17,6 +17,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { AgentWorkSummary } from '@/components/layout/agent-work-summary';
+import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 import { cn } from '@/lib/utils';
 
 const navItems = [
@@ -42,12 +43,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
 
   return (
     <aside className="flex h-full w-64 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 items-center border-b px-4">
-        <Link href="/" className="flex items-center gap-2 font-semibold" onClick={onNavigate}>
-          <span className="text-lg">🚀</span>
-          <span>openspace.ai</span>
-        </Link>
-      </div>
+      <WorkspaceSwitcher />
       <nav
         className="flex-1 space-y-1 overflow-y-auto p-2"
         role="navigation"

@@ -2,6 +2,7 @@ import { resolve } from 'node:path';
 
 import cors from '@fastify/cors';
 import { mcpPlugin } from '@openspace/mcp-server';
+import type { AgentCapability } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
@@ -24,6 +25,7 @@ import teamMembersRoute from './routes/team-members.js';
 import terminalRoute from './routes/terminal.js';
 import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
+import workspacesRoute from './routes/workspaces.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
 import { ActivityFeed } from './services/activity/index.js';
@@ -34,9 +36,9 @@ import { AuthService } from './services/auth/index.js';
 import { ChatService } from './services/chat/index.js';
 import { loadSquadConfig } from './services/config/index.js';
 import { CronService } from './services/cron/index.js';
-import { buildHookPipeline, type HookPipeline } from './services/hooks/pipeline.js';
 import { openDatabase } from './services/db/index.js';
 import { seedTeamMembers } from './services/db/seed-team.js';
+import { buildHookPipeline, type HookPipeline } from './services/hooks/pipeline.js';
 import { SandboxService } from './services/sandbox/index.js';
 import { KnowledgeSearchService } from './services/search/index.js';
 import { seedBuiltinSkills } from './services/seed-skills.js';
@@ -50,6 +52,7 @@ import {
 } from './services/voice/index.js';
 import type { WebSocketManager } from './services/websocket/index.js';
 import { wsPlugin } from './services/websocket/index.js';
+import { WorkspaceService } from './services/workspace/index.js';
 
 /** Voice service bundle exposed on the Fastify instance. */
 export interface VoiceServices {
@@ -89,6 +92,11 @@ export function buildApp(opts: AppOptions = {}) {
   // Decorate with a SquadParser instance
   const parser = new SquadParser(squadDir);
   app.decorate('squadParser', parser);
+
+  // Workspace service (global, stored in ~/.openspace/workspaces.json)
+  const workspaceService = new WorkspaceService();
+  workspaceService.autoRegister(resolve(squadDir, '..'));
+  app.decorate('workspaceService', workspaceService);
 
   // Activity feed (in-memory ring buffer)
   const activityFeed = new ActivityFeed();
@@ -213,7 +221,7 @@ export function buildApp(opts: AppOptions = {}) {
       voiceServices.chatAgents = AGENT_PROFILES;
 
       // Wire capabilities from config into SquadParser so /api/agents returns them
-      const capMap = new Map<string, import('@openspace/shared').AgentCapability[]>();
+      const capMap = new Map<string, AgentCapability[]>();
       for (const agentDef of squadConfig.agents) {
         if (agentDef.capabilities?.length) {
           capMap.set(agentDef.name, agentDef.capabilities);
@@ -358,6 +366,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(tracesRoute, { prefix: '/api' });
   app.register(skillsRoute, { prefix: '/api' });
   app.register(cronRoute, { prefix: '/api' });
+  app.register(workspacesRoute, { prefix: '/api' });
   // Terminal route
   app.register(terminalRoute, { prefix: '/api' });
 

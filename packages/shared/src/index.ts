@@ -183,6 +183,7 @@ export type {
   WorkflowExecutionStatus,
   WorkflowNodeType,
   WorkflowStartOptions,
+  Workspace,
 } from './types/index.js';
 
 // ── Escalation Engine ──────────────────────────────────────────────

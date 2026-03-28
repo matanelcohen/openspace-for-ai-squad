@@ -147,6 +147,14 @@ export type {
   VectorStoreProvider,
 } from './rag.js';
 export type {
+  Sandbox,
+  SandboxCommand,
+  SandboxOutputLine,
+  SandboxResources,
+  SandboxRuntime,
+  SandboxStatus,
+} from './sandbox.js';
+export type {
   CompositeTrigger,
   FileTrigger,
   LabelTrigger,
@@ -192,6 +200,7 @@ export type {
   SkillValidationWarning,
   TaskTypeTrigger,
 } from './skill.js';
+export * from './skill.js';
 export type { SquadConfig, SquadOverview, TaskCounts } from './squad.js';
 export type { Task, TaskAssigneeType, TaskPriority, TaskStatus } from './task.js';
 export type { TeamMember, TeamMemberRank, TeamMemberStatus } from './team-member.js';
@@ -222,13 +231,4 @@ export type {
   WorkflowExecutionStatus,
   WorkflowNodeType,
 } from './workflow.js';
-export type {
-  Sandbox,
-  SandboxCommand,
-  SandboxOutputLine,
-  SandboxResources,
-  SandboxRuntime,
-  SandboxStatus,
-} from './sandbox.js';
-
-export * from './skill.js';
+export type { Workspace } from './workspace.js';
