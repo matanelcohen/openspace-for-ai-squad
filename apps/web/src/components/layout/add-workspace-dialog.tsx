@@ -95,7 +95,7 @@ export function AddWorkspaceDialog() {
           Add Workspace
         </button>
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg w-[95vw]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Add Workspace</DialogTitle>
@@ -103,62 +103,72 @@ export function AddWorkspaceDialog() {
           </DialogHeader>
 
           {browsing && browseData ? (
-            <div className="mt-4 space-y-2">
-              {/* Breadcrumb */}
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                <button type="button" onClick={() => browse(browseData.parent)} className="hover:text-foreground">
-                  ↑ Parent
-                </button>
-                <span className="mx-1">|</span>
-                <span className="truncate font-mono">{browseData.current}</span>
+            <div className="mt-4 space-y-3">
+              {/* Current path + navigation */}
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => browse(browseData.parent)}
+                >
+                  ← Up
+                </Button>
+                <div className="flex-1 min-w-0 rounded-md bg-muted px-3 py-1.5">
+                  <span className="block truncate text-xs font-mono text-muted-foreground">{browseData.current}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="default"
+                  size="sm"
+                  className="shrink-0"
+                  onClick={() => selectDir({ name: browseData.name, path: browseData.current, hasSquad: false, hasGit: false })}
+                >
+                  Use This
+                </Button>
               </div>
 
               {/* Directory list */}
-              <div className="max-h-64 overflow-y-auto rounded-md border">
+              <div className="max-h-[50vh] overflow-y-auto rounded-md border">
                 {browseData.dirs.length === 0 ? (
-                  <p className="p-4 text-center text-sm text-muted-foreground">No subdirectories</p>
+                  <p className="p-6 text-center text-sm text-muted-foreground">No subdirectories</p>
                 ) : (
                   browseData.dirs.map((entry) => (
-                    <div
+                    <button
                       key={entry.path}
-                      className="flex items-center gap-2 border-b px-3 py-2 last:border-0 hover:bg-muted/50"
+                      type="button"
+                      className="flex w-full items-center gap-3 border-b px-3 py-3 text-left last:border-0 hover:bg-muted/50 active:bg-muted transition-colors"
+                      onClick={() => browse(entry.path)}
                     >
                       {entry.hasSquad ? (
-                        <Users className="h-4 w-4 shrink-0 text-primary" />
+                        <Users className="h-5 w-5 shrink-0 text-primary" />
                       ) : entry.hasGit ? (
-                        <FolderGit2 className="h-4 w-4 shrink-0 text-orange-500" />
+                        <FolderGit2 className="h-5 w-5 shrink-0 text-orange-500" />
                       ) : (
-                        <Folder className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <Folder className="h-5 w-5 shrink-0 text-muted-foreground" />
                       )}
-                      <span className="flex-1 truncate text-sm">{entry.name}</span>
-                      {entry.hasSquad && (
-                        <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">.squad</span>
-                      )}
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 px-2"
-                        onClick={() => selectDir(entry)}
-                      >
-                        Select
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => browse(entry.path)}
-                      >
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="block truncate text-sm font-medium">{entry.name}</span>
+                        {(entry.hasSquad || entry.hasGit) && (
+                          <div className="flex gap-1.5 mt-0.5">
+                            {entry.hasSquad && (
+                              <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">.squad</span>
+                            )}
+                            {entry.hasGit && (
+                              <span className="rounded bg-orange-500/10 px-1.5 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400">.git</span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    </button>
                   ))
                 )}
               </div>
 
-              <Button type="button" variant="outline" size="sm" onClick={() => setBrowsing(false)}>
-                Back to form
+              <Button type="button" variant="ghost" size="sm" onClick={() => setBrowsing(false)} className="w-full">
+                ← Back to form
               </Button>
             </div>
           ) : (
