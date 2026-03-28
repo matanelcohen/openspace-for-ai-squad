@@ -1,22 +1,47 @@
 'use client';
 
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { SkillDetailInstructions } from '@/components/skills/skill-detail-instructions';
 import { SkillDetailOverview } from '@/components/skills/skill-detail-overview';
+import { SkillFormDialog } from '@/components/skills/skill-form-dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAgents } from '@/hooks/use-agents';
-import { useAgentSkillsManagement, useSkillDetail } from '@/hooks/use-skills';
+import { useAgentSkillsManagement, useDeleteSkill, useSkillDetail } from '@/hooks/use-skills';
 
 export default function SkillDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const { data: skill, isLoading, error } = useSkillDetail(params.id);
+  const deleteSkill = useDeleteSkill();
+  const [editOpen, setEditOpen] = useState(false);
+
+  const handleDelete = async () => {
+    try {
+      await deleteSkill.mutateAsync(params.id);
+      router.push('/skills');
+    } catch {
+      // Error is handled by react-query
+    }
+  };
 
   if (isLoading) {
     return <LoadingSpinner size="lg" message="Loading skill details..." />;
@@ -38,12 +63,65 @@ export default function SkillDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link href="/skills">
-        <Button variant="ghost" size="sm">
-          <ArrowLeft className="mr-1 h-4 w-4" />
-          Back to Skill Store
-        </Button>
-      </Link>
+      <div className="flex items-center justify-between">
+        <Link href="/skills">
+          <Button variant="ghost" size="sm">
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Back to Skill Store
+          </Button>
+        </Link>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+            data-testid="edit-skill-btn"
+          >
+            <Pencil className="mr-1 h-4 w-4" />
+            Edit
+          </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="destructive"
+                size="sm"
+                data-testid="delete-skill-btn"
+              >
+                <Trash2 className="mr-1 h-4 w-4" />
+                Delete
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent data-testid="delete-skill-confirm">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Skill</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete &quot;{skill.manifest.name}&quot;? This action
+                  cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  data-testid="delete-skill-confirm-btn"
+                >
+                  {deleteSkill.isPending ? 'Deleting...' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
+
+      <SkillFormDialog
+        skill={skill}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onCreated={() => setEditOpen(false)}
+      />
 
       <Tabs defaultValue="overview">
         <TabsList>

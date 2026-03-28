@@ -17,6 +17,10 @@ vi.mock('@/hooks/use-skills', () => ({
     mutateAsync: vi.fn().mockResolvedValue({ id: 'test-skill', name: 'test-skill' }),
     isPending: false,
   }),
+  useUpdateSkill: () => ({
+    mutateAsync: vi.fn().mockResolvedValue({ id: 'test-skill' }),
+    isPending: false,
+  }),
 }));
 
 // Need to import after mocks

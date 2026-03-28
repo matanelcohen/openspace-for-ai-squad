@@ -16,7 +16,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateSkill } from '@/hooks/use-skills';
+import { useCreateSkill, useUpdateSkill } from '@/hooks/use-skills';
+import type { SkillDetail } from '@/hooks/use-skills';
 import { cn } from '@/lib/utils';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -76,26 +77,59 @@ function validate(data: SkillFormData): FieldErrors {
 interface SkillFormDialogProps {
   trigger?: React.ReactNode;
   onCreated?: (skillId: string) => void;
+  skill?: SkillDetail;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export function SkillFormDialog({ trigger, onCreated }: SkillFormDialogProps) {
-  const [open, setOpen] = useState(false);
+export function SkillFormDialog({
+  trigger,
+  onCreated,
+  skill,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+}: SkillFormDialogProps) {
+  const isEditMode = !!skill;
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = controlledOnOpenChange ?? setInternalOpen;
   const [submitted, setSubmitted] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [binInput, setBinInput] = useState('');
   const [envInput, setEnvInput] = useState('');
 
-  const [form, setForm] = useState<SkillFormData>({
-    name: '',
-    description: '',
-    tags: [],
-    roles: ['*'],
-    bins: [],
-    env: [],
-    instructions: '',
-  });
+  const initialForm: SkillFormData = skill
+    ? {
+        name: skill.manifest.id,
+        description: skill.manifest.description,
+        tags: skill.manifest.tags ?? [],
+        roles: (skill.manifest as Record<string, unknown>).agentMatch
+          ? ((skill.manifest as Record<string, unknown>).agentMatch as { roles: string[] }).roles
+          : ['*'],
+        bins: (skill.manifest as Record<string, unknown>).requires
+          ? ((skill.manifest as Record<string, unknown>).requires as { bins?: string[] }).bins ?? []
+          : [],
+        env: (skill.manifest as Record<string, unknown>).requires
+          ? ((skill.manifest as Record<string, unknown>).requires as { env?: string[] }).env ?? []
+          : [],
+        instructions:
+          ((skill.manifest as Record<string, unknown>).instructions as string) ?? '',
+      }
+    : {
+        name: '',
+        description: '',
+        tags: [],
+        roles: ['*'],
+        bins: [],
+        env: [],
+        instructions: '',
+      };
+
+  const [form, setForm] = useState<SkillFormData>(initialForm);
 
   const createSkill = useCreateSkill();
+  const updateSkill = useUpdateSkill();
+  const activeMutation = isEditMode ? updateSkill : createSkill;
   const errors = submitted ? validate(form) : {};
   const hasErrors = Object.keys(errors).length > 0;
 
@@ -169,42 +203,42 @@ export function SkillFormDialog({ trigger, onCreated }: SkillFormDialogProps) {
   // ── Reset & Submit ──────────────────────────────────────────────
 
   const resetForm = useCallback(() => {
-    setForm({
-      name: '',
-      description: '',
-      tags: [],
-      roles: ['*'],
-      bins: [],
-      env: [],
-      instructions: '',
-    });
+    setForm(initialForm);
     setSubmitted(false);
     setTagInput('');
     setBinInput('');
     setEnvInput('');
-  }, []);
+  }, [initialForm]);
 
   const handleSubmit = useCallback(async () => {
     setSubmitted(true);
     const validationErrors = validate(form);
     if (Object.keys(validationErrors).length > 0) return;
 
+    const payload = {
+      name: form.name,
+      description: form.description,
+      tags: form.tags,
+      agentMatch: { roles: form.roles },
+      requires: { bins: form.bins, env: form.env },
+      instructions: form.instructions,
+    };
+
     try {
-      const result = await createSkill.mutateAsync({
-        name: form.name,
-        description: form.description,
-        tags: form.tags,
-        agentMatch: { roles: form.roles },
-        requires: { bins: form.bins, env: form.env },
-        instructions: form.instructions,
-      });
-      setOpen(false);
-      resetForm();
-      onCreated?.(result.id ?? result.name);
+      if (isEditMode) {
+        await updateSkill.mutateAsync({ id: skill.manifest.id, ...payload });
+        setOpen(false);
+        onCreated?.(skill.manifest.id);
+      } else {
+        const result = await createSkill.mutateAsync(payload);
+        setOpen(false);
+        resetForm();
+        onCreated?.(result.id ?? result.name);
+      }
     } catch {
       // Error is handled by react-query
     }
-  }, [form, createSkill, onCreated, resetForm]);
+  }, [form, isEditMode, skill, createSkill, updateSkill, onCreated, resetForm, setOpen]);
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
@@ -216,22 +250,25 @@ export function SkillFormDialog({ trigger, onCreated }: SkillFormDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        {trigger ?? (
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
+      {!trigger && !isEditMode && (
+        <DialogTrigger asChild>
           <Button data-testid="create-skill-btn">
             <Plus className="h-4 w-4 mr-2" />
             Create Skill
           </Button>
-        )}
-      </DialogTrigger>
+        </DialogTrigger>
+      )}
       <DialogContent
         className="max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0"
         data-testid="skill-form-dialog"
       >
         <DialogHeader className="px-6 pt-6 pb-4 border-b">
-          <DialogTitle>Create New Skill</DialogTitle>
+          <DialogTitle>{isEditMode ? 'Edit Skill' : 'Create New Skill'}</DialogTitle>
           <DialogDescription>
-            Define a skill that teaches AI agents how to use a capability.
+            {isEditMode
+              ? 'Update the skill definition.'
+              : 'Define a skill that teaches AI agents how to use a capability.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -249,6 +286,7 @@ export function SkillFormDialog({ trigger, onCreated }: SkillFormDialogProps) {
                 onChange={(e) => handleNameChange(e.target.value)}
                 className={cn(errors.name && 'border-destructive')}
                 data-testid="skill-field-name"
+                disabled={isEditMode}
               />
               <p className="text-xs text-muted-foreground">
                 Kebab-case identifier (e.g. &quot;code-review&quot;, &quot;file-operations&quot;)
@@ -465,10 +503,16 @@ export function SkillFormDialog({ trigger, onCreated }: SkillFormDialogProps) {
             <Button
               type="button"
               onClick={handleSubmit}
-              disabled={createSkill.isPending}
+              disabled={activeMutation.isPending}
               data-testid="skill-form-submit"
             >
-              {createSkill.isPending ? 'Creating...' : 'Create Skill'}
+              {activeMutation.isPending
+                ? isEditMode
+                  ? 'Saving...'
+                  : 'Creating...'
+                : isEditMode
+                  ? 'Save Changes'
+                  : 'Create Skill'}
             </Button>
           </div>
         </div>

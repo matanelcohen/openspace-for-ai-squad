@@ -245,6 +245,28 @@ export function useCreateSkill() {
   });
 }
 
+export function useUpdateSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...payload }: CreateSkillPayload & { id: string }) =>
+      api.put<SkillSummary>(`/api/skills/${id}`, payload),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({ queryKey: ['skills'] });
+      void queryClient.invalidateQueries({ queryKey: ['skills', variables.id] });
+    },
+  });
+}
+
+export function useDeleteSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete<void>(`/api/skills/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['skills'] });
+    },
+  });
+}
+
 // ── GitHub import types ──────────────────────────────────────────
 
 export interface GitHubSkillSource {

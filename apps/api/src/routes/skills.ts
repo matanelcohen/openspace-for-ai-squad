@@ -5,8 +5,8 @@
  * POST   /api/skills                  — Create a new skill (SKILL.md format)
  * GET    /api/skills/health           — Health status for all skills
  * GET    /api/skills/:id              — Skill detail
- * PUT    /api/skills/:id              — Update skill manifest
- * DELETE /api/skills/:id              — Unregister (unload) a skill
+ * PUT    /api/skills/:id              — Update skill (SKILL.md content + registry)
+ * DELETE /api/skills/:id              — Delete skill (files + registry)
  * GET    /api/skills/:id/agents       — List agents using a skill
  * GET    /api/skills/:id/health       — Health status for a single skill
  * POST   /api/skills/:id/recover      — Manually recover a failed/disabled skill
@@ -16,7 +16,7 @@
  * POST   /api/skills/import           — Import selected skills from GitHub
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import type { SkillManifest } from '@openspace/shared';
@@ -379,47 +379,104 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     return reply.send(serialiseEntry(entry));
   });
 
-  // PUT /api/skills/:id — update skill manifest
-  app.put<{ Params: { id: string }; Body: Partial<SkillManifest> }>(
-    '/skills/:id',
-    async (request, reply) => {
-      const registry = app.skillRegistry;
-      if (!registry) {
-        return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
-      }
+  // PUT /api/skills/:id — update skill (SKILL.md content + registry)
+  app.put<{ Params: { id: string } }>('/skills/:id', async (request, reply) => {
+    const registry = app.skillRegistry;
+    if (!registry) {
+      return sendError(reply, 503, ErrorCodes.INTERNAL_ERROR, 'Skill registry not available');
+    }
 
-      const skillId = request.params.id;
-      const entry = registry.get(skillId);
-      if (!entry) {
-        return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
-      }
+    const skillId = request.params.id;
+    const entry = registry.get(skillId);
+    if (!entry) {
+      return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
+    }
 
-      const body = request.body;
-      if (!body || typeof body !== 'object') {
-        return sendError(
-          reply,
-          400,
-          ErrorCodes.VALIDATION_ERROR,
-          'Request body must be a JSON object',
-        );
-      }
+    const body = request.body;
 
-      const result = await registry.updateManifest(skillId, body as Partial<SkillManifest>);
-      if (!result.valid) {
-        return sendError(
-          reply,
-          400,
-          ErrorCodes.VALIDATION_ERROR,
-          result.errors.map((e: { message: string }) => e.message).join('; '),
-        );
+    // Accept SKILL.md-compatible payload
+    if (isSkillMdPayload(body)) {
+      const payload = body as SkillMdPayload;
+
+      // Overwrite SKILL.md file
+      const squadDir = getSquadDir();
+      const skillDir = join(squadDir, 'skills', skillId);
+      const skillFile = join(skillDir, 'SKILL.md');
+
+      if (!existsSync(skillDir)) {
+        mkdirSync(skillDir, { recursive: true });
       }
+      writeFileSync(skillFile, generateSkillMd(payload), 'utf-8');
+
+      // Pretty-print the display name from the kebab-case ID
+      const displayName = skillId
+        .split('-')
+        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .join(' ');
+
+      // Update the registry entry in-place
+      const entries = (registry as unknown as { entries: Map<string, unknown> }).entries;
+      const existing = entries.get(skillId) as Record<string, unknown> | undefined;
+      entries.set(skillId, {
+        ...(existing ?? {}),
+        manifest: {
+          ...((existing?.manifest as Record<string, unknown>) ?? {}),
+          manifestVersion: '1.0' as const,
+          id: skillId,
+          name: displayName,
+          version: ((existing?.manifest as Record<string, unknown>)?.version as string) ?? '1.0.0',
+          description: payload.description,
+          author:
+            ((existing?.manifest as Record<string, unknown>)?.author as string) ?? 'openspace.ai',
+          tags: payload.tags ?? [],
+          icon:
+            ((existing?.manifest as Record<string, unknown>)?.icon as string) ??
+            SKILL_ICONS[skillId] ??
+            '🔧',
+          permissions: [],
+          agentMatch: payload.agentMatch ?? { roles: ['*'] },
+          requires: payload.requires ?? { bins: [], env: [] },
+          instructions: payload.instructions ?? '',
+        },
+        phase: (existing?.phase as string) ?? ('loaded' as const),
+        hooks: (existing?.hooks as unknown) ?? null,
+        activeAgents: (existing?.activeAgents as Set<string>) ?? new Set<string>(),
+        lastTransition: Date.now(),
+        error: null,
+        sourcePath: skillFile,
+        retryState: (existing?.retryState as unknown) ?? null,
+        circuitBreaker: (existing?.circuitBreaker as unknown) ?? null,
+      });
 
       const updated = registry.get(skillId);
       return reply.send(serialiseEntry(updated));
-    },
-  );
+    }
 
-  // DELETE /api/skills/:id — unregister (unload) a skill
+    // Fallback: accept legacy SkillManifest partial payload
+    if (!body || typeof body !== 'object') {
+      return sendError(
+        reply,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        'Request body must include name and description',
+      );
+    }
+
+    const result = await registry.updateManifest(skillId, body as Partial<SkillManifest>);
+    if (!result.valid) {
+      return sendError(
+        reply,
+        400,
+        ErrorCodes.VALIDATION_ERROR,
+        result.errors.map((e: { message: string }) => e.message).join('; '),
+      );
+    }
+
+    const updated = registry.get(skillId);
+    return reply.send(serialiseEntry(updated));
+  });
+
+  // DELETE /api/skills/:id — delete skill (files + registry)
   app.delete<{ Params: { id: string } }>('/skills/:id', async (request, reply) => {
     const registry = app.skillRegistry;
     if (!registry) {
@@ -433,14 +490,28 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     }
 
     try {
+      // Remove from registry (deactivate agents first if needed)
+      if (entry.activeAgents.size > 0) {
+        for (const agentId of [...entry.activeAgents]) {
+          await registry.deactivate(skillId, agentId);
+        }
+      }
       await registry.unload(skillId);
+
+      // Remove skill directory from disk
+      const squadDir = getSquadDir();
+      const skillDir = join(squadDir, 'skills', skillId);
+      if (existsSync(skillDir)) {
+        rmSync(skillDir, { recursive: true });
+      }
+
       return reply.status(204).send();
     } catch (err) {
       return sendError(
         reply,
         409,
         ErrorCodes.CONFLICT,
-        `Cannot unregister skill: ${(err as Error).message}`,
+        `Cannot delete skill: ${(err as Error).message}`,
       );
     }
   });
