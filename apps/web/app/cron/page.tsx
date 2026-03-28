@@ -1,7 +1,7 @@
 'use client';
 
 import { Clock, History, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -46,6 +46,65 @@ import {
   useToggleCronJob,
 } from '@/hooks/use-cron';
 import { useAgents } from '@/hooks/use-agents';
+
+/** Simple cron next-run calculator (minute, hour, day-of-month, month, day-of-week). */
+function getNextCronRuns(expr: string, count: number): Date[] {
+  const parts = expr.split(/\s+/);
+  if (parts.length < 5) return [];
+
+  const parse = (field: string, min: number, max: number): number[] => {
+    if (field === '*') return Array.from({ length: max - min + 1 }, (_, i) => i + min);
+    const values = new Set<number>();
+    for (const part of field.split(',')) {
+      if (part.includes('/')) {
+        const [range, step] = part.split('/');
+        const s = Number(step);
+        const start = range === '*' ? min : Number(range);
+        for (let i = start; i <= max; i += s) values.add(i);
+      } else if (part.includes('-')) {
+        const [a, b] = part.split('-').map(Number);
+        for (let i = a; i <= b; i++) values.add(i);
+      } else {
+        values.add(Number(part));
+      }
+    }
+    return [...values].filter((v) => v >= min && v <= max).sort((a, b) => a - b);
+  };
+
+  const minutes = parse(parts[0]!, 0, 59);
+  const hours = parse(parts[1]!, 0, 23);
+  const daysOfMonth = parse(parts[2]!, 1, 31);
+  const months = parse(parts[3]!, 1, 12);
+  const daysOfWeek = parse(parts[4]!, 0, 6);
+
+  if (!minutes.length || !hours.length) return [];
+
+  const results: Date[] = [];
+  const now = new Date();
+  const cursor = new Date(now);
+  cursor.setSeconds(0, 0);
+  cursor.setMinutes(cursor.getMinutes() + 1);
+
+  for (let i = 0; i < 60 * 24 * 60 && results.length < count; i++) {
+    const m = cursor.getMinutes();
+    const h = cursor.getHours();
+    const dom = cursor.getDate();
+    const mon = cursor.getMonth() + 1;
+    const dow = cursor.getDay();
+
+    if (
+      minutes.includes(m) &&
+      hours.includes(h) &&
+      (parts[2] === '*' || daysOfMonth.includes(dom)) &&
+      (parts[3] === '*' || months.includes(mon)) &&
+      (parts[4] === '*' || daysOfWeek.includes(dow))
+    ) {
+      results.push(new Date(cursor));
+    }
+    cursor.setMinutes(cursor.getMinutes() + 1);
+  }
+  return results;
+}
 
 function StatusBadge({ status }: { status: string }) {
   const variant =
@@ -271,6 +330,16 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const { data: agents = [] } = useAgents();
   const createJob = useCreateCronJob();
   const [action, setAction] = useState<'chat' | 'task'>('chat');
+  const [schedule, setSchedule] = useState('');
+
+  const nextRuns = useMemo(() => {
+    if (!schedule.trim()) return [];
+    try {
+      return getNextCronRuns(schedule.trim(), 3);
+    } catch {
+      return [];
+    }
+  }, [schedule]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -306,8 +375,28 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Schedule (cron)</label>
-            <Input name="schedule" placeholder="0 9 * * 1-5" required />
+            <Input
+              name="schedule"
+              placeholder="0 9 * * 1-5"
+              required
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+            />
             <p className="text-xs text-muted-foreground">e.g., &quot;0 9 * * 1-5&quot; = weekdays at 9am</p>
+            {nextRuns.length > 0 && (
+              <div className="rounded-md bg-muted/50 p-2 text-xs">
+                <p className="font-medium text-muted-foreground mb-1">Next runs:</p>
+                {nextRuns.map((d, i) => (
+                  <p key={i} className="text-foreground">
+                    {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                    {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                ))}
+              </div>
+            )}
+            {schedule.trim() && nextRuns.length === 0 && (
+              <p className="text-xs text-destructive">Invalid cron expression</p>
+            )}
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Agent</label>
