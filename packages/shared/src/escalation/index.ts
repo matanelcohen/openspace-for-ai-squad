@@ -134,7 +134,7 @@ export function getNextChainLevel(
   const sorted = [...chain.levels].sort((a, b) => a.level - b.level);
   const currentIdx = sorted.findIndex((l) => l.level === currentLevel);
   if (currentIdx === -1 || currentIdx === sorted.length - 1) return null;
-  return sorted[currentIdx + 1];
+  return sorted[currentIdx + 1] ?? null;
 }
 
 /**

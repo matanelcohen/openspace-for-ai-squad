@@ -147,8 +147,6 @@ export type {
   VectorStoreProvider,
 } from './rag.js';
 export type {
-  AgentSkillAssignment,
-  AgentSkillsConfig,
   CompositeTrigger,
   FileTrigger,
   LabelTrigger,

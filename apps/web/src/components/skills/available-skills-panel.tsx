@@ -10,7 +10,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   useAgentSkills,
-  useAttachAgentSkill,
+  useToggleAgentSkill,
   useSkills,
 } from '@/hooks/use-skills';
 
@@ -24,7 +24,7 @@ interface AvailableSkillsPanelProps {
 export function AvailableSkillsPanel({ agentId }: AvailableSkillsPanelProps) {
   const { data: allSkills, isLoading: skillsLoading } = useSkills();
   const { data: agentSkillsConfig } = useAgentSkills(agentId);
-  const attachMutation = useAttachAgentSkill(agentId);
+  const attachMutation = useToggleAgentSkill(agentId);
   const [search, setSearch] = useState('');
 
   const assignedIds = useMemo(
@@ -103,7 +103,7 @@ export function AvailableSkillsPanel({ agentId }: AvailableSkillsPanelProps) {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => attachMutation.mutate({ skillId: skill.id })}
+                    onClick={() => attachMutation.mutate({ skillId: skill.id, enabled: true })}
                     disabled={attachMutation.isPending}
                     className="h-8 gap-1 text-xs shrink-0"
                     data-testid={`assign-skill-${skill.id}`}

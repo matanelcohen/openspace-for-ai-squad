@@ -88,7 +88,7 @@ export function SkillGrid({ skills, isLoading }: SkillGridProps) {
           <SkillCard
             key={skill.id}
             skill={skill}
-            enabledAgents={enabledAgents.map((a) => ({ id: a.id, name: a.name }))}
+            enabledAgents={enabledAgents.map((a) => ({ id: a!.id, name: a!.name }))}
           />
         );
       })}

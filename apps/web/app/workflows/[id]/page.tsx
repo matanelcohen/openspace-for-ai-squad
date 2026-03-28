@@ -149,8 +149,9 @@ export default function WorkflowDetailPage() {
           <div className="mt-4">
             <h3 className="mb-2 text-xs font-semibold text-muted-foreground">Node Status</h3>
             <div className="space-y-1">
-              {Object.entries(activeExecution.nodeStates).map(([nodeId, nodeState]) => {
-                const node = definition.nodes.find((n) => n.id === nodeId);
+              {Object.entries(activeExecution.nodeStates).map(([nodeId, _nodeState]) => {
+                const nodeState = _nodeState as { startedAt?: string; completedAt?: string; status?: string };
+                const node = definition.nodes.find((n: { id: string }) => n.id === nodeId);
                 return (
                   <div
                     key={nodeId}

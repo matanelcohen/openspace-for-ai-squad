@@ -525,6 +525,31 @@ export interface SkillRegistryEntry {
 
   /** Error details if phase is 'error'. */
   error?: SkillRegistryError;
+
+  /** Circuit breaker state for fault tolerance. */
+  circuitBreaker?: SkillCircuitBreakerState;
+
+  /** Last health check timestamp. */
+  lastHealthCheck?: number | null;
+}
+
+/** Circuit breaker state for skill fault tolerance. */
+export interface SkillCircuitBreakerState {
+  consecutiveFailures: number;
+  status: 'closed' | 'open' | 'half-open';
+  lastFailureTime: number | null;
+  disabledAt: number | null;
+}
+
+/** Health status snapshot for a registered skill. */
+export interface SkillHealthStatus {
+  skillId: string;
+  phase: SkillPhase;
+  circuitBreaker: SkillCircuitBreakerState;
+  retryPolicy: SkillRetryPolicy;
+  lastHealthCheck: number | null;
+  activeAgents: string[];
+  error: SkillRegistryError | null;
 }
 
 export interface SkillRegistryError {

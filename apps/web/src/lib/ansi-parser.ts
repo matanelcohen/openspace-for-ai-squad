@@ -101,8 +101,8 @@ function applyCodes(state: SgrState, raw: string): void {
     else if (c === 23) state.italic = false;
     else if (c === 24) state.underline = false;
     else if (c === 29) state.strikethrough = false;
-    else if (FG_MAP[c]) state.fg = FG_MAP[c];
-    else if (BG_MAP[c]) state.bg = BG_MAP[c];
+    else if (c !== undefined && FG_MAP[c]) state.fg = FG_MAP[c]!;
+    else if (c !== undefined && BG_MAP[c]) state.bg = BG_MAP[c]!;
     else if (c === 39) state.fg = '';
     else if (c === 49) state.bg = '';
     // 256-colour: 38;5;n or 48;5;n
@@ -135,7 +135,7 @@ export function parseAnsi(input: string): AnsiSpan[] {
       const text = input.slice(lastIndex, match.index);
       if (text) spans.push({ text, className: stateToClassName(state) });
     }
-    applyCodes(state, match[1]);
+    applyCodes(state, match[1]!);
     lastIndex = ANSI_RE.lastIndex;
   }
 

@@ -104,17 +104,17 @@ export function SkillFormDialog({
         name: skill.manifest.id,
         description: skill.manifest.description,
         tags: skill.manifest.tags ?? [],
-        roles: (skill.manifest as Record<string, unknown>).agentMatch
-          ? ((skill.manifest as Record<string, unknown>).agentMatch as { roles: string[] }).roles
+        roles: (skill.manifest as unknown as Record<string, unknown>).agentMatch
+          ? ((skill.manifest as unknown as Record<string, unknown>).agentMatch as { roles: string[] }).roles
           : ['*'],
-        bins: (skill.manifest as Record<string, unknown>).requires
-          ? ((skill.manifest as Record<string, unknown>).requires as { bins?: string[] }).bins ?? []
+        bins: (skill.manifest as unknown as Record<string, unknown>).requires
+          ? ((skill.manifest as unknown as Record<string, unknown>).requires as { bins?: string[] }).bins ?? []
           : [],
-        env: (skill.manifest as Record<string, unknown>).requires
-          ? ((skill.manifest as Record<string, unknown>).requires as { env?: string[] }).env ?? []
+        env: (skill.manifest as unknown as Record<string, unknown>).requires
+          ? ((skill.manifest as unknown as Record<string, unknown>).requires as { env?: string[] }).env ?? []
           : [],
         instructions:
-          ((skill.manifest as Record<string, unknown>).instructions as string) ?? '',
+          ((skill.manifest as unknown as Record<string, unknown>).instructions as string) ?? '',
       }
     : {
         name: '',

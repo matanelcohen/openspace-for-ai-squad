@@ -332,6 +332,7 @@ export class DAGWorkflowEngine {
       updatedAt: now,
       completedAt: null,
       checkpointVersion: 0,
+      activeInterrupts: [],
     };
 
     // Checkpoint v0

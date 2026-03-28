@@ -14,4 +14,3 @@ export {
 export type { WorkflowNodeData } from './workflow-utils';
 export { WorkflowViewer } from './workflow-viewer';
 export type { WorkflowViewerProps } from './workflow-viewer';
-export { WorkflowPage } from './workflow-page';

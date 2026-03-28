@@ -351,8 +351,8 @@ function evaluateSimpleCondition(condition: string, output: unknown): boolean {
   if (!match) return false;
 
   const [, fieldPath, operator, rawValue] = match;
-  const actual = resolveFieldPath(fieldPath, output);
-  const expected = parseValue(rawValue.trim());
+  const actual = resolveFieldPath(fieldPath!, output);
+  const expected = parseValue(rawValue!.trim());
 
   switch (operator) {
     case '===': return actual === expected;

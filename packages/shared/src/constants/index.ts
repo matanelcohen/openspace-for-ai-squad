@@ -15,6 +15,8 @@ import type {
   A2ARoutingStrategy,
   ActivityEventType,
   AgentStatus,
+  SandboxRuntime,
+  SandboxStatus,
   TaskPriority,
   TaskStatus,
   TeamMemberRank,

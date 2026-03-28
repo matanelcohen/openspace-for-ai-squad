@@ -249,7 +249,7 @@ export function formStateToManifest(state: WizardFormState): SkillManifest {
   if (state.config.length > 0) manifest.config = state.config;
   if (state.permissions.length > 0) manifest.permissions = state.permissions;
   if (state.entryPoint) manifest.entryPoint = state.entryPoint;
-  if (state.priority !== 0) manifest.priority = state.priority;
+  if (state.priority !== 0) (manifest as unknown as Record<string, unknown>).priority = state.priority;
 
   return manifest;
 }
@@ -271,7 +271,7 @@ export function manifestToFormState(manifest: SkillManifest): WizardFormState {
     config: manifest.config ?? [],
     permissions: manifest.permissions ?? [],
     entryPoint: manifest.entryPoint ?? '',
-    priority: manifest.priority ?? 0,
+    priority: (manifest as unknown as Record<string, unknown>).priority as number ?? 0,
   };
 }
 

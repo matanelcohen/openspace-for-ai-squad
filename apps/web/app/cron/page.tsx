@@ -64,7 +64,7 @@ function getNextCronRuns(expr: string, count: number): Date[] {
         for (let i = start; i <= max; i += s) values.add(i);
       } else if (part.includes('-')) {
         const [a, b] = part.split('-').map(Number);
-        for (let i = a; i <= b; i++) values.add(i);
+        for (let i = a!; i <= b!; i++) values.add(i);
       } else {
         values.add(Number(part));
       }

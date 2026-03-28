@@ -21,12 +21,13 @@ export interface SkillSummary {
   requiredBins?: string[];
 }
 
-export interface SkillDetail extends SkillRegistryEntry {
+export interface SkillDetail {
   manifest: SkillManifest & {
     sourcePath?: string;
     resolvedDependencies?: Record<string, string>;
     toolAvailability?: Record<string, boolean>;
   };
+  phase: SkillPhase;
 }
 
 export interface AgentSkillAssignment {
