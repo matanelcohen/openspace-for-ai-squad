@@ -73,9 +73,9 @@ const workspacesRoute: FastifyPluginAsync = async (app) => {
         app.squadParser.setSquadDir(newSquadDir);
       }
 
-      // Re-seed team members from new workspace
-      const { seedTeamMembers } = await import('../services/db/seed-team.js');
-      seedTeamMembers(app.db, newSquadDir);
+      // Re-sync team members from new workspace (clears old + re-inserts)
+      const { syncTeamMembers } = await import('../services/db/seed-team.js');
+      syncTeamMembers(app.db, newSquadDir);
 
       // Re-load agent registry from new DB
       if (app.agentRegistry) {
