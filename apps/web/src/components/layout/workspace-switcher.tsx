@@ -26,7 +26,10 @@ export function WorkspaceSwitcher() {
     restoredRef.current = true;
     const storedId = getStoredWorkspaceId();
     if (storedId && storedId !== active.id && workspaces.some((w) => w.id === storedId)) {
-      activateWorkspace.mutate(storedId);
+      // Activate on API then reload to get fresh data
+      activateWorkspace.mutateAsync(storedId).then(() => {
+        window.location.reload();
+      }).catch(() => { /* ignore */ });
     }
   }, [workspaces, active, activateWorkspace]);
 
