@@ -13,7 +13,7 @@ import type { Task } from '@openspace/shared';
 
 import type { ActivityFeed } from '../activity/index.js';
 import type { AIProvider } from '../ai/copilot-provider.js';
-import { selectTier } from '../routing/tiers.js';
+import { getTierDefinition, selectTier } from '../routing/tiers.js';
 import {
   buildSkillsPrompt,
   getSkillsForRole,
@@ -329,12 +329,20 @@ export class AgentWorkerService {
         description: task.description,
         priority: task.priority,
       });
-      console.log(`[AgentWorker] Response tier: ${tier} for task ${taskId}`);
+      const tierDef = getTierDefinition(tier);
+      console.log(`[AgentWorker] Response tier: ${tier} (${tierDef.description}) for task ${taskId}`);
+
+      // Log tier in task description for traceability
+      await updateTask(this.config.tasksDir, taskId, {
+        description:
+          task.description +
+          `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.\n**[${now()}]** 🎚️ Response tier: **${tier}** — ${tierDef.description} (maxAgents: ${tierDef.maxAgents})`,
+      });
 
       // ── Lead delegation: break down task and assign to team ──
       const isLead = agent.role.toLowerCase().includes('lead');
       if (isLead) {
-        await this.handleLeadDelegation(agent, task, taskId);
+        await this.handleLeadDelegation(agent, task, taskId, tier);
         return;
       }
 
@@ -464,17 +472,23 @@ export class AgentWorkerService {
   /**
    * When a lead agent gets a task, they break it down into sub-tasks
    * and assign them to the right team members instead of doing the work themselves.
+   * The tier controls how many agents get delegated to.
    */
   private async handleLeadDelegation(
     agent: AgentProfile,
     task: Task,
     taskId: string,
+    tier: import('@openspace/shared').ResponseTier = 'standard',
   ): Promise<void> {
     const now = () => new Date().toISOString().replace('T', ' ').substring(0, 19);
+    const tierDef = getTierDefinition(tier);
     const otherAgents = this.config.agents.filter(
       (a) => a.id !== agent.id && !['scribe', 'ralph'].includes(a.id),
     );
     const agentList = otherAgents.map((a) => `- ${a.id}: ${a.name} (${a.role})`).join('\n');
+
+    // Tier-based delegation constraints
+    const maxSubTasks = tier === 'full' ? otherAgents.length : tier === 'standard' ? Math.min(3, otherAgents.length) : 1;
 
     try {
       const result = await this.config.aiProvider.chatCompletion({
@@ -483,11 +497,12 @@ export class AgentWorkerService {
         systemPrompt:
           `You are ${agent.name}, the Lead of the openspace.ai squad.\n` +
           `Your job is to break down tasks and delegate to the right team members.\n\n` +
+          `Response tier: ${tier} (${tierDef.description}). Max agents: ${tierDef.maxAgents}.\n\n` +
           `Available team members:\n${agentList}\n\n` +
           `Respond ONLY with valid JSON — an array of sub-tasks:\n` +
           `[{"title": "...", "description": "...", "assignee": "agent_id"}]\n\n` +
           `Rules:\n` +
-          `- Break the task into 2-5 focused sub-tasks\n` +
+          `- Break the task into ${tier === 'full' ? `up to ${maxSubTasks}` : `1-${maxSubTasks}`} focused sub-tasks\n` +
           `- Assign frontend work to the Frontend Dev\n` +
           `- Assign backend/API work to the Backend Dev\n` +
           `- Assign testing to the Tester\n` +

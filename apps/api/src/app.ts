@@ -34,6 +34,7 @@ import { AuthService } from './services/auth/index.js';
 import { ChatService } from './services/chat/index.js';
 import { loadSquadConfig } from './services/config/index.js';
 import { CronService } from './services/cron/index.js';
+import { buildHookPipeline, type HookPipeline } from './services/hooks/pipeline.js';
 import { openDatabase } from './services/db/index.js';
 import { seedTeamMembers } from './services/db/seed-team.js';
 import { SandboxService } from './services/sandbox/index.js';
@@ -210,6 +211,37 @@ export function buildApp(opts: AppOptions = {}) {
         personality: PERSONALITY_MAP[a.role] ?? 'Professional, collaborative, dedicated.',
       }));
       voiceServices.chatAgents = AGENT_PROFILES;
+
+      // Wire capabilities from config into SquadParser so /api/agents returns them
+      const capMap = new Map<string, import('@openspace/shared').AgentCapability[]>();
+      for (const agentDef of squadConfig.agents) {
+        if (agentDef.capabilities?.length) {
+          capMap.set(agentDef.name, agentDef.capabilities);
+        }
+      }
+      if (capMap.size > 0) {
+        parser.setCapabilities(capMap);
+        console.log(`[Config] Loaded capabilities for ${capMap.size} agents`);
+      }
+
+      // Wire routing rules from config into ChatService
+      if (squadConfig.routing?.rules?.length) {
+        chatService.setRoutingRules(squadConfig.routing.rules);
+        console.log(`[Config] Loaded ${squadConfig.routing.rules.length} routing rules`);
+      }
+
+      // Wire hooks from config into a HookPipeline
+      if (squadConfig.hooks) {
+        const hookPipeline = buildHookPipeline(squadConfig.hooks);
+        app.decorate('hookPipeline', hookPipeline);
+        console.log('[Config] Loaded governance hooks (FileGuard, ShellRestriction, RateLimit)');
+      }
+
+      // Wire ceremonies from config into CronService
+      if (squadConfig.ceremonies?.length) {
+        cronService.loadCeremonies(squadConfig.ceremonies);
+        console.log(`[Config] Loaded ${squadConfig.ceremonies.length} ceremony definitions`);
+      }
     }
 
     // Initialize AI provider and connect to chat + voice + worker services
@@ -349,5 +381,6 @@ declare module 'fastify' {
     agentWorker?: AgentWorkerService;
     a2aService?: A2AService;
     sandboxService: SandboxService;
+    hookPipeline?: HookPipeline;
   }
 }

@@ -9,6 +9,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import type { CeremonyDefinition } from '@openspace/shared';
+
 import type { ChatService } from '../chat/index.js';
 
 // ── Types ─────────────────────────────────────────────────────────
@@ -143,6 +145,32 @@ export class CronService {
   /** Connect to ChatService for sending messages. */
   setChatService(service: ChatService): void {
     this.chatService = service;
+  }
+
+  /** Load ceremony definitions from squad.config.ts into the job list. */
+  loadCeremonies(ceremonies: CeremonyDefinition[]): void {
+    for (const ceremony of ceremonies) {
+      const id = `ceremony-${ceremony.name.toLowerCase().replace(/\s+/g, '-')}`;
+      if (this.jobs.some((j) => j.id === id)) continue;
+
+      this.jobs.push({
+        id,
+        schedule: ceremony.schedule ?? '0 9 * * 1-5',
+        agent: ceremony.participants?.[0] ?? 'leela',
+        action: ceremony.action ?? 'chat',
+        message: ceremony.message ?? `${ceremony.name}: ${ceremony.agenda ?? ''}`,
+        channel: 'team',
+        enabled: true,
+        participants: ceremony.participants,
+        agenda: ceremony.agenda,
+        type: ceremony.name.toLowerCase().includes('retro')
+          ? 'retro'
+          : ceremony.name.toLowerCase().includes('standup')
+            ? 'standup'
+            : 'custom',
+      });
+    }
+    console.log(`[Cron] Merged ${ceremonies.length} ceremonies into job list (total: ${this.jobs.length})`);
   }
 
   /** Start the scheduler — checks every 60 seconds. */

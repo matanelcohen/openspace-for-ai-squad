@@ -13,6 +13,7 @@ import { join, resolve } from 'node:path';
 
 import type {
   Agent,
+  AgentCapability,
   AgentDetail,
   ChatChannel,
   Decision,
@@ -36,6 +37,8 @@ function resolveSquadDir(): string {
 
 export class SquadParser {
   private readonly squadDir: string;
+  /** Config-driven capabilities mapped by agent name (lowercase). */
+  private capabilitiesMap = new Map<string, AgentCapability[]>();
 
   constructor(squadDir?: string) {
     this.squadDir = squadDir ?? resolveSquadDir();
@@ -46,9 +49,22 @@ export class SquadParser {
     return this.squadDir;
   }
 
-  /** Parse team.md and return all agents. */
+  /** Set agent capabilities from squad.config.ts. */
+  setCapabilities(caps: Map<string, AgentCapability[]>): void {
+    this.capabilitiesMap = caps;
+  }
+
+  /** Parse team.md and return all agents, augmented with config capabilities. */
   async getAgents(): Promise<Agent[]> {
-    return parseTeamFile(this.squadDir);
+    const agents = await parseTeamFile(this.squadDir);
+    // Merge capabilities from config
+    for (const agent of agents) {
+      const caps = this.capabilitiesMap.get(agent.id);
+      if (caps) {
+        agent.capabilities = caps;
+      }
+    }
+    return agents;
   }
 
   /** Parse a single agent's full detail (charter + history). */

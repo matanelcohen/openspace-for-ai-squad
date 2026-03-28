@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { appendFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import type { ChatChannel, ChatMessage } from '@openspace/shared';
+import type { ChatChannel, ChatMessage, RoutingRule } from '@openspace/shared';
 import { CHAT_CHANNEL_PREFIX, CHAT_TEAM_RECIPIENT } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
@@ -111,6 +111,7 @@ export class ChatService {
   private aiProvider: AIProvider | null = null;
   private activityFeed: ActivityFeed | null = null;
   private readonly allSkills: ParsedSkill[];
+  private routingRules: RoutingRule[] = [];
 
   constructor(opts: {
     db?: Database.Database | null;
@@ -154,6 +155,11 @@ export class ChatService {
   /** Connect to the activity feed for cross-system event publishing. */
   setActivityFeed(feed: ActivityFeed): void {
     this.activityFeed = feed;
+  }
+
+  /** Set routing rules from squad.config.ts for pattern-based routing. */
+  setRoutingRules(rules: RoutingRule[]): void {
+    this.routingRules = rules;
   }
 
   // ── Send message ────────────────────────────────────────────
@@ -994,7 +1000,7 @@ export class ChatService {
     return echo;
   }
 
-  /** Determine which agents should respond. Direct name match first, then LLM routing. */
+  /** Determine which agents should respond. Config routing rules → name match → LLM routing. */
   private async routeToAgents(content: string): Promise<string[]> {
     const lower = content.toLowerCase();
 
@@ -1009,6 +1015,21 @@ export class ChatService {
     );
     if (mentioned.length > 0) {
       return mentioned.map((a) => a.id);
+    }
+
+    // Config-driven routing rules — pattern match against message content
+    if (this.routingRules.length > 0) {
+      for (const rule of this.routingRules) {
+        const pattern = rule.pattern instanceof RegExp ? rule.pattern : new RegExp(rule.pattern, 'i');
+        if (pattern.test(content)) {
+          const agentIds = rule.agents.map((a) => a.replace(/^@/, ''));
+          const valid = agentIds.filter((id) => ChatService.AGENTS.some((a) => a.id === id));
+          if (valid.length > 0) {
+            console.log(`[Chat] Routing rule matched: "${rule.pattern}" → [${valid.join(', ')}]`);
+            return valid;
+          }
+        }
+      }
     }
 
     // Short messages or greetings → route to Leela (lead) as the default responder
