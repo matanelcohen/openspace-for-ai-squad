@@ -296,6 +296,15 @@ export class CronService {
     return true;
   }
 
+  /** Update a cron job by ID. */
+  updateJob(id: string, updates: Partial<Omit<CronJob, 'id'>>): CronJob | null {
+    const job = this.jobs.find((j) => j.id === id);
+    if (!job) return null;
+    Object.assign(job, updates);
+    this.persistConfig();
+    return job;
+  }
+
   /** Persist current job config back to cron.json. */
   private persistConfig(): void {
     try {

@@ -104,3 +104,14 @@ export function useDeleteCronJob() {
     },
   });
 }
+
+export function useUpdateCronJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; schedule?: string; agent?: string; action?: 'chat' | 'task'; message?: string; channel?: string; title?: string; description?: string }) =>
+      api.put(`/api/cron/${id}`, body),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['cron-jobs'] });
+    },
+  });
+}

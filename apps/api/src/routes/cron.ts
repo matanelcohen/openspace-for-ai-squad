@@ -96,6 +96,18 @@ const cronRoute: FastifyPluginAsync = async (app) => {
     if (!deleted) return reply.status(404).send({ error: `Job "${request.params.id}" not found` });
     return reply.status(204).send();
   });
+
+  // PUT /api/cron/:id — update a job
+  app.put<{ Params: { id: string }; Body: Record<string, unknown> }>('/cron/:id', async (request, reply) => {
+    const body = request.body;
+    if (!body || typeof body !== 'object') {
+      return reply.status(400).send({ error: 'Request body is required' });
+    }
+
+    const job = app.cronService.updateJob(request.params.id, body as Partial<{ schedule: string; agent: string; action: 'chat' | 'task'; message: string; channel: string; title: string; description: string; enabled: boolean }>);
+    if (!job) return reply.status(404).send({ error: `Job "${request.params.id}" not found` });
+    return reply.send({ job });
+  });
 };
 
 export default cronRoute;

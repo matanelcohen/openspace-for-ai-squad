@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, History, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { Clock, History, Pencil, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -44,6 +44,7 @@ import {
   useDeleteCronJob,
   useRunCronJob,
   useToggleCronJob,
+  useUpdateCronJob,
 } from '@/hooks/use-cron';
 import { useAgents } from '@/hooks/use-agents';
 
@@ -130,7 +131,7 @@ function formatRelativeTime(dateStr?: string): string {
   return `${diffDays}d ago`;
 }
 
-function CronJobRow({ job }: { job: CronJob }) {
+function CronJobRow({ job, onEdit, onDelete }: { job: CronJob; onEdit?: (job: CronJob) => void; onDelete?: (id: string) => void }) {
   const toggleMutation = useToggleCronJob();
   const runMutation = useRunCronJob();
   const [runningId, setRunningId] = useState<string | null>(null);
@@ -175,19 +176,36 @@ function CronJobRow({ job }: { job: CronJob }) {
         )}
       </TableCell>
       <TableCell>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => void handleRun(job.id)}
-          disabled={runningId === job.id || runMutation.isPending}
-        >
-          {runningId === job.id ? (
-            <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
-          ) : (
-            <Play className="mr-1 h-3 w-3" />
-          )}
-          Run Now
-        </Button>
+        <div className="flex gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleRun(job.id)}
+            disabled={runningId === job.id || runMutation.isPending}
+          >
+            {runningId === job.id ? (
+              <RefreshCw className="mr-1 h-3 w-3 animate-spin" />
+            ) : (
+              <Play className="mr-1 h-3 w-3" />
+            )}
+            Run
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onEdit?.(job)}
+          >
+            <Pencil className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10"
+            onClick={() => onDelete?.(job.id)}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -241,7 +259,14 @@ function ExecutionHistory({ executions }: { executions?: CronExecution[] }) {
 export default function CronPage() {
   const { data: jobs, isLoading: jobsLoading } = useCronJobs();
   const { data: executions, isLoading: execLoading } = useCronExecutions();
+  const deleteCron = useDeleteCronJob();
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<CronJob | null>(null);
+
+  const handleDelete = (id: string) => {
+    if (!confirm('Delete this scheduled job?')) return;
+    deleteCron.mutate(id);
+  };
 
   return (
     <div className="space-y-6">
@@ -262,6 +287,9 @@ export default function CronPage() {
       </div>
 
       <CreateCronJobDialog open={createOpen} onOpenChange={setCreateOpen} />
+      {editingJob && (
+        <EditCronJobDialog job={editingJob} open onOpenChange={(v) => { if (!v) setEditingJob(null); }} />
+      )}
 
       <Tabs defaultValue="jobs">
         <TabsList>
@@ -298,7 +326,7 @@ export default function CronPage() {
                   </TableHeader>
                   <TableBody>
                     {jobs.map((job) => (
-                      <CronJobRow key={job.id} job={job} />
+                      <CronJobRow key={job.id} job={job} onEdit={setEditingJob} onDelete={handleDelete} />
                     ))}
                   </TableBody>
                 </Table>
@@ -446,6 +474,120 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={createJob.isPending}>
               {createJob.isPending ? 'Creating...' : 'Create Job'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditCronJobDialog({ job, open, onOpenChange }: { job: CronJob; open: boolean; onOpenChange: (v: boolean) => void }) {
+  const { data: agents = [] } = useAgents();
+  const updateJob = useUpdateCronJob();
+  const [action, setAction] = useState<'chat' | 'task'>(
+    (job.actionType as 'chat' | 'task') ?? 'chat',
+  );
+  const [schedule, setSchedule] = useState(job.schedule ?? '');
+
+  const nextRuns = useMemo(() => {
+    if (!schedule.trim()) return [];
+    try {
+      return getNextCronRuns(schedule.trim(), 3);
+    } catch {
+      return [];
+    }
+  }, [schedule]);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    updateJob.mutate(
+      {
+        id: job.id,
+        schedule: form.get('schedule') as string,
+        agent: form.get('agent') as string,
+        action,
+        message: action === 'chat' ? (form.get('message') as string) : undefined,
+        channel: action === 'chat' ? (form.get('channel') as string) || 'team' : undefined,
+        title: action === 'task' ? (form.get('title') as string) : undefined,
+        description: action === 'task' ? (form.get('description') as string) : undefined,
+      },
+      { onSuccess: () => onOpenChange(false) },
+    );
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Edit Job: {job.name ?? job.id}</DialogTitle>
+          <DialogDescription>Update the schedule and configuration.</DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Schedule (cron)</label>
+            <Input name="schedule" defaultValue={job.schedule} required value={schedule} onChange={(e) => setSchedule(e.target.value)} />
+            {nextRuns.length > 0 && (
+              <div className="rounded-md bg-muted/50 p-2 text-xs">
+                <p className="font-medium text-muted-foreground mb-1">Next runs:</p>
+                {nextRuns.map((d, i) => (
+                  <p key={i} className="text-foreground">
+                    {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                    {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Agent</label>
+            <Select name="agent" defaultValue={job.agentId ?? 'leela'}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {agents.filter(a => !['scribe', 'ralph'].includes(a.id)).map(a => (
+                  <SelectItem key={a.id} value={a.id}>{a.name} ({a.role})</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Action</label>
+            <Select value={action} onValueChange={(v) => setAction(v as 'chat' | 'task')}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="chat">Send Chat Message</SelectItem>
+                <SelectItem value="task">Create Task</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {action === 'chat' ? (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Channel</label>
+                <Input name="channel" defaultValue={(job as unknown as Record<string, string>).channel ?? 'team'} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Message</label>
+                <Textarea name="message" defaultValue={(job as unknown as Record<string, string>).message ?? ''} rows={3} />
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Task Title</label>
+                <Input name="title" defaultValue={(job as unknown as Record<string, string>).title ?? ''} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Description</label>
+                <Textarea name="description" defaultValue={(job as unknown as Record<string, string>).description ?? ''} rows={3} />
+              </div>
+            </>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="submit" disabled={updateJob.isPending}>
+              {updateJob.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
         </form>
