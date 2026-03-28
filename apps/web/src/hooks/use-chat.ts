@@ -28,8 +28,14 @@ export function useChatMessages(recipient: string) {
   // Listen for real-time chat messages via WebSocket
   // Route each message to the correct channel cache regardless of which channel is viewed
   useWsEvent('chat:message', (envelope: WsEnvelope) => {
-    const msg = envelope.payload as unknown as ChatMessage;
-    if (!msg?.id) return;
+    const payload = envelope.payload as unknown as ChatMessage & { workspaceId?: string };
+    if (!payload?.id) return;
+
+    // Ignore messages from other workspaces
+    const storedWs = typeof window !== 'undefined' ? localStorage.getItem('openspace:active-workspace') : null;
+    if (payload.workspaceId && storedWs && payload.workspaceId !== storedWs) return;
+
+    const msg = payload;
 
     // Determine which cache key(s) this message belongs to
     const targets: string[] = [];
@@ -185,13 +191,18 @@ export function useTypingIndicator() {
   useWsEvent(
     'chat:typing',
     useCallback((envelope: WsEnvelope) => {
-      const { agentId, agentName, isTyping, recipient } = envelope.payload as {
+      const { agentId, agentName, isTyping, recipient, workspaceId } = envelope.payload as {
         agentId: string;
         agentName?: string;
         isTyping: boolean;
         recipient?: string;
+        workspaceId?: string;
       };
       if (!agentId) return;
+
+      // Ignore typing from other workspaces
+      const storedWs = typeof window !== 'undefined' ? localStorage.getItem('openspace:active-workspace') : null;
+      if (workspaceId && storedWs && workspaceId !== storedWs) return;
 
       setTypingAgents((prev) => {
         const next = new Map(prev);

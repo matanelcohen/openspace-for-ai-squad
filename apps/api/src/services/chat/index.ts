@@ -866,11 +866,10 @@ export class ChatService {
 
     const envelope: WsEnvelope = {
       type: 'chat:message',
-      payload: msg as unknown as Record<string, unknown>,
+      payload: { ...msg, workspaceId: this.workspaceId } as unknown as Record<string, unknown>,
       timestamp: msg.timestamp,
     };
 
-    // Route channel messages only to clients that joined the channel
     if (msg.recipient.startsWith(CHAT_CHANNEL_PREFIX)) {
       const channelId = msg.recipient.slice(CHAT_CHANNEL_PREFIX.length);
       this.wsManager.broadcastToChannel(channelId, envelope);
@@ -884,7 +883,7 @@ export class ChatService {
 
     this.wsManager.broadcast({
       type: 'chat:typing',
-      payload: { agentId, agentName, isTyping: true, recipient },
+      payload: { agentId, agentName, isTyping: true, recipient, workspaceId: this.workspaceId },
       timestamp: new Date().toISOString(),
     });
   }
@@ -894,7 +893,7 @@ export class ChatService {
 
     this.wsManager.broadcast({
       type: 'chat:typing',
-      payload: { agentId, isTyping: false, recipient },
+      payload: { agentId, isTyping: false, recipient, workspaceId: this.workspaceId },
       timestamp: new Date().toISOString(),
     });
   }
