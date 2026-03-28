@@ -2,9 +2,9 @@
 
 import type { TaskStatus } from '@openspace/shared';
 import { TASK_STATUS_LABELS,TASK_STATUSES } from '@openspace/shared';
-import { ArrowLeft, Pencil, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useState } from 'react';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -23,7 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useTask, useDeleteTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
 
 export default function TaskDetailPage() {
   const params = useParams();
@@ -31,7 +31,17 @@ export default function TaskDetailPage() {
   const { data: task, isLoading, error } = useTask(id);
   const updateStatus = useUpdateTaskStatus();
   const updateTask = useUpdateTask();
+  const deleteTask = useDeleteTask();
+  const router = useRouter();
   const [editOpen, setEditOpen] = useState(false);
+
+  const handleDelete = async () => {
+    if (!task || !confirm(`Delete "${task.title}"? This cannot be undone.`)) return;
+    try {
+      await deleteTask.mutateAsync(task.id);
+      router.push('/tasks');
+    } catch { /* handled by react-query */ }
+  };
 
   if (isLoading) {
     return (
@@ -115,10 +125,23 @@ export default function TaskDetailPage() {
             ))}
           </div>
         </div>
-        <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} data-testid="edit-task-btn">
-          <Pencil className="mr-1 h-3 w-3" />
-          Edit
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} data-testid="edit-task-btn">
+            <Pencil className="mr-1 h-3 w-3" />
+            Edit
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleDelete}
+            disabled={deleteTask.isPending}
+            className="text-destructive hover:bg-destructive/10"
+            data-testid="delete-task-btn"
+          >
+            <Trash2 className="mr-1 h-3 w-3" />
+            {deleteTask.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </div>
       </div>
 
       {/* Blocked task banner with retry button */}
