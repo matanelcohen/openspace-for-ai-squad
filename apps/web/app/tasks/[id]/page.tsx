@@ -1,7 +1,7 @@
 'use client';
 
 import type { TaskStatus } from '@openspace/shared';
-import { TASK_STATUS_LABELS,TASK_STATUSES } from '@openspace/shared';
+import { TASK_STATUS_LABELS, TASK_STATUSES } from '@openspace/shared';
 import { ArrowLeft, Pencil, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
@@ -23,7 +23,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useTask, useDeleteTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useDeleteTask, useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { selectTier } from '@/lib/tiers';
 
 export default function TaskDetailPage() {
   const params = useParams();
@@ -40,7 +41,9 @@ export default function TaskDetailPage() {
     try {
       await deleteTask.mutateAsync(task.id);
       router.push('/tasks');
-    } catch { /* handled by react-query */ }
+    } catch {
+      /* handled by react-query */
+    }
   };
 
   if (isLoading) {
@@ -55,7 +58,10 @@ export default function TaskDetailPage() {
   if (error || !task) {
     return (
       <div className="space-y-4" data-testid="task-detail-error">
-        <Link href="/tasks" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground">
+        <Link
+          href="/tasks"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
           <ArrowLeft className="h-4 w-4" /> Back to tasks
         </Link>
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
@@ -87,18 +93,23 @@ export default function TaskDetailPage() {
       .replace(/\n\n\*\*Stack:\*\*[\s\S]*?(?=\n\n---|$)/g, '')
       .trimEnd();
 
-    updateTask.mutate({
-      taskId: task.id,
-      title: task.title,
-      description: cleanDesc + `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🔄 Task reset and re-queued by user.`,
-      assignee: task.assignee,
-      priority: task.priority,
-      labels: task.labels,
-    }, {
-      onSuccess: () => {
-        updateStatus.mutate({ taskId: task.id, status: 'backlog' });
+    updateTask.mutate(
+      {
+        taskId: task.id,
+        title: task.title,
+        description:
+          cleanDesc +
+          `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🔄 Task reset and re-queued by user.`,
+        assignee: task.assignee,
+        priority: task.priority,
+        labels: task.labels,
       },
-    });
+      {
+        onSuccess: () => {
+          updateStatus.mutate({ taskId: task.id, status: 'backlog' });
+        },
+      },
+    );
   }
 
   return (
@@ -120,13 +131,32 @@ export default function TaskDetailPage() {
           </h1>
           <div className="flex items-center gap-2">
             <PriorityBadge priority={task.priority} />
+            {(() => {
+              const tierInfo = selectTier({
+                title: task.title,
+                description: task.description,
+                priority: task.priority,
+              });
+              return (
+                <Badge className={tierInfo.color} data-testid="tier-badge">
+                  {tierInfo.label}
+                </Badge>
+              );
+            })()}
             {task.labels.map((l) => (
-              <Badge key={l} variant="secondary">{l}</Badge>
+              <Badge key={l} variant="secondary">
+                {l}
+              </Badge>
             ))}
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setEditOpen(true)} data-testid="edit-task-btn">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setEditOpen(true)}
+            data-testid="edit-task-btn"
+          >
             <Pencil className="mr-1 h-3 w-3" />
             Edit
           </Button>
@@ -146,10 +176,17 @@ export default function TaskDetailPage() {
 
       {/* Blocked task banner with retry button */}
       {task.status === 'blocked' && (
-        <div className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900 dark:bg-red-950" data-testid="blocked-banner">
+        <div
+          className="flex items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900 dark:bg-red-950"
+          data-testid="blocked-banner"
+        >
           <div>
-            <p className="text-sm font-medium text-red-800 dark:text-red-200">⚠️ This task is blocked</p>
-            <p className="text-xs text-red-600 dark:text-red-400">The agent failed to complete this task. You can reset and retry it.</p>
+            <p className="text-sm font-medium text-red-800 dark:text-red-200">
+              ⚠️ This task is blocked
+            </p>
+            <p className="text-xs text-red-600 dark:text-red-400">
+              The agent failed to complete this task. You can reset and retry it.
+            </p>
           </div>
           <Button
             variant="outline"
@@ -178,7 +215,9 @@ export default function TaskDetailPage() {
               </SelectTrigger>
               <SelectContent>
                 {TASK_STATUSES.map((s) => (
-                  <SelectItem key={s} value={s}>{TASK_STATUS_LABELS[s]}</SelectItem>
+                  <SelectItem key={s} value={s}>
+                    {TASK_STATUS_LABELS[s]}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -217,7 +256,10 @@ export default function TaskDetailPage() {
           <CardTitle className="text-sm">Description</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="prose prose-sm dark:prose-invert max-w-none" data-testid="task-description">
+          <div
+            className="prose prose-sm dark:prose-invert max-w-none"
+            data-testid="task-description"
+          >
             {task.description ? (
               <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
             ) : (

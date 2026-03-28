@@ -90,6 +90,26 @@ export function AgentCard({ agent, workStatus }: AgentCardProps) {
             ))}
           </div>
         )}
+        {/* Capability badges with level indicators */}
+        {agent.capabilities && agent.capabilities.length > 0 && (
+          <div className="flex flex-wrap gap-1" data-testid={`agent-capabilities-${agent.id}`}>
+            {agent.capabilities.map((cap) => {
+              const levelColors = {
+                expert: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+                proficient: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+                basic: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
+              };
+              return (
+                <Badge key={cap.name} className={`text-xs ${levelColors[cap.level]}`}>
+                  {cap.name}
+                  <span className="ml-1 opacity-60">
+                    {cap.level === 'expert' ? '★★★' : cap.level === 'proficient' ? '★★' : '★'}
+                  </span>
+                </Badge>
+              );
+            })}
+          </div>
+        )}
         {/* Skills badge */}
         <button
           type="button"

@@ -32,6 +32,7 @@ import type { AIProvider } from './services/ai/copilot-provider.js';
 import { createAIProvider } from './services/ai/copilot-provider.js';
 import { AuthService } from './services/auth/index.js';
 import { ChatService } from './services/chat/index.js';
+import { loadSquadConfig } from './services/config/index.js';
 import { CronService } from './services/cron/index.js';
 import { openDatabase } from './services/db/index.js';
 import { seedTeamMembers } from './services/db/seed-team.js';
@@ -122,8 +123,8 @@ export function buildApp(opts: AppOptions = {}) {
   const sandboxService = new SandboxService();
   app.decorate('sandboxService', sandboxService);
 
-  // Voice services
-  const AGENT_PROFILES = [
+  // Voice services — agent profiles loaded from config or defaults
+  const DEFAULT_AGENT_PROFILES = [
     {
       id: 'leela',
       name: 'Leela',
@@ -149,6 +150,9 @@ export function buildApp(opts: AppOptions = {}) {
       personality: 'Methodical, thorough, precise. Finds edge cases others miss.',
     },
   ];
+
+  // Will be replaced by config-driven profiles in onReady
+  let AGENT_PROFILES = DEFAULT_AGENT_PROFILES;
 
   const voiceServices: VoiceServices = {
     sessionManager: new VoiceSessionManager(),
@@ -184,6 +188,29 @@ export function buildApp(opts: AppOptions = {}) {
     app.wsManager.setChatSendHandler(async (input) => {
       await chatService.send(input);
     });
+
+    // Load squad.config.ts (optional) and derive agent profiles from it
+    const squadConfig = await loadSquadConfig({
+      rootDir: resolve(squadDir, '..'),
+      squadDir,
+    });
+
+    if (squadConfig) {
+      const PERSONALITY_MAP: Record<string, string> = {
+        Lead: 'Strategic, decisive, direct. Keeps the team focused on what matters.',
+        'Frontend Dev': 'Enthusiastic, creative, friendly. Loves building beautiful UIs.',
+        'Backend Dev': 'Blunt, efficient, matter-of-fact. Gets things done with minimal fuss.',
+        Tester: 'Methodical, thorough, precise. Finds edge cases others miss.',
+      };
+
+      AGENT_PROFILES = squadConfig.agents.map((a) => ({
+        id: a.name,
+        name: a.name.charAt(0).toUpperCase() + a.name.slice(1),
+        role: a.role,
+        personality: PERSONALITY_MAP[a.role] ?? 'Professional, collaborative, dedicated.',
+      }));
+      voiceServices.chatAgents = AGENT_PROFILES;
+    }
 
     // Initialize AI provider and connect to chat + voice + worker services
     if (!opts.aiProvider) {

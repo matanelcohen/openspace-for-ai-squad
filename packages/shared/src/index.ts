@@ -113,9 +113,9 @@ export type {
   SandboxStatus,
   SemVer,
   SerializedContext,
+  SkillCircuitBreakerState,
   SkillConfigSchema,
   SkillContext,
-  SkillCircuitBreakerState,
   SkillDependency,
   SkillHealthStatus,
   SkillLifecycleHooks,
@@ -231,3 +231,27 @@ export {
 
 // ── Skills ─────────────────────────────────────────────────────
 export * from './types/skill.js';
+
+// ── Squad SDK Config ──────────────────────────────────────────
+export type {
+  AgentCapability,
+  AgentDefinition,
+  CeremonyDefinition,
+  HooksDefinition,
+  ModelConfig,
+  ResponseTier,
+  RoutingDefinition,
+  RoutingRule,
+  SquadSDKConfig,
+  TeamDefinition,
+  TelemetryDefinition,
+} from './config/define.js';
+export {
+  defineAgent,
+  defineCeremony,
+  defineHooks,
+  defineRouting,
+  defineSquad,
+  defineTeam,
+  defineTelemetry,
+} from './config/define.js';

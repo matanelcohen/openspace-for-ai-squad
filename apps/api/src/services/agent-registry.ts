@@ -6,6 +6,7 @@
  * members are added, updated or removed at runtime.
  */
 
+import type { AgentCapability, SquadSDKConfig } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -15,6 +16,7 @@ export interface AgentProfile {
   name: string;
   role: string;
   personality: string;
+  capabilities?: AgentCapability[];
 }
 
 type ChangeListener = (agents: AgentProfile[]) => void;
@@ -106,6 +108,23 @@ export class AgentRegistry {
   /** Subscribe to roster changes. */
   onChange(listener: ChangeListener): void {
     this.listeners.push(listener);
+  }
+
+  /** Merge capabilities from squad.config.ts into loaded agent profiles. */
+  applyConfigCapabilities(config: SquadSDKConfig): void {
+    for (const agentDef of config.agents) {
+      const profile = this.agents.get(agentDef.name);
+      if (profile && agentDef.capabilities?.length) {
+        profile.capabilities = agentDef.capabilities;
+        this.agents.set(profile.id, profile);
+      }
+    }
+    this.notify();
+  }
+
+  /** Find agents that have a specific capability. */
+  findByCapability(capabilityName: string): AgentProfile[] {
+    return this.getAll().filter((a) => a.capabilities?.some((c) => c.name === capabilityName));
   }
 
   // ── internal ───────────────────────────────────────────────────

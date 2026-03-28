@@ -27,6 +27,13 @@ export interface CronJob {
   /** Task description (for task actions). */
   description?: string;
   enabled: boolean;
+  // ── Ceremony fields (Phase 5: Squad SDK) ──
+  /** Which agents participate in this ceremony. */
+  participants?: string[];
+  /** Structured agenda text for ceremonies. */
+  agenda?: string;
+  /** Ceremony type for template selection. */
+  type?: 'standup' | 'retro' | 'custom';
 }
 
 export interface CronConfig {
@@ -97,6 +104,7 @@ function matchField(expr: string, value: number): boolean {
 export class CronService {
   private jobs: CronJob[] = [];
   private readonly configPath: string;
+  private readonly ceremoniesPath: string;
   private readonly tasksDir: string;
   private interval: ReturnType<typeof setInterval> | null = null;
   private chatService: ChatService | null = null;
@@ -106,22 +114,28 @@ export class CronService {
   constructor(opts: { squadDir: string }) {
     this.configPath = join(opts.squadDir, 'cron.json');
     this.tasksDir = join(opts.squadDir, 'tasks');
+    this.ceremoniesPath = join(opts.squadDir, 'ceremonies.json');
   }
 
-  /** Load jobs from .squad/cron.json. */
+  /** Load jobs from .squad/cron.json or .squad/ceremonies.json. */
   loadConfig(): void {
-    if (!existsSync(this.configPath)) {
-      console.log('[Cron] No cron.json found — scheduler disabled');
+    // Try ceremonies.json first, fall back to cron.json
+    const configFile = existsSync(this.ceremoniesPath) ? this.ceremoniesPath : this.configPath;
+
+    if (!existsSync(configFile)) {
+      console.log('[Cron] No cron.json or ceremonies.json found — scheduler disabled');
       return;
     }
 
     try {
-      const raw = readFileSync(this.configPath, 'utf-8');
+      const raw = readFileSync(configFile, 'utf-8');
       const config = JSON.parse(raw) as CronConfig;
       this.jobs = config.jobs ?? [];
-      console.log(`[Cron] Loaded ${this.jobs.length} jobs from cron.json`);
+      console.log(
+        `[Cron] Loaded ${this.jobs.length} jobs from ${configFile === this.ceremoniesPath ? 'ceremonies.json' : 'cron.json'}`,
+      );
     } catch (err) {
-      console.warn('[Cron] Failed to parse cron.json:', err);
+      console.warn('[Cron] Failed to parse config:', err);
       this.jobs = [];
     }
   }
@@ -305,13 +319,15 @@ export class CronService {
     return job;
   }
 
-  /** Persist current job config back to cron.json. */
+  /** Persist current job config back to the active config file. */
   private persistConfig(): void {
     try {
       const config: CronConfig = { jobs: this.jobs };
-      writeFileSync(this.configPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
+      // Write to ceremonies.json if it exists, otherwise cron.json
+      const targetPath = existsSync(this.ceremoniesPath) ? this.ceremoniesPath : this.configPath;
+      writeFileSync(targetPath, JSON.stringify(config, null, 2) + '\n', 'utf-8');
     } catch (err) {
-      console.warn('[Cron] Failed to persist cron.json:', err);
+      console.warn('[Cron] Failed to persist config:', err);
     }
   }
 }

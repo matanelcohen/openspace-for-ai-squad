@@ -249,7 +249,10 @@ function AgentCharterSection({
             <FileText className="h-4 w-4" />
             Agent Prompt
             {saveSuccess && (
-              <Badge variant="outline" className="bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/20 text-[10px]">
+              <Badge
+                variant="outline"
+                className="bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/20 text-[10px]"
+              >
                 <Check className="h-3 w-3 mr-1" />
                 Saved
               </Badge>
@@ -274,7 +277,12 @@ function AgentCharterSection({
                   Create a charter to define this agent&apos;s identity, expertise, and boundaries.
                 </p>
               </div>
-              <Button variant="outline" size="sm" onClick={handleCreate} data-testid="charter-create-btn">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCreate}
+                data-testid="charter-create-btn"
+              >
                 <Plus className="h-3.5 w-3.5 mr-1" />
                 Create Charter
               </Button>
@@ -304,7 +312,10 @@ function AgentCharterSection({
               </div>
 
               {showPreview ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none rounded-md border p-4 min-h-[320px]" data-testid="charter-preview">
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none rounded-md border p-4 min-h-[320px]"
+                  data-testid="charter-preview"
+                >
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown>
                 </div>
               ) : (
@@ -350,7 +361,10 @@ function AgentCharterSection({
               </div>
             </div>
           ) : (
-            <div className="prose prose-sm dark:prose-invert max-w-none" data-testid="charter-viewer">
+            <div
+              className="prose prose-sm dark:prose-invert max-w-none"
+              data-testid="charter-viewer"
+            >
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{charter ?? ''}</ReactMarkdown>
             </div>
           )}
@@ -566,6 +580,37 @@ export default function TeamMemberDetailPage() {
               <SkillsEditor skills={member.skills} onSkillsChange={handleSkillsChange} editable />
             </CardContent>
           </Card>
+
+          {/* Agent Capabilities (from squad.config.ts) */}
+          {matchingAgent?.capabilities && matchingAgent.capabilities.length > 0 && (
+            <Card data-testid="agent-capabilities-card">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-medium">Agent Capabilities</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-2">
+                  {matchingAgent.capabilities.map((cap) => {
+                    const levelColors = {
+                      expert:
+                        'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 border-green-200 dark:border-green-800',
+                      proficient:
+                        'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 border-blue-200 dark:border-blue-800',
+                      basic:
+                        'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+                    };
+                    return (
+                      <Badge key={cap.name} className={`${levelColors[cap.level]} border`}>
+                        {cap.name}
+                        <span className="ml-1.5 opacity-60">
+                          {cap.level === 'expert' ? '★★★' : cap.level === 'proficient' ? '★★' : '★'}
+                        </span>
+                      </Badge>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Assigned Tasks */}
           <Card>

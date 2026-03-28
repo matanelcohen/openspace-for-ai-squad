@@ -17,6 +17,10 @@ export interface CronJob {
   lastRunStatus?: 'success' | 'failure' | 'running';
   nextRunAt?: string;
   createdAt?: string;
+  // Ceremony fields (Phase 5)
+  participants?: string[];
+  agenda?: string;
+  type?: 'standup' | 'retro' | 'custom';
 }
 
 export interface CronExecution {
@@ -45,10 +49,8 @@ export function useCronExecutions() {
   return useQuery<CronExecution[]>({
     queryKey: ['cron-executions'],
     queryFn: async () => {
-      const res = await api.get<{ executions: unknown[] } | unknown[]>(
-        '/api/cron/executions',
-      );
-      const raw = Array.isArray(res) ? res : (res as { executions: unknown[] }).executions ?? [];
+      const res = await api.get<{ executions: unknown[] } | unknown[]>('/api/cron/executions');
+      const raw = Array.isArray(res) ? res : ((res as { executions: unknown[] }).executions ?? []);
       // Map API shape to frontend shape
       return raw.map((e: unknown, i: number) => {
         const exec = e as Record<string, unknown>;
@@ -56,7 +58,10 @@ export function useCronExecutions() {
           id: (exec.id as string) ?? `exec-${i}`,
           jobId: (exec.jobId as string) ?? '',
           jobName: (exec.jobName as string) ?? (exec.jobId as string) ?? '',
-          status: ((exec.status as string) ?? (exec.result as string) ?? 'success') as 'success' | 'failure' | 'running',
+          status: ((exec.status as string) ?? (exec.result as string) ?? 'success') as
+            | 'success'
+            | 'failure'
+            | 'running',
           startedAt: (exec.startedAt as string) ?? (exec.executedAt as string) ?? '',
           completedAt: exec.completedAt as string | undefined,
           durationMs: exec.durationMs as number | undefined,
@@ -122,8 +127,19 @@ export function useDeleteCronJob() {
 export function useUpdateCronJob() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; schedule?: string; agent?: string; action?: 'chat' | 'task'; message?: string; channel?: string; title?: string; description?: string }) =>
-      api.put(`/api/cron/${id}`, body),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      schedule?: string;
+      agent?: string;
+      action?: 'chat' | 'task';
+      message?: string;
+      channel?: string;
+      title?: string;
+      description?: string;
+    }) => api.put(`/api/cron/${id}`, body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['cron-jobs'] });
     },

@@ -9,15 +9,18 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import type { MemoryAttribution, Task } from '@openspace/shared';
+import type { Task } from '@openspace/shared';
 
 import type { ActivityFeed } from '../activity/index.js';
 import type { AIProvider } from '../ai/copilot-provider.js';
-import type { MemoryExtractor } from '../memory/memory-extractor.js';
-import type { MemoryRecallEngine } from '../memory/memory-recall.js';
-import type { MemoryStore } from '../memory/memory-store.js';
+import { selectTier } from '../routing/tiers.js';
+import {
+  buildSkillsPrompt,
+  getSkillsForRole,
+  loadSkillsFromDirectory,
+  type ParsedSkill,
+} from '../seed-skills.js';
 import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
-import { buildSkillsPrompt, getSkillsForRole, loadSkillsFromDirectory, type ParsedSkill } from '../seed-skills.js';
 import type { WebSocketManager } from '../websocket/index.js';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -162,7 +165,9 @@ export class AgentWorkerService {
             const retryCount = (task.description.match(/🚀.*started working/g) ?? []).length;
             if (retryCount >= 3) {
               // Too many retries — mark as blocked permanently with reason
-              const lastError = task.description.match(/\*\*Error:\*\*\s*(.+)/g)?.pop() ?? 'Unknown — server likely crashed before error could be captured';
+              const lastError =
+                task.description.match(/\*\*Error:\*\*\s*(.+)/g)?.pop() ??
+                'Unknown — server likely crashed before error could be captured';
               await updateTask(this.config.tasksDir, taskId, {
                 status: 'blocked',
                 description:
@@ -318,6 +323,14 @@ export class AgentWorkerService {
 
       console.log(`[AgentWorker] ${agent.name} started: ${task.title}`);
 
+      // ── Select response tier based on task complexity ──
+      const tier = selectTier({
+        title: task.title,
+        description: task.description,
+        priority: task.priority,
+      });
+      console.log(`[AgentWorker] Response tier: ${tier} for task ${taskId}`);
+
       // ── Lead delegation: break down task and assign to team ──
       const isLead = agent.role.toLowerCase().includes('lead');
       if (isLead) {
@@ -416,7 +429,9 @@ export class AgentWorkerService {
         if (!existsSync(logDir)) mkdirSync(logDir, { recursive: true });
         const logLine = `[${new Date().toISOString()}] ${agentId} | ${taskId} | ${message}\n`;
         appendFileSync(join(logDir, 'agent-errors.log'), logLine, 'utf-8');
-      } catch { /* best effort */ }
+      } catch {
+        /* best effort */
+      }
 
       try {
         const currentTask = await getTask(this.config.tasksDir, taskId).catch(() => null);
@@ -528,7 +543,9 @@ export class AgentWorkerService {
         createdSubTasks.push(`- **${sub.title}** → ${validAssignee.name} (${validAssignee.role})`);
         this.broadcastTaskUpdate(subTask.id, 'backlog');
 
-        console.log(`[AgentWorker] ${agent.name} delegated "${sub.title}" to ${validAssignee.name}`);
+        console.log(
+          `[AgentWorker] ${agent.name} delegated "${sub.title}" to ${validAssignee.name}`,
+        );
       }
 
       // Mark parent task as done with delegation summary
@@ -546,7 +563,9 @@ export class AgentWorkerService {
         `Delegated: ${task.title} → ${createdSubTasks.length} sub-tasks`,
       );
 
-      console.log(`[AgentWorker] ${agent.name} delegated ${createdSubTasks.length} sub-tasks for: ${task.title}`);
+      console.log(
+        `[AgentWorker] ${agent.name} delegated ${createdSubTasks.length} sub-tasks for: ${task.title}`,
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[AgentWorker] ${agent.name} delegation failed:`, message);

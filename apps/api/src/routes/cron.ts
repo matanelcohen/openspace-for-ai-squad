@@ -64,12 +64,28 @@ const cronRoute: FastifyPluginAsync = async (app) => {
       return reply.status(400).send({ error: 'Request body is required' });
     }
 
-    const { id, schedule, agent, action, message, channel, title, description, enabled } = body as Record<string, string | boolean | undefined>;
+    const {
+      id,
+      schedule,
+      agent,
+      action,
+      message,
+      channel,
+      title,
+      description,
+      enabled,
+      participants,
+      agenda,
+      type: ceremonyType,
+    } = body as Record<string, string | boolean | string[] | undefined>;
 
     if (!id || typeof id !== 'string') return reply.status(400).send({ error: '"id" is required' });
-    if (!schedule || typeof schedule !== 'string') return reply.status(400).send({ error: '"schedule" is required (cron expression)' });
-    if (!agent || typeof agent !== 'string') return reply.status(400).send({ error: '"agent" is required' });
-    if (action !== 'chat' && action !== 'task') return reply.status(400).send({ error: '"action" must be "chat" or "task"' });
+    if (!schedule || typeof schedule !== 'string')
+      return reply.status(400).send({ error: '"schedule" is required (cron expression)' });
+    if (!agent || typeof agent !== 'string')
+      return reply.status(400).send({ error: '"agent" is required' });
+    if (action !== 'chat' && action !== 'task')
+      return reply.status(400).send({ error: '"action" must be "chat" or "task"' });
 
     try {
       const job = app.cronService.addJob({
@@ -82,6 +98,11 @@ const cronRoute: FastifyPluginAsync = async (app) => {
         title: (title as string) || undefined,
         description: (description as string) || undefined,
         enabled: enabled !== false,
+        participants: Array.isArray(participants) ? participants : undefined,
+        agenda: (agenda as string) || undefined,
+        type: (['standup', 'retro', 'custom'].includes(ceremonyType as string)
+          ? ceremonyType
+          : undefined) as 'standup' | 'retro' | 'custom' | undefined,
       });
       return reply.status(201).send({ job });
     } catch (err) {
@@ -98,16 +119,31 @@ const cronRoute: FastifyPluginAsync = async (app) => {
   });
 
   // PUT /api/cron/:id — update a job
-  app.put<{ Params: { id: string }; Body: Record<string, unknown> }>('/cron/:id', async (request, reply) => {
-    const body = request.body;
-    if (!body || typeof body !== 'object') {
-      return reply.status(400).send({ error: 'Request body is required' });
-    }
+  app.put<{ Params: { id: string }; Body: Record<string, unknown> }>(
+    '/cron/:id',
+    async (request, reply) => {
+      const body = request.body;
+      if (!body || typeof body !== 'object') {
+        return reply.status(400).send({ error: 'Request body is required' });
+      }
 
-    const job = app.cronService.updateJob(request.params.id, body as Partial<{ schedule: string; agent: string; action: 'chat' | 'task'; message: string; channel: string; title: string; description: string; enabled: boolean }>);
-    if (!job) return reply.status(404).send({ error: `Job "${request.params.id}" not found` });
-    return reply.send({ job });
-  });
+      const job = app.cronService.updateJob(
+        request.params.id,
+        body as Partial<{
+          schedule: string;
+          agent: string;
+          action: 'chat' | 'task';
+          message: string;
+          channel: string;
+          title: string;
+          description: string;
+          enabled: boolean;
+        }>,
+      );
+      if (!job) return reply.status(404).send({ error: `Job "${request.params.id}" not found` });
+      return reply.send({ job });
+    },
+  );
 };
 
 export default cronRoute;

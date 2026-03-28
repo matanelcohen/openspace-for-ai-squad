@@ -2,6 +2,7 @@
  * Agent types — represents an AI agent in the squad.
  */
 
+import type { AgentCapability } from '../config/define.js';
 import type { VoiceProfile } from './voice.js';
 
 /** Possible runtime states of an agent. */
@@ -21,6 +22,8 @@ export interface Agent {
   currentTask: string | null;
   /** Expertise tags describing the agent's capabilities. */
   expertise: string[];
+  /** Structured capabilities with proficiency levels (from squad.config.ts). */
+  capabilities?: AgentCapability[];
   /** Voice configuration for the real-time voice chat. */
   voiceProfile: VoiceProfile;
 }

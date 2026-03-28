@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { useAgents } from '@/hooks/use-agents';
 import {
   type CronExecution,
   type CronJob,
@@ -46,7 +47,6 @@ import {
   useToggleCronJob,
   useUpdateCronJob,
 } from '@/hooks/use-cron';
-import { useAgents } from '@/hooks/use-agents';
 
 /** Simple cron next-run calculator (minute, hour, day-of-month, month, day-of-week). */
 function getNextCronRuns(expr: string, count: number): Date[] {
@@ -109,11 +109,7 @@ function getNextCronRuns(expr: string, count: number): Date[] {
 
 function StatusBadge({ status }: { status: string }) {
   const variant =
-    status === 'success'
-      ? 'default'
-      : status === 'failure'
-        ? 'destructive'
-        : 'secondary';
+    status === 'success' ? 'default' : status === 'failure' ? 'destructive' : 'secondary';
   return <Badge variant={variant}>{status}</Badge>;
 }
 
@@ -131,7 +127,15 @@ function formatRelativeTime(dateStr?: string): string {
   return `${diffDays}d ago`;
 }
 
-function CronJobRow({ job, onEdit, onDelete }: { job: CronJob; onEdit?: (job: CronJob) => void; onDelete?: (id: string) => void }) {
+function CronJobRow({
+  job,
+  onEdit,
+  onDelete,
+}: {
+  job: CronJob;
+  onEdit?: (job: CronJob) => void;
+  onDelete?: (id: string) => void;
+}) {
   const toggleMutation = useToggleCronJob();
   const runMutation = useRunCronJob();
   const [runningId, setRunningId] = useState<string | null>(null);
@@ -160,9 +164,7 @@ function CronJobRow({ job, onEdit, onDelete }: { job: CronJob; onEdit?: (job: Cr
       <TableCell>
         <Switch
           checked={job.enabled}
-          onCheckedChange={(enabled) =>
-            toggleMutation.mutate({ id: job.id, enabled })
-          }
+          onCheckedChange={(enabled) => toggleMutation.mutate({ id: job.id, enabled })}
           disabled={toggleMutation.isPending}
           aria-label={`Toggle ${job.name}`}
         />
@@ -190,11 +192,7 @@ function CronJobRow({ job, onEdit, onDelete }: { job: CronJob; onEdit?: (job: Cr
             )}
             Run
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onEdit?.(job)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => onEdit?.(job)}>
             <Pencil className="h-3 w-3" />
           </Button>
           <Button
@@ -288,7 +286,13 @@ export default function CronPage() {
 
       <CreateCronJobDialog open={createOpen} onOpenChange={setCreateOpen} />
       {editingJob && (
-        <EditCronJobDialog job={editingJob} open onOpenChange={(v) => { if (!v) setEditingJob(null); }} />
+        <EditCronJobDialog
+          job={editingJob}
+          open
+          onOpenChange={(v) => {
+            if (!v) setEditingJob(null);
+          }}
+        />
       )}
 
       <Tabs defaultValue="jobs">
@@ -326,7 +330,12 @@ export default function CronPage() {
                   </TableHeader>
                   <TableBody>
                     {jobs.map((job) => (
-                      <CronJobRow key={job.id} job={job} onEdit={setEditingJob} onDelete={handleDelete} />
+                      <CronJobRow
+                        key={job.id}
+                        job={job}
+                        onEdit={setEditingJob}
+                        onDelete={handleDelete}
+                      />
                     ))}
                   </TableBody>
                 </Table>
@@ -354,11 +363,42 @@ export default function CronPage() {
   );
 }
 
-function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+function CreateCronJobDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const { data: agents = [] } = useAgents();
   const createJob = useCreateCronJob();
   const [action, setAction] = useState<'chat' | 'task'>('chat');
   const [schedule, setSchedule] = useState('');
+  const [jobName, setJobName] = useState('');
+  const [message, setMessage] = useState('');
+  const [channel, setChannel] = useState('team');
+
+  // Ceremony template presets
+  const applyTemplate = (template: 'standup' | 'retro' | 'custom') => {
+    if (template === 'standup') {
+      setJobName('daily-standup');
+      setSchedule('0 9 * * 1-5');
+      setAction('chat');
+      setMessage(
+        'Good morning team! Time for standup.\n\n**Yesterday:** What did you accomplish?\n**Today:** What are you working on?\n**Blockers:** Anything blocking your progress?',
+      );
+      setChannel('team');
+    } else if (template === 'retro') {
+      setJobName('weekly-retro');
+      setSchedule('0 15 * * 5');
+      setAction('chat');
+      setMessage(
+        'Time for our weekly retrospective!\n\n**What went well:** Share your wins\n**What to improve:** What could be better?\n**Action items:** What should we change?',
+      );
+      setChannel('team');
+    }
+    // 'custom' leaves form empty
+  };
 
   const nextRuns = useMemo(() => {
     if (!schedule.trim()) return [];
@@ -372,16 +412,19 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    const id = (form.get('id') as string).trim().toLowerCase().replace(/\s+/g, '-');
+    const id =
+      jobName.trim().toLowerCase().replace(/\s+/g, '-') ||
+      (form.get('id') as string).trim().toLowerCase().replace(/\s+/g, '-');
 
     createJob.mutate(
       {
         id,
-        schedule: form.get('schedule') as string,
+        schedule: schedule || (form.get('schedule') as string),
         agent: form.get('agent') as string,
         action,
-        message: action === 'chat' ? (form.get('message') as string) : undefined,
-        channel: action === 'chat' ? (form.get('channel') as string) || 'team' : undefined,
+        message: action === 'chat' ? message || (form.get('message') as string) : undefined,
+        channel:
+          action === 'chat' ? channel || (form.get('channel') as string) || 'team' : undefined,
         title: action === 'task' ? (form.get('title') as string) : undefined,
         description: action === 'task' ? (form.get('description') as string) : undefined,
       },
@@ -397,9 +440,29 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <DialogDescription>Set up a recurring task or message for an agent.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Ceremony template selector */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Template</label>
+            <Select onValueChange={(v) => applyTemplate(v as 'standup' | 'retro' | 'custom')}>
+              <SelectTrigger>
+                <SelectValue placeholder="Start from template..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standup">🌅 Daily Standup (9am weekdays)</SelectItem>
+                <SelectItem value="retro">🔄 Weekly Retro (3pm Friday)</SelectItem>
+                <SelectItem value="custom">📝 Custom (blank)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Job Name</label>
-            <Input name="id" placeholder="daily-standup" required />
+            <Input
+              name="id"
+              placeholder="daily-standup"
+              required
+              value={jobName}
+              onChange={(e) => setJobName(e.target.value)}
+            />
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Schedule (cron)</label>
@@ -410,13 +473,19 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               value={schedule}
               onChange={(e) => setSchedule(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">e.g., &quot;0 9 * * 1-5&quot; = weekdays at 9am</p>
+            <p className="text-xs text-muted-foreground">
+              e.g., &quot;0 9 * * 1-5&quot; = weekdays at 9am
+            </p>
             {nextRuns.length > 0 && (
               <div className="rounded-md bg-muted/50 p-2 text-xs">
                 <p className="font-medium text-muted-foreground mb-1">Next runs:</p>
                 {nextRuns.map((d, i) => (
                   <p key={i} className="text-foreground">
-                    {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                    {d.toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })}{' '}
                     {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 ))}
@@ -429,18 +498,26 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
           <div className="space-y-2">
             <label className="text-sm font-medium">Agent</label>
             <Select name="agent" defaultValue="leela">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {agents.filter(a => !['scribe', 'ralph'].includes(a.id)).map(a => (
-                  <SelectItem key={a.id} value={a.id}>{a.name} ({a.role})</SelectItem>
-                ))}
+                {agents
+                  .filter((a) => !['scribe', 'ralph'].includes(a.id))
+                  .map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} ({a.role})
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Action</label>
             <Select value={action} onValueChange={(v) => setAction(v as 'chat' | 'task')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="chat">Send Chat Message</SelectItem>
                 <SelectItem value="task">Create Task</SelectItem>
@@ -451,11 +528,23 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
             <>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Channel</label>
-                <Input name="channel" placeholder="team" defaultValue="team" />
+                <Input
+                  name="channel"
+                  placeholder="team"
+                  value={channel}
+                  onChange={(e) => setChannel(e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Message</label>
-                <Textarea name="message" placeholder="Good morning team! Status update please." required rows={3} />
+                <Textarea
+                  name="message"
+                  placeholder="Good morning team! Status update please."
+                  required
+                  rows={3}
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                />
               </div>
             </>
           ) : (
@@ -466,12 +555,18 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Description</label>
-                <Textarea name="description" placeholder="Run all tests and report results" rows={3} />
+                <Textarea
+                  name="description"
+                  placeholder="Run all tests and report results"
+                  rows={3}
+                />
               </div>
             </>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={createJob.isPending}>
               {createJob.isPending ? 'Creating...' : 'Create Job'}
             </Button>
@@ -482,7 +577,15 @@ function CreateCronJobDialog({ open, onOpenChange }: { open: boolean; onOpenChan
   );
 }
 
-function EditCronJobDialog({ job, open, onOpenChange }: { job: CronJob; open: boolean; onOpenChange: (v: boolean) => void }) {
+function EditCronJobDialog({
+  job,
+  open,
+  onOpenChange,
+}: {
+  job: CronJob;
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
   const { data: agents = [] } = useAgents();
   const updateJob = useUpdateCronJob();
   const [action, setAction] = useState<'chat' | 'task'>(
@@ -527,13 +630,23 @@ function EditCronJobDialog({ job, open, onOpenChange }: { job: CronJob; open: bo
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Schedule (cron)</label>
-            <Input name="schedule" defaultValue={job.schedule} required value={schedule} onChange={(e) => setSchedule(e.target.value)} />
+            <Input
+              name="schedule"
+              defaultValue={job.schedule}
+              required
+              value={schedule}
+              onChange={(e) => setSchedule(e.target.value)}
+            />
             {nextRuns.length > 0 && (
               <div className="rounded-md bg-muted/50 p-2 text-xs">
                 <p className="font-medium text-muted-foreground mb-1">Next runs:</p>
                 {nextRuns.map((d, i) => (
                   <p key={i} className="text-foreground">
-                    {d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}{' '}
+                    {d.toLocaleDateString(undefined, {
+                      weekday: 'short',
+                      month: 'short',
+                      day: 'numeric',
+                    })}{' '}
                     {d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
                   </p>
                 ))}
@@ -543,18 +656,26 @@ function EditCronJobDialog({ job, open, onOpenChange }: { job: CronJob; open: bo
           <div className="space-y-2">
             <label className="text-sm font-medium">Agent</label>
             <Select name="agent" defaultValue={job.agentId ?? 'leela'}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
-                {agents.filter(a => !['scribe', 'ralph'].includes(a.id)).map(a => (
-                  <SelectItem key={a.id} value={a.id}>{a.name} ({a.role})</SelectItem>
-                ))}
+                {agents
+                  .filter((a) => !['scribe', 'ralph'].includes(a.id))
+                  .map((a) => (
+                    <SelectItem key={a.id} value={a.id}>
+                      {a.name} ({a.role})
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">Action</label>
             <Select value={action} onValueChange={(v) => setAction(v as 'chat' | 'task')}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="chat">Send Chat Message</SelectItem>
                 <SelectItem value="task">Create Task</SelectItem>
@@ -565,27 +686,43 @@ function EditCronJobDialog({ job, open, onOpenChange }: { job: CronJob; open: bo
             <>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Channel</label>
-                <Input name="channel" defaultValue={(job as unknown as Record<string, string>).channel ?? 'team'} />
+                <Input
+                  name="channel"
+                  defaultValue={(job as unknown as Record<string, string>).channel ?? 'team'}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Message</label>
-                <Textarea name="message" defaultValue={(job as unknown as Record<string, string>).message ?? ''} rows={3} />
+                <Textarea
+                  name="message"
+                  defaultValue={(job as unknown as Record<string, string>).message ?? ''}
+                  rows={3}
+                />
               </div>
             </>
           ) : (
             <>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Task Title</label>
-                <Input name="title" defaultValue={(job as unknown as Record<string, string>).title ?? ''} />
+                <Input
+                  name="title"
+                  defaultValue={(job as unknown as Record<string, string>).title ?? ''}
+                />
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium">Description</label>
-                <Textarea name="description" defaultValue={(job as unknown as Record<string, string>).description ?? ''} rows={3} />
+                <Textarea
+                  name="description"
+                  defaultValue={(job as unknown as Record<string, string>).description ?? ''}
+                  rows={3}
+                />
               </div>
             </>
           )}
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             <Button type="submit" disabled={updateJob.isPending}>
               {updateJob.isPending ? 'Saving...' : 'Save Changes'}
             </Button>
