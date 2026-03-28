@@ -77,12 +77,19 @@ export class TraceService {
   private readonly upsertSpanStmt: Database.Statement;
   private readonly refreshTraceAggregatesStmt: Database.Statement;
 
+  private workspaceId = '';
+
   constructor(private readonly db: Database.Database) {
+    // Ensure workspace_id column exists
+    try {
+      db.exec('ALTER TABLE traces ADD COLUMN workspace_id TEXT DEFAULT \'\'');
+    } catch { /* column already exists */ }
+
     this.insertTrace = db.prepare(`
       INSERT OR IGNORE INTO traces (id, root_span_name, agent_name, status, start_time, end_time, duration_ms,
-        span_count, total_tokens, prompt_tokens, completion_tokens, cost_usd, error_message, created_at)
+        span_count, total_tokens, prompt_tokens, completion_tokens, cost_usd, error_message, created_at, workspace_id)
       VALUES (@id, @root_span_name, @agent_name, @status, @start_time, @end_time, @duration_ms,
-        @span_count, @total_tokens, @prompt_tokens, @completion_tokens, @cost_usd, @error_message, @created_at)
+        @span_count, @total_tokens, @prompt_tokens, @completion_tokens, @cost_usd, @error_message, @created_at, @workspace_id)
     `);
 
     this.insertSpan = db.prepare(`
@@ -120,7 +127,7 @@ export class TraceService {
     `);
 
     this.selectTraces = db.prepare(`
-      SELECT * FROM traces ORDER BY start_time DESC LIMIT @limit
+      SELECT * FROM traces WHERE workspace_id = @workspace_id ORDER BY start_time DESC LIMIT @limit
     `);
 
     this.selectTraceById = db.prepare(`
@@ -223,6 +230,7 @@ export class TraceService {
       cost_usd: 0,
       error_message: null,
       created_at: createdAt,
+      workspace_id: this.workspaceId,
     });
 
     const attributes = JSON.stringify({
@@ -398,34 +406,35 @@ export class TraceService {
   /**
    * List traces with optional filters. Returns newest first.
    */
+  /** Set the active workspace ID — traces are scoped per workspace. */
+  setWorkspaceId(id: string): void {
+    this.workspaceId = id;
+  }
+
   listTraces(opts?: { limit?: number; agent?: string; status?: string }): TraceRecord[] {
     const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 500);
+    const wsFilter = 'workspace_id = @workspace_id';
+    const wsParam = { workspace_id: this.workspaceId };
 
     if (opts?.agent && opts?.status) {
       return this.db
-        .prepare(
-          `SELECT * FROM traces WHERE agent_name = @agent AND status = @status ORDER BY start_time DESC LIMIT @limit`,
-        )
-        .all({ agent: opts.agent, status: opts.status, limit }) as TraceRecord[];
+        .prepare(`SELECT * FROM traces WHERE ${wsFilter} AND agent_name = @agent AND status = @status ORDER BY start_time DESC LIMIT @limit`)
+        .all({ ...wsParam, agent: opts.agent, status: opts.status, limit }) as TraceRecord[];
     }
 
     if (opts?.agent) {
       return this.db
-        .prepare(
-          `SELECT * FROM traces WHERE agent_name = @agent ORDER BY start_time DESC LIMIT @limit`,
-        )
-        .all({ agent: opts.agent, limit }) as TraceRecord[];
+        .prepare(`SELECT * FROM traces WHERE ${wsFilter} AND agent_name = @agent ORDER BY start_time DESC LIMIT @limit`)
+        .all({ ...wsParam, agent: opts.agent, limit }) as TraceRecord[];
     }
 
     if (opts?.status) {
       return this.db
-        .prepare(
-          `SELECT * FROM traces WHERE status = @status ORDER BY start_time DESC LIMIT @limit`,
-        )
-        .all({ status: opts.status, limit }) as TraceRecord[];
+        .prepare(`SELECT * FROM traces WHERE ${wsFilter} AND status = @status ORDER BY start_time DESC LIMIT @limit`)
+        .all({ ...wsParam, status: opts.status, limit }) as TraceRecord[];
     }
 
-    return this.selectTraces.all({ limit }) as TraceRecord[];
+    return this.selectTraces.all({ ...wsParam, limit }) as TraceRecord[];
   }
 
   /**

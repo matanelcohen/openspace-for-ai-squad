@@ -337,6 +337,9 @@ export function buildApp(opts: AppOptions = {}) {
 
   // Trace service for recording AI interactions
   const traceService = new TraceService(db);
+  // Set initial workspace ID from auto-registered workspace
+  const activeWs = workspaceService.getActive();
+  if (activeWs) traceService.setWorkspaceId(activeWs.id);
   app.decorate('traceService', traceService);
 
   // Decorate Fastify instance with the SQLite database

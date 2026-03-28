@@ -89,6 +89,11 @@ const workspacesRoute: FastifyPluginAsync = async (app) => {
         loadSkillsFromDirectory(skillsDir);
       }
 
+      // Scope traces to this workspace
+      if (app.traceService && typeof app.traceService.setWorkspaceId === 'function') {
+        app.traceService.setWorkspaceId(workspace.id);
+      }
+
       app.log.info(`Switched to workspace: ${workspace.name} (${newSquadDir})`);
     } catch (err) {
       app.log.warn(`Workspace switch partial: ${(err as Error).message}`);
