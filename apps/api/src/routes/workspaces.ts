@@ -58,15 +58,6 @@ const workspacesRoute: FastifyPluginAsync = async (app) => {
     }
     return reply.send(workspace);
   });
-};
-
-export default workspacesRoute;
-
-declare module 'fastify' {
-  interface FastifyInstance {
-    workspaceService: WorkspaceService;
-  }
-}
 
   // GET /api/workspaces/browse — list directories for workspace picker
   app.get<{ Querystring: { path?: string } }>('/workspaces/browse', async (request, reply) => {
@@ -103,3 +94,12 @@ declare module 'fastify' {
       return reply.status(400).send({ error: `Cannot read directory: ${resolved}` });
     }
   });
+};
+
+export default workspacesRoute;
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    workspaceService: WorkspaceService;
+  }
+}
