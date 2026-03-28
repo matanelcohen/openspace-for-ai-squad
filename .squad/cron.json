@@ -17,6 +17,24 @@
       "title": "Run nightly test suite",
       "description": "Run all tests and report results to the team channel.",
       "enabled": false
+    },
+    {
+      "id": "daily",
+      "schedule": "*/2 * * * *",
+      "agent": "leela",
+      "action": "chat",
+      "message": "Ask for updates and see if someone looking for job if thats the case create them tasks.",
+      "channel": "team",
+      "enabled": false
+    },
+    {
+      "id": "daily2",
+      "schedule": "*/2 * * * *",
+      "agent": "leela",
+      "action": "chat",
+      "message": "Team what is your status?",
+      "channel": "team",
+      "enabled": false
     }
   ]
 }

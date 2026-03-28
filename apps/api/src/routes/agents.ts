@@ -4,6 +4,8 @@
  * GET    /api/agents              — List all agents with status, role, current task.
  * GET    /api/agents/status       — Real-time agent work status (active tasks + queues).
  * GET    /api/agents/:id          — Agent detail with charter, history, expertise.
+ * GET    /api/agents/:id/charter  — Raw charter markdown for an agent.
+ * PUT    /api/agents/:id/charter  — Update the charter markdown for an agent.
  * GET    /api/agents/:id/skills   — Per-agent skills (role-matched + overrides).
  * PATCH  /api/agents/:id/skills   — Toggle a skill override for an agent.
  */
@@ -119,6 +121,61 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
 
     return reply.send(agent);
   });
+
+  // GET /api/agents/:id/charter — raw charter markdown
+  app.get<{ Params: { id: string } }>('/agents/:id/charter', async (request, reply) => {
+    const { id } = request.params;
+    const agent = await app.squadParser.getAgent(id);
+
+    if (!agent) {
+      return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
+    }
+
+    const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+    const charterPath = join(squadDir, 'agents', id, 'charter.md');
+
+    if (!existsSync(charterPath)) {
+      return reply.status(404).send({ agentId: id, charter: null, error: 'Charter file not found' });
+    }
+
+    const charter = readFileSync(charterPath, 'utf-8');
+    return reply.send({ agentId: id, charter });
+  });
+
+  // PUT /api/agents/:id/charter — update charter markdown
+  app.put<{ Params: { id: string }; Body: { charter: string } }>(
+    '/agents/:id/charter',
+    async (request, reply) => {
+      const { id } = request.params;
+      const { charter } = request.body ?? {};
+
+      if (typeof charter !== 'string') {
+        return sendError(
+          reply,
+          400,
+          ErrorCodes.VALIDATION_ERROR,
+          'Missing required field: charter (string)',
+        );
+      }
+
+      const agent = await app.squadParser.getAgent(id);
+      if (!agent) {
+        return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
+      }
+
+      const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+      const agentDir = join(squadDir, 'agents', id);
+
+      if (!existsSync(agentDir)) {
+        mkdirSync(agentDir, { recursive: true });
+      }
+
+      const charterPath = join(agentDir, 'charter.md');
+      writeFileSync(charterPath, charter, 'utf-8');
+
+      return reply.send({ agentId: id, charter, success: true });
+    },
+  );
 
   // GET /api/agents/:id/skills — per-agent skills (role-matched + overrides)
   app.get<{ Params: { id: string } }>('/agents/:id/skills', async (request, reply) => {

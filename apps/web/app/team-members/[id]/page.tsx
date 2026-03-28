@@ -1,11 +1,28 @@
 'use client';
 
-import type { Task } from '@openspace/shared';
+import type { Agent, Task } from '@openspace/shared';
 import { TASK_STATUS_LABELS, TEAM_MEMBER_RANK_LABELS } from '@openspace/shared';
-import { ArrowLeft, Bot, Building2, Calendar, CheckCircle2, ListTodo, Mail } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  Building2,
+  Calendar,
+  Check,
+  CheckCircle2,
+  Eye,
+  FileText,
+  ListTodo,
+  Loader2,
+  Mail,
+  Pencil,
+  Plus,
+  X,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { PriorityBadge } from '@/components/priority-badge';
@@ -21,6 +38,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { useAgentCharter, useUpdateAgentCharter } from '@/hooks/use-agent-charter';
 import { useAgents } from '@/hooks/use-agents';
 import { useAgentSkillsManagement } from '@/hooks/use-skills';
 import { useTasks } from '@/hooks/use-tasks';
@@ -116,6 +135,249 @@ function AgentSkillsSection() {
   );
 }
 
+// ── Agent Charter Section ────────────────────────────────────────
+
+function agentSlugFromName(name: string): string {
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function findMatchingAgent(agents: Agent[] | undefined, memberName: string): Agent | undefined {
+  if (!agents) return undefined;
+  const slug = agentSlugFromName(memberName);
+  return agents.find((a) => a.id === slug);
+}
+
+function AgentCharterSection({
+  agentId,
+  agentName,
+  agentRole,
+  agentPersonality,
+}: {
+  agentId: string;
+  agentName: string;
+  agentRole: string;
+  agentPersonality?: string;
+}) {
+  const { data: charterData, isLoading } = useAgentCharter(agentId);
+  const updateCharter = useUpdateAgentCharter();
+  const [isEditing, setIsEditing] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const charter = charterData?.charter ?? null;
+
+  useEffect(() => {
+    if (charter !== null) {
+      setDraft(charter);
+    }
+  }, [charter]);
+
+  const handleEdit = useCallback(() => {
+    setDraft(charter ?? '');
+    setIsEditing(true);
+    setShowPreview(false);
+    setSaveSuccess(false);
+  }, [charter]);
+
+  const handleCancel = useCallback(() => {
+    setIsEditing(false);
+    setShowPreview(false);
+    setDraft(charter ?? '');
+  }, [charter]);
+
+  const handleSave = useCallback(() => {
+    updateCharter.mutate(
+      { agentId, charter: draft },
+      {
+        onSuccess: () => {
+          setIsEditing(false);
+          setShowPreview(false);
+          setSaveSuccess(true);
+          setTimeout(() => setSaveSuccess(false), 3000);
+        },
+      },
+    );
+  }, [agentId, draft, updateCharter]);
+
+  const handleCreate = useCallback(() => {
+    const template = `# ${agentName} — ${agentRole}\n\n> Describe this agent's personality and focus.\n\n## Identity\n\n- **Name:** ${agentName}\n- **Role:** ${agentRole}\n- **Expertise:** \n- **Style:** \n\n## What I Own\n\n- \n\n## How I Work\n\n- \n\n## Boundaries\n\n**I handle:** \n\n**I don't handle:** \n\n**When I'm unsure:** I say so and suggest who might know.\n\n## Voice\n\n`;
+    setDraft(template);
+    setIsEditing(true);
+    setShowPreview(false);
+  }, [agentName, agentRole]);
+
+  // Build system prompt preview
+  const personality = agentPersonality ?? 'Professional, collaborative, dedicated';
+  const systemPromptPreview =
+    `You are ${agentName}, the ${agentRole} of the openspace.ai squad. ` +
+    `Personality: ${personality}\n\n` +
+    `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
+    `Do the actual work, don't just describe what you would do.\n\n` +
+    `[Skills prompt injected based on role-matched skills]\n\n` +
+    `When done, provide a brief summary of what you did.`;
+
+  if (isLoading) {
+    return (
+      <Card data-testid="agent-charter-section">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Agent Prompt
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-4 w-1/2" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card data-testid="agent-charter-section">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <FileText className="h-4 w-4" />
+            Agent Prompt
+            {saveSuccess && (
+              <Badge variant="outline" className="bg-green-500/15 text-green-700 dark:text-green-400 border-green-500/20 text-[10px]">
+                <Check className="h-3 w-3 mr-1" />
+                Saved
+              </Badge>
+            )}
+          </CardTitle>
+          <div className="flex items-center gap-1.5">
+            {!isEditing && charter !== null && (
+              <Button variant="ghost" size="sm" onClick={handleEdit} data-testid="charter-edit-btn">
+                <Pencil className="h-3.5 w-3.5 mr-1" />
+                Edit
+              </Button>
+            )}
+          </div>
+        </CardHeader>
+        <CardContent>
+          {charter === null && !isEditing ? (
+            <div className="flex flex-col items-center gap-3 py-6 text-center">
+              <FileText className="h-8 w-8 text-muted-foreground/50" />
+              <div>
+                <p className="text-sm font-medium text-muted-foreground">No charter yet</p>
+                <p className="text-xs text-muted-foreground/70 mt-1">
+                  Create a charter to define this agent&apos;s identity, expertise, and boundaries.
+                </p>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleCreate} data-testid="charter-create-btn">
+                <Plus className="h-3.5 w-3.5 mr-1" />
+                Create Charter
+              </Button>
+            </div>
+          ) : isEditing ? (
+            <div className="space-y-3">
+              {/* Edit/Preview toggle */}
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant={!showPreview ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setShowPreview(false)}
+                  className="text-xs h-7"
+                >
+                  <Pencil className="h-3 w-3 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  variant={showPreview ? 'secondary' : 'ghost'}
+                  size="sm"
+                  onClick={() => setShowPreview(true)}
+                  className="text-xs h-7"
+                >
+                  <Eye className="h-3 w-3 mr-1" />
+                  Preview
+                </Button>
+              </div>
+
+              {showPreview ? (
+                <div className="prose prose-sm dark:prose-invert max-w-none rounded-md border p-4 min-h-[320px]" data-testid="charter-preview">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown>
+                </div>
+              ) : (
+                <Textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  className="font-mono text-sm min-h-[320px] resize-y"
+                  rows={20}
+                  placeholder="# Agent Name — Role&#10;&#10;> Personality description..."
+                  data-testid="charter-editor"
+                />
+              )}
+
+              <div className="flex items-center gap-2 justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCancel}
+                  disabled={updateCharter.isPending}
+                  data-testid="charter-cancel-btn"
+                >
+                  <X className="h-3.5 w-3.5 mr-1" />
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSave}
+                  disabled={updateCharter.isPending}
+                  data-testid="charter-save-btn"
+                >
+                  {updateCharter.isPending ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-3.5 w-3.5 mr-1" />
+                      Save Charter
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="prose prose-sm dark:prose-invert max-w-none" data-testid="charter-viewer">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{charter ?? ''}</ReactMarkdown>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* System Prompt Preview */}
+      <Card data-testid="system-prompt-preview">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <Bot className="h-4 w-4" />
+            System Prompt Preview
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-2">
+            This is the system prompt used when this agent responds in chat or works on tasks.
+          </p>
+          <pre className="rounded-md border bg-muted/30 p-3 text-xs font-mono whitespace-pre-wrap break-words leading-relaxed overflow-x-auto">
+            {systemPromptPreview}
+          </pre>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
+
 function DetailSkeleton() {
   return (
     <div className="space-y-6">
@@ -139,6 +401,12 @@ export default function TeamMemberDetailPage() {
   const updateStatus = useUpdateTeamMemberStatus();
   const updateMember = useUpdateTeamMember();
   const { data: allTasks } = useTasks();
+  const { data: agents } = useAgents();
+
+  const matchingAgent = useMemo(
+    () => (member ? findMatchingAgent(agents, member.name) : undefined),
+    [agents, member],
+  );
 
   const assignedTasks = useMemo(() => {
     if (!allTasks || !member) return [];
@@ -346,6 +614,15 @@ export default function TeamMemberDetailPage() {
 
           {/* AI Agent Skills Management */}
           <AgentSkillsSection />
+
+          {/* Agent Charter / Prompt */}
+          {matchingAgent && (
+            <AgentCharterSection
+              agentId={matchingAgent.id}
+              agentName={matchingAgent.name}
+              agentRole={matchingAgent.role}
+            />
+          )}
         </div>
       </div>
     </div>
