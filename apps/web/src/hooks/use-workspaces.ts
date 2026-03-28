@@ -23,11 +23,20 @@ export function useWorkspaces() {
   });
 }
 
-/** Fetch the currently active workspace. */
+const STORAGE_KEY = 'openspace:active-workspace';
+
+/** Fetch the currently active workspace. Restores from localStorage on load. */
 export function useActiveWorkspace() {
   return useQuery<Workspace>({
     queryKey: workspaceKeys.active,
-    queryFn: () => api.get<Workspace>('/api/workspaces/active'),
+    queryFn: async () => {
+      const ws = await api.get<Workspace>('/api/workspaces/active');
+      // Persist to localStorage for sticky selection
+      if (typeof window !== 'undefined' && ws?.id) {
+        localStorage.setItem(STORAGE_KEY, ws.id);
+      }
+      return ws;
+    },
     staleTime: WORKSPACE_STALE_TIME,
   });
 }
@@ -48,18 +57,27 @@ export function useCreateWorkspace() {
   });
 }
 
-/** Activate a workspace by ID. */
+/** Activate a workspace by ID. Saves to localStorage for persistence. */
 export function useActivateWorkspace() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (id: string) =>
       api.post<Workspace>(`/api/workspaces/${encodeURIComponent(id)}/activate`, {}),
-    onSuccess: () => {
+    onSuccess: (workspace) => {
+      if (typeof window !== 'undefined' && workspace?.id) {
+        localStorage.setItem(STORAGE_KEY, workspace.id);
+      }
       queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
       queryClient.invalidateQueries({ queryKey: workspaceKeys.active });
     },
   });
+}
+
+/** Get the last active workspace ID from localStorage (for restoring on load). */
+export function getStoredWorkspaceId(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(STORAGE_KEY);
 }
 
 /** Delete a workspace by ID. */

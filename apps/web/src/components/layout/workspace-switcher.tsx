@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, ChevronsUpDown } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 import {
   DropdownMenu,
@@ -9,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useActivateWorkspace, useActiveWorkspace, useWorkspaces } from '@/hooks/use-workspaces';
+import { useActivateWorkspace, useActiveWorkspace, useWorkspaces, getStoredWorkspaceId } from '@/hooks/use-workspaces';
 
 import { AddWorkspaceDialog } from './add-workspace-dialog';
 
@@ -17,6 +18,17 @@ export function WorkspaceSwitcher() {
   const { data: workspaces = [] } = useWorkspaces();
   const { data: active } = useActiveWorkspace();
   const activateWorkspace = useActivateWorkspace();
+
+  // Restore last workspace from localStorage on first load
+  const restoredRef = useRef(false);
+  useEffect(() => {
+    if (restoredRef.current || !workspaces.length || !active) return;
+    restoredRef.current = true;
+    const storedId = getStoredWorkspaceId();
+    if (storedId && storedId !== active.id && workspaces.some((w) => w.id === storedId)) {
+      activateWorkspace.mutate(storedId);
+    }
+  }, [workspaces, active, activateWorkspace]);
 
   const handleSwitch = async (id: string) => {
     if (id === active?.id) return;
