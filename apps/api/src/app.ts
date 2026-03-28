@@ -38,7 +38,7 @@ import { ChatService } from './services/chat/index.js';
 import { loadSquadConfig } from './services/config/index.js';
 import { CronService } from './services/cron/index.js';
 import { openDatabase } from './services/db/index.js';
-import { seedTeamMembers } from './services/db/seed-team.js';
+import { seedTeamMembers, syncTeamMembers } from './services/db/seed-team.js';
 import { buildHookPipeline, type HookPipeline } from './services/hooks/pipeline.js';
 import { SandboxService } from './services/sandbox/index.js';
 import { KnowledgeSearchService } from './services/search/index.js';
@@ -83,20 +83,24 @@ export function buildApp(opts: AppOptions = {}) {
     logger: opts.logger ?? true,
   });
 
-  // Initialize SQLite database if not provided
-  const squadDir = opts.squadDir ?? resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+  // Workspace service (global, stored in ~/.openspace/workspaces.json)
+  const workspaceService = new WorkspaceService();
+  const defaultSquadDir = opts.squadDir ?? resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+  workspaceService.autoRegister(resolve(defaultSquadDir, '..'));
+
+  // Use stored active workspace's squadDir if available, otherwise default
+  const activeWsOnStartup = workspaceService.getActive();
+  const squadDir = activeWsOnStartup?.squadDir ?? defaultSquadDir;
+
   const db = opts.db ?? openDatabase({ squadDir });
 
-  // Seed team members from .squad/team.md (no-op if already populated)
-  seedTeamMembers(db, squadDir);
+  // Seed team members from .squad/team.md
+  syncTeamMembers(db, squadDir);
 
   // Decorate with a SquadParser instance
   const parser = new SquadParser(squadDir);
   app.decorate('squadParser', parser);
 
-  // Workspace service (global, stored in ~/.openspace/workspaces.json)
-  const workspaceService = new WorkspaceService();
-  workspaceService.autoRegister(resolve(squadDir, '..'));
   app.decorate('workspaceService', workspaceService);
 
   // Activity feed (in-memory ring buffer)
