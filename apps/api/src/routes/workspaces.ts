@@ -67,3 +67,39 @@ declare module 'fastify' {
     workspaceService: WorkspaceService;
   }
 }
+
+  // GET /api/workspaces/browse — list directories for workspace picker
+  app.get<{ Querystring: { path?: string } }>('/workspaces/browse', async (request, reply) => {
+    const { readdirSync, statSync } = await import('node:fs');
+    const { resolve, join, basename } = await import('node:path');
+    const { homedir } = await import('node:os');
+
+    const basePath = request.query.path?.trim() || homedir();
+    const resolved = resolve(basePath);
+
+    try {
+      const entries = readdirSync(resolved, { withFileTypes: true });
+      const dirs = entries
+        .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+        .map((e) => {
+          const fullPath = join(resolved, e.name);
+          const hasSquad = (() => { try { statSync(join(fullPath, '.squad')); return true; } catch { return false; } })();
+          const hasGit = (() => { try { statSync(join(fullPath, '.git')); return true; } catch { return false; } })();
+          return { name: e.name, path: fullPath, hasSquad, hasGit };
+        })
+        .sort((a, b) => {
+          if (a.hasSquad !== b.hasSquad) return a.hasSquad ? -1 : 1;
+          if (a.hasGit !== b.hasGit) return a.hasGit ? -1 : 1;
+          return a.name.localeCompare(b.name);
+        });
+
+      return reply.send({
+        current: resolved,
+        parent: resolve(resolved, '..'),
+        name: basename(resolved),
+        dirs,
+      });
+    } catch {
+      return reply.status(400).send({ error: `Cannot read directory: ${resolved}` });
+    }
+  });
