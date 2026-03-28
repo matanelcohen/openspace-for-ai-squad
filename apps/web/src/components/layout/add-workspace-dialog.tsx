@@ -105,28 +105,30 @@ export function AddWorkspaceDialog() {
           {browsing && browseData ? (
             <div className="mt-4 space-y-3">
               {/* Current path + navigation */}
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => browse(browseData.parent)}
-                >
-                  ← Up
-                </Button>
-                <div className="flex-1 min-w-0 rounded-md bg-muted px-3 py-1.5">
-                  <span className="block truncate text-xs font-mono text-muted-foreground">{browseData.current}</span>
+              <div className="space-y-2">
+                <div className="rounded-md bg-muted px-3 py-2">
+                  <span className="block break-all text-xs font-mono text-muted-foreground">{browseData.current}</span>
                 </div>
-                <Button
-                  type="button"
-                  variant="default"
-                  size="sm"
-                  className="shrink-0"
-                  onClick={() => selectDir({ name: browseData.name, path: browseData.current, hasSquad: false, hasGit: false })}
-                >
-                  Use This
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => browse(browseData.parent)}
+                  >
+                    ← Up
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => selectDir({ name: browseData.name, path: browseData.current, hasSquad: false, hasGit: false })}
+                  >
+                    ✓ Use This Folder
+                  </Button>
+                </div>
               </div>
 
               {/* Directory list */}
