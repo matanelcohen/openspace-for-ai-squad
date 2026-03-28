@@ -14,7 +14,7 @@ import { syncTeamMembers } from './db/seed-team.js';
 
 // ── Charter template ────────────────────────────────────────────
 
-function generateCharter(name: string, role: string, skills: string[]): string {
+export function generateCharter(name: string, role: string, skills: string[]): string {
   const expertiseList = skills.length > 0 ? skills.join(', ') : 'General';
 
   return `# ${name} — ${role}

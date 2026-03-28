@@ -93,3 +93,43 @@ export function useDeleteWorkspace() {
     },
   });
 }
+
+// ── Squad init hooks ────────────────────────────────────────────────
+
+export interface WorkspaceStatus {
+  initialized: boolean;
+  hasTeam: boolean;
+  agentCount: number;
+}
+
+/** Check if a squad is initialized in a workspace. */
+export function useWorkspaceStatus(workspaceId: string | undefined) {
+  return useQuery<WorkspaceStatus>({
+    queryKey: ['workspaces', workspaceId, 'status'] as const,
+    queryFn: () => api.get<WorkspaceStatus>(`/api/workspaces/${encodeURIComponent(workspaceId!)}/status`),
+    enabled: !!workspaceId,
+    staleTime: WORKSPACE_STALE_TIME,
+  });
+}
+
+export interface InitSquadInput {
+  teamName: string;
+  description?: string;
+  stack?: string;
+  agents: Array<{ name: string; role: string }>;
+}
+
+/** Initialize a squad in a workspace. */
+export function useInitSquad() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ workspaceId, ...body }: InitSquadInput & { workspaceId: string }) =>
+      api.post<Workspace>(`/api/workspaces/${encodeURIComponent(workspaceId)}/init`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.active });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+}

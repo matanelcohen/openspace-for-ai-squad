@@ -7,6 +7,7 @@ import { KanbanBoard } from '@/components/tasks/kanban-board';
 import { TaskFormDialog } from '@/components/tasks/task-form-dialog';
 import { TaskListView } from '@/components/tasks/task-list-view';
 import { Button } from '@/components/ui/button';
+import { SquadGuard } from '@/components/workspace/squad-guard';
 
 type ViewMode = 'board' | 'list';
 
@@ -15,6 +16,7 @@ export default function TasksPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
   return (
+    <SquadGuard>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -53,5 +55,6 @@ export default function TasksPage() {
 
       <TaskFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
+    </SquadGuard>
   );
 }

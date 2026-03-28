@@ -13,6 +13,7 @@ import { TeamMemberFormDialog } from '@/components/team-members/team-member-form
 import { TeamMemberListView } from '@/components/team-members/team-member-list-view';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SquadGuard } from '@/components/workspace/squad-guard';
 import { useTeamMembers } from '@/hooks/use-team-members';
 
 type ViewMode = 'grid' | 'table';
@@ -64,6 +65,7 @@ export default function TeamMembersPage() {
   });
 
   return (
+    <SquadGuard>
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -162,5 +164,6 @@ export default function TeamMembersPage() {
 
       <TeamMemberFormDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </div>
+    </SquadGuard>
   );
 }

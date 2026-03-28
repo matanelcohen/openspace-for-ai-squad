@@ -4,6 +4,13 @@ import type { WorkspaceService } from '../services/workspace/index.js';
 import type { ChatService } from '../services/chat/index.js';
 import type { AgentRegistry } from '../services/agent-registry.js';
 
+interface InitSquadBody {
+  teamName: string;
+  description?: string;
+  stack?: string;
+  agents: Array<{ name: string; role: string }>;
+}
+
 const workspacesRoute: FastifyPluginAsync = async (app) => {
   /** List all workspaces. */
   app.get('/workspaces', async (_request, reply) => {
@@ -114,6 +121,146 @@ const workspacesRoute: FastifyPluginAsync = async (app) => {
     return reply.send(workspace);
   });
 
+  /** Check if a squad is initialized in this workspace. */
+  app.get<{ Params: { id: string } }>('/workspaces/:id/status', async (request, reply) => {
+    const workspace = app.workspaceService.get(request.params.id);
+    if (!workspace) {
+      return reply.status(404).send({ error: 'Workspace not found' });
+    }
+
+    const { existsSync } = await import('node:fs');
+    const { join } = await import('node:path');
+
+    const squadDir = workspace.squadDir;
+    const teamMdExists = existsSync(join(squadDir, 'team.md'));
+    const agentsDir = join(squadDir, 'agents');
+    let agentCount = 0;
+
+    if (existsSync(agentsDir)) {
+      const { readdirSync } = await import('node:fs');
+      try {
+        agentCount = readdirSync(agentsDir, { withFileTypes: true }).filter((e) => e.isDirectory()).length;
+      } catch {
+        // ignore
+      }
+    }
+
+    return reply.send({
+      initialized: existsSync(squadDir) && teamMdExists,
+      hasTeam: teamMdExists,
+      agentCount,
+    });
+  });
+
+  /** Initialize a squad in a workspace — creates .squad/ structure. */
+  app.post<{ Params: { id: string }; Body: InitSquadBody }>(
+    '/workspaces/:id/init',
+    async (request, reply) => {
+      const workspace = app.workspaceService.get(request.params.id);
+      if (!workspace) {
+        return reply.status(404).send({ error: 'Workspace not found' });
+      }
+
+      const { teamName, description, stack, agents } = request.body ?? {};
+      if (!teamName || !agents || agents.length === 0) {
+        return reply.status(400).send({ error: 'teamName and at least one agent are required' });
+      }
+
+      const { existsSync, mkdirSync, writeFileSync } = await import('node:fs');
+      const { join } = await import('node:path');
+      const { generateCharter } = await import('../services/squad-file-writer.js');
+
+      const squadDir = join(workspace.projectDir, '.squad');
+
+      // 1. Create .squad/ directory
+      if (!existsSync(squadDir)) {
+        mkdirSync(squadDir, { recursive: true });
+      }
+
+      // 2. Create .squad/tasks/ and .squad/sessions/
+      for (const subdir of ['tasks', 'sessions', 'agents', 'decisions/inbox']) {
+        const dirPath = join(squadDir, subdir);
+        if (!existsSync(dirPath)) {
+          mkdirSync(dirPath, { recursive: true });
+        }
+      }
+
+      // 3. Create .squad/config.json
+      const configPath = join(squadDir, 'config.json');
+      writeFileSync(
+        configPath,
+        JSON.stringify({ version: 1, defaultModel: 'claude-opus-4.6' }, null, 2),
+        'utf-8',
+      );
+
+      // 4. Create .squad/team.md with Members table
+      const stackLine = stack ? `\n**Tech Stack:** ${stack}\n` : '';
+      const descLine = description ? `\n> ${description}\n` : '';
+      const memberRows = agents
+        .map((a) => {
+          const slug = a.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+          return `| ${a.name} | ${a.role} | .squad/agents/${slug}/charter.md | 🟢 Active |`;
+        })
+        .join('\n');
+
+      const teamMd = `# ${teamName}
+${descLine}${stackLine}
+## Members
+
+| Name | Role | Charter | Status |
+| ---- | ---- | ------- | ------ |
+${memberRows}
+
+## Project Context
+
+This squad was initialized via the openspace.ai wizard.
+`;
+
+      writeFileSync(join(squadDir, 'team.md'), teamMd, 'utf-8');
+
+      // 5. Create charter files for each agent
+      const skills = stack ? stack.split(',').map((s) => s.trim()) : [];
+      for (const agent of agents) {
+        const slug = agent.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-');
+        const agentDir = join(squadDir, 'agents', slug);
+        if (!existsSync(agentDir)) {
+          mkdirSync(agentDir, { recursive: true });
+        }
+
+        const charterPath = join(agentDir, 'charter.md');
+        if (!existsSync(charterPath)) {
+          const charter = generateCharter(agent.name, agent.role, skills);
+          writeFileSync(charterPath, charter, 'utf-8');
+        }
+      }
+
+      // 6. Update the workspace's squadDir
+      const updatedWorkspace = app.workspaceService.update(workspace.id, {});
+      // squadDir is derived from projectDir so we just re-sync
+
+      // 7. Re-sync the database with the new team
+      try {
+        const { syncTeamMembers } = await import('../services/db/seed-team.js');
+        syncTeamMembers(app.db, squadDir);
+
+        if (app.agentRegistry) {
+          app.agentRegistry.loadFromDatabase();
+        }
+
+        if (app.squadParser && typeof app.squadParser.setSquadDir === 'function') {
+          app.squadParser.setSquadDir(squadDir);
+        }
+
+        app.log.info(`Squad initialized for workspace: ${workspace.name} (${squadDir})`);
+      } catch (err) {
+        app.log.warn(`Squad init partial sync: ${(err as Error).message}`);
+      }
+
+      // 8. Return the workspace
+      return reply.status(201).send(updatedWorkspace ?? workspace);
+    },
+  );
+
   // GET /api/workspaces/browse — list directories for workspace picker
   app.get<{ Querystring: { path?: string } }>('/workspaces/browse', async (request, reply) => {
     const { readdirSync, statSync } = await import('node:fs');
@@ -158,5 +305,7 @@ declare module 'fastify' {
     workspaceService: WorkspaceService;
     chatService: ChatService;
     agentRegistry: AgentRegistry;
+    db: import('better-sqlite3').Database;
+    squadParser: { setSquadDir?: (dir: string) => void };
   }
 }
