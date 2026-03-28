@@ -40,6 +40,7 @@ interface FieldErrors {
 
 const AVAILABLE_ROLES = [
   { value: '*', label: 'All (*)' },
+  { value: 'none', label: 'None (manual only)' },
   { value: 'lead', label: 'Lead' },
   { value: 'frontend-dev', label: 'Frontend Dev' },
   { value: 'backend-dev', label: 'Backend Dev' },
@@ -193,10 +194,13 @@ export function SkillFormDialog({
       if (role === '*') {
         return { ...prev, roles: ['*'] };
       }
+      if (role === 'none') {
+        return { ...prev, roles: [] };
+      }
       const without = prev.roles.filter((r) => r !== '*' && r !== role);
       const has = prev.roles.includes(role);
       const next = has ? without : [...without, role];
-      return { ...prev, roles: next.length === 0 ? ['*'] : next };
+      return { ...prev, roles: next.length === 0 ? [] : next };
     });
   }, []);
 
@@ -358,7 +362,9 @@ export function SkillFormDialog({
               <p className="text-xs text-muted-foreground">Which agent roles can use this skill.</p>
               <div className="flex flex-wrap gap-2 mt-1">
                 {AVAILABLE_ROLES.map(({ value, label }) => {
-                  const isActive = form.roles.includes(value);
+                  const isActive = value === 'none'
+                    ? form.roles.length === 0
+                    : form.roles.includes(value);
                   return (
                     <button
                       key={value}

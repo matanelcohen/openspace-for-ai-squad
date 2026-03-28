@@ -890,7 +890,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
             tags: fm.tags ?? [],
             icon: SKILL_ICONS[skill.id] ?? '📦',
             permissions: [],
-            agentMatch: fm.agentMatch ?? { roles: ['*'] },
+            agentMatch: fm.agentMatch ?? { roles: [] },
             requires: fm.requires ?? { bins: [], env: [] },
             instructions: content.trim(),
           },
