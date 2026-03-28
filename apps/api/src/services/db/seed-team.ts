@@ -103,12 +103,12 @@ function parseMembersTable(content: string): ParsedAgent[] {
         .map((c) => c.trim())
         .filter(Boolean);
 
-      if (cells.length >= 4) {
+      if (cells.length >= 2) {
         agents.push({
           name: cells[0]!,
           role: cells[1]!,
-          charterPath: cells[2] === '—' ? null : cells[2]!,
-          status: cells[3]!,
+          charterPath: cells.length >= 4 && cells[2] !== '—' && cells[2]!.includes('/') ? cells[2]! : null,
+          status: cells.length >= 4 ? cells[3]! : 'Active',
         });
       }
     }
@@ -181,8 +181,8 @@ function parseSkillsFromCharter(charterContent: string): string[] {
  */
 function normalizeStatus(raw: string): string {
   const lower = raw.toLowerCase();
-  if (lower.includes('active') || lower.includes('monitor')) return 'active';
-  return 'inactive';
+  if (lower.includes('inactive') || lower.includes('retired') || lower.includes('disabled')) return 'inactive';
+  return 'active';
 }
 
 // ── Public API ─────────────────────────────────────────────────────
