@@ -21,23 +21,9 @@ export function WorkspaceSwitcher() {
   const handleSwitch = async (id: string) => {
     if (id === active?.id) return;
     await activateWorkspace.mutateAsync(id);
-    // Reload to show the new workspace's data
     window.location.reload();
   };
 
-  // Single workspace — just show name, no dropdown
-  if (workspaces.length <= 1) {
-    return (
-      <div className="flex h-14 items-center border-b px-4">
-        <div className="flex items-center gap-2 font-semibold">
-          <span className="text-lg">{active?.icon ?? '🚀'}</span>
-          <span className="truncate">{active?.name ?? 'openspace.ai'}</span>
-        </div>
-      </div>
-    );
-  }
-
-  // Multiple workspaces — show dropdown
   return (
     <div className="flex h-14 items-center border-b px-4">
       <DropdownMenu>
