@@ -27,6 +27,7 @@ import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import workspacesRoute from './routes/workspaces.js';
 import type { A2AService } from './services/a2a/index.js';
+import { AgentRegistry } from './services/agent-registry.js';
 import { createA2AService } from './services/a2a/index.js';
 import { ActivityFeed } from './services/activity/index.js';
 import { AgentWorkerService } from './services/agent-worker/index.js';
@@ -109,6 +110,18 @@ export function buildApp(opts: AppOptions = {}) {
     aiProvider: opts.aiProvider ?? null,
   });
   app.decorate('chatService', chatService);
+
+  // Agent registry — dynamic roster loaded from team_members table
+  const agentRegistry = new AgentRegistry(db);
+  agentRegistry.loadFromDatabase();
+  app.decorate('agentRegistry', agentRegistry);
+  chatService.setAgentRegistry(agentRegistry);
+
+  // Set initial workspace ID on chat service
+  {
+    const activeWs = workspaceService.getActive();
+    if (activeWs) chatService.setWorkspaceId(activeWs.id);
+  }
 
   // Auth service
   const authService = new AuthService({ db });
@@ -394,5 +407,6 @@ declare module 'fastify' {
     a2aService?: A2AService;
     sandboxService: SandboxService;
     hookPipeline?: HookPipeline;
+    agentRegistry: AgentRegistry;
   }
 }

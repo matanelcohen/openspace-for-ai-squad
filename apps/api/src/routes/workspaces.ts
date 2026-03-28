@@ -1,6 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 
 import type { WorkspaceService } from '../services/workspace/index.js';
+import type { ChatService } from '../services/chat/index.js';
+import type { AgentRegistry } from '../services/agent-registry.js';
 
 const workspacesRoute: FastifyPluginAsync = async (app) => {
   /** List all workspaces. */
@@ -94,6 +96,16 @@ const workspacesRoute: FastifyPluginAsync = async (app) => {
         app.traceService.setWorkspaceId(workspace.id);
       }
 
+      // Scope chat messages to this workspace
+      if (app.chatService && typeof app.chatService.setWorkspaceId === 'function') {
+        app.chatService.setWorkspaceId(workspace.id);
+      }
+
+      // Refresh chat agent list from newly loaded registry
+      if (app.chatService && app.agentRegistry && typeof app.chatService.setAgentRegistry === 'function') {
+        app.chatService.setAgentRegistry(app.agentRegistry);
+      }
+
       app.log.info(`Switched to workspace: ${workspace.name} (${newSquadDir})`);
     } catch (err) {
       app.log.warn(`Workspace switch partial: ${(err as Error).message}`);
@@ -144,5 +156,7 @@ export default workspacesRoute;
 declare module 'fastify' {
   interface FastifyInstance {
     workspaceService: WorkspaceService;
+    chatService: ChatService;
+    agentRegistry: AgentRegistry;
   }
 }

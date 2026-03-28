@@ -18,6 +18,7 @@ import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 
 import type { ActivityFeed } from '../activity/index.js';
+import type { AgentRegistry } from '../agent-registry.js';
 import type { AIProvider } from '../ai/copilot-provider.js';
 import {
   buildSkillsPrompt,
@@ -112,6 +113,8 @@ export class ChatService {
   private activityFeed: ActivityFeed | null = null;
   private readonly allSkills: ParsedSkill[];
   private routingRules: RoutingRule[] = [];
+  private workspaceId = '';
+  private agentRegistry: AgentRegistry | null = null;
 
   constructor(opts: {
     db?: Database.Database | null;
@@ -129,6 +132,13 @@ export class ChatService {
 
     if (this.sessionsDir && !existsSync(this.sessionsDir)) {
       mkdirSync(this.sessionsDir, { recursive: true });
+    }
+
+    // Ensure workspace_id column exists (safe migration)
+    if (this.db) {
+      try {
+        this.db.exec("ALTER TABLE chat_messages ADD COLUMN workspace_id TEXT DEFAULT ''");
+      } catch { /* column already exists */ }
     }
 
     // Load skills from .squad/skills/ for per-agent filtering
@@ -155,6 +165,25 @@ export class ChatService {
   /** Connect to the activity feed for cross-system event publishing. */
   setActivityFeed(feed: ActivityFeed): void {
     this.activityFeed = feed;
+  }
+
+  /** Set the active workspace ID — chat messages are scoped per workspace. */
+  setWorkspaceId(id: string): void {
+    this.workspaceId = id;
+  }
+
+  /** Set the agent registry for dynamic agent lookups. */
+  setAgentRegistry(registry: AgentRegistry): void {
+    this.agentRegistry = registry;
+  }
+
+  /** Get the current agent list from the registry, falling back to FALLBACK_AGENTS. */
+  private getAgents(): ReadonlyArray<{ id: string; name: string; role: string; personality: string }> {
+    if (this.agentRegistry) {
+      const agents = this.agentRegistry.getAll();
+      if (agents.length > 0) return agents;
+    }
+    return ChatService.FALLBACK_AGENTS;
   }
 
   /** Set routing rules from squad.config.ts for pattern-based routing. */
@@ -201,7 +230,7 @@ export class ChatService {
       }
     } else {
       // Direct message to a specific agent
-      const agent = ChatService.AGENTS.find((a) => a.id === input.recipient);
+      const agent = this.getAgents().find((a) => a.id === input.recipient);
       if (agent && this.aiProvider) {
         this.handleDirectMessage(agent, message).catch((err) => {
           console.error(`[Chat] Direct message to ${agent.name} failed:`, err);
@@ -245,7 +274,7 @@ export class ChatService {
     if (input.recipient === CHAT_TEAM_RECIPIENT) {
       await this.coordinatorEchoStream(message, onStreamEvent);
     } else {
-      const agent = ChatService.AGENTS.find((a) => a.id === input.recipient);
+      const agent = this.getAgents().find((a) => a.id === input.recipient);
       if (agent && this.aiProvider) {
         await this.handleDirectMessageStream(agent, message, onStreamEvent);
       }
@@ -265,10 +294,8 @@ export class ChatService {
     const limit = opts.limit ?? 50;
     const offset = opts.offset ?? 0;
 
-    let whereClause = '';
-    const params: Record<string, string> = {};
-
-    const conditions: string[] = [];
+    const conditions: string[] = ['workspace_id = @workspaceId'];
+    const params: Record<string, string> = { workspaceId: this.workspaceId };
 
     if (opts.agent) {
       conditions.push('(sender = @agent OR recipient = @agent)');
@@ -280,9 +307,7 @@ export class ChatService {
       params.threadId = opts.threadId;
     }
 
-    if (conditions.length > 0) {
-      whereClause = `WHERE ${conditions.join(' AND ')}`;
-    }
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
     const countSql = `SELECT COUNT(*) as total FROM chat_messages ${whereClause}`;
     const totalRow = this.db.prepare(countSql).get(params) as { total: number };
@@ -319,8 +344,8 @@ export class ChatService {
     if (!this.db) return { deleted: 0 };
 
     const { agent, channel } = opts;
-    const conditions: string[] = [];
-    const params: Record<string, string> = {};
+    const conditions: string[] = ['workspace_id = @workspaceId'];
+    const params: Record<string, string> = { workspaceId: this.workspaceId };
 
     if (agent) {
       conditions.push('(sender = @agent OR recipient = @agent)');
@@ -331,7 +356,7 @@ export class ChatService {
       params.channel = channel;
     }
 
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const whereClause = `WHERE ${conditions.join(' AND ')}`;
     const result = this.db.prepare(`DELETE FROM chat_messages ${whereClause}`).run(params);
 
     await this.clearSessionMarkdown(agent);
@@ -799,8 +824,8 @@ export class ChatService {
 
     this.db
       .prepare(
-        `INSERT INTO chat_messages (id, sender, recipient, content, timestamp, thread_id)
-         VALUES (@id, @sender, @recipient, @content, @timestamp, @threadId)`,
+        `INSERT INTO chat_messages (id, sender, recipient, content, timestamp, thread_id, workspace_id)
+         VALUES (@id, @sender, @recipient, @content, @timestamp, @threadId, @workspaceId)`,
       )
       .run({
         id: msg.id,
@@ -809,6 +834,7 @@ export class ChatService {
         content: msg.content,
         timestamp: msg.timestamp,
         threadId: msg.threadId,
+        workspaceId: this.workspaceId,
       });
   }
 
@@ -901,10 +927,11 @@ export class ChatService {
       const rows = this.db
         .prepare(
           `SELECT sender, content FROM chat_messages
-           WHERE recipient = @recipient OR sender = @recipient
+           WHERE (recipient = @recipient OR sender = @recipient)
+             AND workspace_id = @workspaceId
            ORDER BY timestamp DESC LIMIT 10`,
         )
-        .all({ recipient }) as Array<{ sender: string; content: string }>;
+        .all({ recipient, workspaceId: this.workspaceId }) as Array<{ sender: string; content: string }>;
 
       // Reverse so oldest first (chronological order)
       return rows.reverse().map((r) => ({
@@ -918,8 +945,8 @@ export class ChatService {
 
   // ── Private: Agent responses ──────────────────────────────────
 
-  /** Agent definitions for routing and personality. */
-  private static readonly AGENTS = [
+  /** Fallback agent definitions used when no AgentRegistry is connected. */
+  private static readonly FALLBACK_AGENTS = [
     {
       id: 'leela',
       name: 'Leela',
@@ -955,7 +982,7 @@ export class ChatService {
       try {
         // First, determine which agents should respond
         const agentIds = await this.routeToAgents(original.content);
-        const respondingAgents = ChatService.AGENTS.filter((a) => agentIds.includes(a.id));
+        const respondingAgents = this.getAgents().filter((a) => agentIds.includes(a.id));
 
         // Generate responses individually — don't let one failure kill all
         const responses: ChatMessage[] = [];
@@ -1003,14 +1030,16 @@ export class ChatService {
   /** Determine which agents should respond. Config routing rules → name match → LLM routing. */
   private async routeToAgents(content: string): Promise<string[]> {
     const lower = content.toLowerCase();
+    const agents = this.getAgents();
+    const leadId = agents.length > 0 ? agents[0]!.id : 'leela';
 
     // "team", "everyone", "each one", "all of you", "squad" → all agents
     if (/\b(team|everyone|each one|all of you|all agents|squad|everybody)\b/.test(lower)) {
-      return ChatService.AGENTS.map((a) => a.id);
+      return agents.map((a) => a.id);
     }
 
     // Direct name match — if the user mentions an agent by name, route to them
-    const mentioned = ChatService.AGENTS.filter(
+    const mentioned = agents.filter(
       (a) => lower.includes(a.name.toLowerCase()) || lower.includes(a.id),
     );
     if (mentioned.length > 0) {
@@ -1023,7 +1052,7 @@ export class ChatService {
         const pattern = rule.pattern instanceof RegExp ? rule.pattern : new RegExp(rule.pattern, 'i');
         if (pattern.test(content)) {
           const agentIds = rule.agents.map((a) => a.replace(/^@/, ''));
-          const valid = agentIds.filter((id) => ChatService.AGENTS.some((a) => a.id === id));
+          const valid = agentIds.filter((id) => agents.some((a) => a.id === id));
           if (valid.length > 0) {
             console.log(`[Chat] Routing rule matched: "${rule.pattern}" → [${valid.join(', ')}]`);
             return valid;
@@ -1032,20 +1061,20 @@ export class ChatService {
       }
     }
 
-    // Short messages or greetings → route to Leela (lead) as the default responder
+    // Short messages or greetings → route to lead agent as the default responder
     const isGreeting =
       /^\s*(hi|hey|hello|yo|sup|howdy|hiya|greetings|good\s*(morning|afternoon|evening))\b/i.test(
         content,
       );
     if (isGreeting || content.trim().length < 20) {
-      return ['leela'];
+      return [leadId];
     }
 
-    // No name mentioned — try LLM routing, fallback to Leela (lead)
-    if (!this.aiProvider) return ['leela'];
+    // No name mentioned — try LLM routing, fallback to lead agent
+    if (!this.aiProvider) return [leadId];
 
     try {
-      const profiles = ChatService.AGENTS.map((a) => ({
+      const profiles = agents.map((a) => ({
         id: a.id,
         name: a.name,
         role: a.role,
@@ -1053,16 +1082,16 @@ export class ChatService {
       }));
 
       const result = await this.aiProvider.route(content, profiles, []);
-      // Always ensure at least Leela (lead) responds
+      // Always ensure at least lead agent responds
       if (result.agentIds.length > 0) {
-        if (!result.agentIds.includes('leela')) {
-          result.agentIds.unshift('leela');
+        if (!result.agentIds.includes(leadId)) {
+          result.agentIds.unshift(leadId);
         }
         return result.agentIds;
       }
-      return ['leela'];
+      return [leadId];
     } catch {
-      return ['leela'];
+      return [leadId];
     }
   }
 
@@ -1154,7 +1183,7 @@ export class ChatService {
     if (this.aiProvider) {
       try {
         const agentIds = await this.routeToAgents(original.content);
-        const respondingAgents = ChatService.AGENTS.filter((a) => agentIds.includes(a.id));
+        const respondingAgents = this.getAgents().filter((a) => agentIds.includes(a.id));
 
         for (const agent of respondingAgents) {
           try {
