@@ -24,6 +24,7 @@
     "access": "public"
   },
   "bin": {
+    "openspace": "./bin/openspace.mjs",
     "openspace-mcp": "./packages/mcp-server/dist/cli.js"
   },
   "packageManager": "pnpm@9.15.4",
