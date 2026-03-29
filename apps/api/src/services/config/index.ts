@@ -84,7 +84,13 @@ async function tryLoadConfigFile(rootDir: string): Promise<SquadSDKConfig | null
         return config as SquadSDKConfig;
       }
     } catch (err) {
-      console.warn(`[Config] Failed to import ${configPath}:`, err);
+      const msg = (err as Error).message ?? '';
+      // Only log briefly — the .squad/ fallback will handle it
+      if (msg.includes('ERR_PACKAGE_PATH_NOT_EXPORTED') || msg.includes('MODULE_NOT_FOUND')) {
+        console.log(`[Config] squad.config.ts found but dependencies not installed — using .squad/ files`);
+      } else {
+        console.warn(`[Config] Failed to import ${configPath}: ${msg}`);
+      }
     }
   }
 
