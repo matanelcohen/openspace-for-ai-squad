@@ -67,12 +67,17 @@ console.log(`   http://localhost:${port}${isDev ? ' (dev mode)' : ''}`);
 
 // Production mode needs a built Next.js app
 if (!isDev && !apiOnly) {
-  const nextDir = join(ROOT, 'apps', 'web', '.next');
-  if (!existsSync(nextDir)) {
+  const nextBuildDir = join(ROOT, 'apps', 'web', '.next');
+  const buildIdFile = join(nextBuildDir, 'BUILD_ID');
+  if (!existsSync(buildIdFile)) {
     console.log('   📦 Building Next.js for production (first run)...');
     const { execSync } = await import('node:child_process');
     try {
-      execSync('npx next build', { cwd: join(ROOT, 'apps', 'web'), stdio: 'inherit', env });
+      execSync('npx next build', {
+        cwd: join(ROOT, 'apps', 'web'),
+        stdio: 'inherit',
+        env: { ...env, NODE_ENV: 'production' },
+      });
     } catch {
       console.warn('   ⚠️  Build failed — falling back to dev mode');
       env.NODE_ENV = 'development';
