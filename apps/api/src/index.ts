@@ -16,9 +16,10 @@ async function start() {
   if (SERVE_UI) {
     try {
       const webDir = resolve(import.meta.dirname ?? __dirname, '../../web');
-      await app.register(import('@fastify/nextjs'), { dir: webDir });
+      const isDev = process.env.NODE_ENV === 'development' || process.env.OPENSPACE_DEV === 'true';
+      await app.register(import('@fastify/nextjs'), { dir: webDir, dev: isDev });
       app.next('/*');
-      app.log.info(`[UI] Next.js serving from ${webDir}`);
+      app.log.info(`[UI] Next.js serving from ${webDir} (${isDev ? 'dev' : 'production'})`);
     } catch (err) {
       app.log.warn(`[UI] Next.js not available — API-only mode: ${(err as Error).message}`);
     }
