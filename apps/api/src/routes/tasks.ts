@@ -7,6 +7,7 @@
  * PUT    /api/tasks/:id          — Full update
  * PATCH  /api/tasks/:id/status   — Status change only
  * PATCH  /api/tasks/:id/priority — Reorder (update sortIndex)
+ * POST   /api/tasks/:id/enqueue  — Assign to agent and enqueue for execution
  * DELETE /api/tasks/:id          — Delete task
  */
 
@@ -174,7 +175,11 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
         const task = await updateTask(tasksDir(), request.params.id, { status });
 
         // If moved to backlog or in-progress and has an assignee, enqueue for agent work
-        if ((status === 'backlog' || status === 'in-progress') && task.assignee && app.agentWorker) {
+        if (
+          (status === 'backlog' || status === 'in-progress') &&
+          task.assignee &&
+          app.agentWorker
+        ) {
           app.agentWorker.enqueue(task);
         }
 
@@ -238,6 +243,32 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
     }
   });
+
+  // POST /api/tasks/:id/enqueue — assign to agent and enqueue for execution
+  app.post<{ Params: { id: string }; Body: { agentId: string } }>(
+    '/tasks/:id/enqueue',
+    async (request, reply) => {
+      const { agentId } = request.body ?? {};
+      if (!agentId || typeof agentId !== 'string') {
+        return reply.status(400).send({ error: 'Field "agentId" is required' });
+      }
+
+      try {
+        const task = await updateTask(tasksDir(), request.params.id, {
+          assignee: agentId,
+          status: 'in-progress' as TaskStatus,
+        });
+
+        if (app.agentWorker) {
+          app.agentWorker.enqueue(task);
+        }
+
+        return reply.send({ success: true, taskId: task.id, agentId });
+      } catch {
+        return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
+      }
+    },
+  );
 
   // DELETE /api/tasks/:id
   app.delete<{ Params: { id: string } }>('/tasks/:id', async (request, reply) => {
