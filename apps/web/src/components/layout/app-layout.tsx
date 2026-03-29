@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SquadInitWizard } from '@/components/workspace/squad-init-wizard';
-import { useActiveWorkspace, useWorkspaces, useWorkspaceStatus } from '@/hooks/use-workspaces';
+import { useActivateWorkspace, useActiveWorkspace, useWorkspaces, useWorkspaceStatus } from '@/hooks/use-workspaces';
 
 import { AddWorkspaceDialog } from './add-workspace-dialog';
 import { Sidebar } from './sidebar';
@@ -56,6 +56,11 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     );
   }
 
+  const activateWorkspace = useActivateWorkspace();
+
+  // Other workspaces the user can switch to
+  const otherWorkspaces = workspaces?.filter((ws: { id: string }) => ws.id !== workspace?.id) ?? [];
+
   // When squad is not initialized, show full-screen welcome
   if (squadMissing) {
     return (
@@ -81,6 +86,29 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
               ✨ Initialize Squad
             </button>
           </div>
+
+          {otherWorkspaces.length > 0 && (
+            <div className="rounded-lg border bg-card p-4 space-y-3">
+              <p className="text-sm font-medium">Or switch to another workspace:</p>
+              <div className="space-y-1.5">
+                {otherWorkspaces.map((ws) => (
+                  <button
+                    key={ws.id}
+                    onClick={() => {
+                      activateWorkspace.mutate(ws.id, {
+                        onSuccess: () => window.location.reload(),
+                      });
+                    }}
+                    disabled={activateWorkspace.isPending}
+                    className="flex w-full items-center gap-2.5 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-muted/50 text-left"
+                  >
+                    <span className="text-lg">{ws.icon ?? '🚀'}</span>
+                    <span className="font-medium">{ws.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <p className="text-xs text-muted-foreground">
             Or run <code className="bg-muted px-1.5 py-0.5 rounded text-xs">squad init</code> from the terminal.
