@@ -25,6 +25,7 @@ export interface CreateTaskInput {
   priority?: TaskPriority;
   assignee?: string | null;
   labels?: string[];
+  parent?: string | null;
 }
 
 export type UpdateTaskInput = Partial<Omit<Task, 'id' | 'createdAt'>>;
@@ -34,7 +35,7 @@ export type UpdateTaskInput = Partial<Omit<Task, 'id' | 'createdAt'>>;
 // ---------------------------------------------------------------------------
 
 function taskToFrontmatter(task: Task): Record<string, unknown> {
-  return {
+  const fm: Record<string, unknown> = {
     id: task.id,
     title: task.title,
     status: task.status,
@@ -45,6 +46,10 @@ function taskToFrontmatter(task: Task): Record<string, unknown> {
     updated: task.updatedAt,
     sortIndex: task.sortIndex,
   };
+  if (task.parent) {
+    fm.parent = task.parent;
+  }
+  return fm;
 }
 
 function taskToFileContent(task: Task): string {
@@ -93,6 +98,7 @@ export async function createTask(tasksDir: string, input: CreateTaskInput): Prom
     createdAt: now,
     updatedAt: now,
     sortIndex: maxSortIndex + 1,
+    parent: input.parent ?? null,
   };
 
   const filePath = taskFilePath(tasksDir, task.id);

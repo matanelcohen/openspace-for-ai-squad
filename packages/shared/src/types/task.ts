@@ -9,7 +9,8 @@ export type TaskStatus =
   | 'in-progress'
   | 'in-review'
   | 'done'
-  | 'blocked';
+  | 'blocked'
+  | 'delegated';
 
 /** Priority levels (P0 = highest urgency). */
 export type TaskPriority = 'P0' | 'P1' | 'P2' | 'P3';
@@ -41,4 +42,6 @@ export interface Task {
   updatedAt: string;
   /** Numeric index for drag-and-drop ordering within a priority level. */
   sortIndex: number;
+  /** Parent task ID when this is a delegated subtask. */
+  parent?: string | null;
 }

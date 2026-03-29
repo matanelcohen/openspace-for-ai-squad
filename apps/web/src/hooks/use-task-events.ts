@@ -27,14 +27,15 @@ export function useTaskEvents(taskId: string) {
       if (status && !payload.progressMessage) {
         if (status === 'in-progress') {
           setIsWorking(true);
-        } else if (status === 'done' || status === 'blocked') {
+        } else if (status === 'done' || status === 'blocked' || status === 'delegated') {
           setIsWorking(false);
-          const icon = status === 'done' ? '✅' : '🛑';
+          const icon = status === 'done' ? '✅' : status === 'delegated' ? '🔀' : '🛑';
+          const label = status === 'done' ? 'completed' : status === 'delegated' ? 'delegated to subtasks' : 'blocked';
           setEvents((prev) => [
             ...prev,
             {
               type: status,
-              message: `${icon} Task ${status === 'done' ? 'completed' : 'blocked'}`,
+              message: `${icon} Task ${label}`,
               timestamp: envelope.timestamp,
             },
           ]);

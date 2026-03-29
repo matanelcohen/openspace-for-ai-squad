@@ -84,6 +84,23 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
     }
   });
 
+  // GET /api/tasks/:id/subtasks — list subtasks of a parent task
+  app.get<{ Params: { id: string } }>('/tasks/:id/subtasks', async (request, reply) => {
+    const parentId = request.params.id;
+    try {
+      // Verify parent task exists
+      await getTask(tasksDir(), parentId);
+    } catch {
+      return reply.status(404).send({ error: `Task not found: ${parentId}` });
+    }
+
+    const allTasks = await app.squadParser.getTasks();
+    const subtasks = allTasks.filter(
+      (t) => t.parent === parentId || t.labels.includes(`parent:${parentId}`),
+    );
+    return reply.send(subtasks);
+  });
+
   // POST /api/tasks — create
   app.post<{ Body: CreateTaskInput }>('/tasks', async (request, reply) => {
     const body = request.body;

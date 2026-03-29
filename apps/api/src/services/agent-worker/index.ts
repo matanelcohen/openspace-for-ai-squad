@@ -344,8 +344,10 @@ export class AgentWorkerService {
       });
 
       // ── Lead delegation: break down task and assign to team ──
-      const isLead = agent.role.toLowerCase().includes('lead');
-      if (isLead) {
+      const isLead = agent.role.toLowerCase().includes('lead') ||
+        agent.role.toLowerCase().includes('architect');
+      const isComplex = (task.description?.length ?? 0) > 200 || task.priority === 'P0';
+      if (isLead && isComplex) {
         await this.handleLeadDelegation(agent, task, taskId, tier);
         return;
       }
@@ -639,9 +641,10 @@ export class AgentWorkerService {
   // ── Lead Delegation ──────────────────────────────────────────────
 
   /**
-   * When a lead agent gets a task, they break it down into sub-tasks
+   * When a lead agent gets a complex task, they break it down into sub-tasks
    * and assign them to the right team members instead of doing the work themselves.
    * The tier controls how many agents get delegated to.
+   * After all subtasks complete, the parent task is summarized and marked done.
    */
   private async handleLeadDelegation(
     agent: AgentProfile,
@@ -668,10 +671,10 @@ export class AgentWorkerService {
           `Your job is to break down tasks and delegate to the right team members.\n\n` +
           `Response tier: ${tier} (${tierDef.description}). Max agents: ${tierDef.maxAgents}.\n\n` +
           `Available team members:\n${agentList}\n\n` +
-          `Respond ONLY with valid JSON — an array of sub-tasks:\n` +
+          `Respond ONLY with valid JSON — an array of 2-4 sub-tasks:\n` +
           `[{"title": "...", "description": "...", "assignee": "agent_id"}]\n\n` +
           `Rules:\n` +
-          `- Break the task into ${tier === 'full' ? `up to ${maxSubTasks}` : `1-${maxSubTasks}`} focused sub-tasks\n` +
+          `- Break the task into 2-${Math.min(4, maxSubTasks)} focused sub-tasks\n` +
           `- Assign frontend work to the Frontend Dev\n` +
           `- Assign backend/API work to the Backend Dev\n` +
           `- Assign testing to the Tester\n` +
@@ -710,6 +713,7 @@ export class AgentWorkerService {
 
       // Create sub-tasks and enqueue them
       const createdSubTasks: string[] = [];
+      const subtaskIds: string[] = [];
       for (const sub of subTasks) {
         const validAssignee = otherAgents.find((a) => a.id === sub.assignee);
         if (!validAssignee) continue;
@@ -721,26 +725,54 @@ export class AgentWorkerService {
           assignee: sub.assignee,
           status: 'backlog',
           labels: [`parent:${taskId}`],
+          parent: taskId,
         });
 
         this.enqueue(subTask);
         createdSubTasks.push(`- **${sub.title}** → ${validAssignee.name} (${validAssignee.role})`);
-        this.broadcastTaskUpdate(subTask.id, 'backlog');
+        subtaskIds.push(subTask.id);
+
+        // Broadcast subtask created event
+        this.config.wsManager?.broadcast({
+          type: 'task:subtask_created',
+          payload: {
+            parentTaskId: taskId,
+            subtaskId: subTask.id,
+            title: subTask.title,
+            assignee: sub.assignee,
+            assigneeName: validAssignee.name,
+          },
+          timestamp: new Date().toISOString(),
+        });
 
         console.log(
           `[AgentWorker] ${agent.name} delegated "${sub.title}" to ${validAssignee.name}`,
         );
       }
 
-      // Mark parent task as done with delegation summary
+      // Mark parent task as "delegated" with delegation summary
       const summary = createdSubTasks.join('\n');
       await updateTask(this.config.tasksDir, taskId, {
-        status: 'done',
+        status: 'delegated',
         description:
           task.description +
-          `\n\n---\n**[${now()}]** 📋 ${agent.name} broke this task into ${createdSubTasks.length} sub-tasks:\n\n${summary}\n\n**[${now()}]** ✅ Delegation complete.`,
+          `\n\n---\n**[${now()}]** 📋 ${agent.name} broke this task into ${createdSubTasks.length} sub-tasks:\n\n${summary}\n\n**[${now()}]** 🔀 Task delegated — waiting for subtask completion.`,
       });
-      this.broadcastTaskUpdate(taskId, 'done');
+
+      // Broadcast delegation event
+      this.config.wsManager?.broadcast({
+        type: 'task:delegated',
+        payload: {
+          taskId,
+          title: task.title,
+          agentId: agent.id,
+          agentName: agent.name,
+          subtaskCount: createdSubTasks.length,
+          subtaskIds,
+        },
+        timestamp: new Date().toISOString(),
+      });
+      this.broadcastTaskUpdate(taskId, 'delegated');
       this.emitActivity(
         agent.id,
         'completed',
@@ -750,6 +782,9 @@ export class AgentWorkerService {
       console.log(
         `[AgentWorker] ${agent.name} delegated ${createdSubTasks.length} sub-tasks for: ${task.title}`,
       );
+
+      // Start monitoring subtask completion in the background
+      this.monitorSubtaskCompletion(agent, taskId, subtaskIds);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[AgentWorker] ${agent.name} delegation failed:`, message);
@@ -769,6 +804,78 @@ export class AgentWorkerService {
       }
       setTimeout(() => this.processNext(agent.id), 3000);
     }
+  }
+
+  /**
+   * Periodically check whether all subtasks for a delegated parent task are done.
+   * When all are complete, summarize results and mark the parent as done.
+   */
+  private monitorSubtaskCompletion(
+    agent: AgentProfile,
+    parentTaskId: string,
+    subtaskIds: string[],
+  ): void {
+    const checkInterval = setInterval(async () => {
+      try {
+        const subtasks = await Promise.all(
+          subtaskIds.map((id) => getTask(this.config.tasksDir, id).catch(() => null)),
+        );
+        const resolved = subtasks.filter((t): t is Task => t !== null);
+        const allDone = resolved.length === subtaskIds.length &&
+          resolved.every((t) => t.status === 'done');
+        const anyBlocked = resolved.some((t) => t.status === 'blocked');
+
+        if (allDone) {
+          clearInterval(checkInterval);
+          const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+          const completionSummary = resolved
+            .map((t) => `- **${t.title}** (${t.assignee ?? 'unassigned'}): ✅ Done`)
+            .join('\n');
+
+          const parentTask = await getTask(this.config.tasksDir, parentTaskId).catch(() => null);
+          if (!parentTask) return;
+
+          await updateTask(this.config.tasksDir, parentTaskId, {
+            status: 'done',
+            description:
+              parentTask.description +
+              `\n\n---\n**[${now}]** ✅ All ${resolved.length} subtasks completed.\n\n${completionSummary}\n\n**[${now}]** ✅ ${agent.name} marked parent task as done.`,
+          });
+          this.broadcastTaskUpdate(parentTaskId, 'done');
+          this.emitActivity(
+            agent.id,
+            'completed',
+            `All subtasks done for: ${parentTask.title}`,
+          );
+
+          // Broadcast subtask completed events
+          for (const st of resolved) {
+            this.config.wsManager?.broadcast({
+              type: 'task:subtask_completed',
+              payload: {
+                parentTaskId,
+                subtaskId: st.id,
+                title: st.title,
+                assignee: st.assignee,
+              },
+              timestamp: new Date().toISOString(),
+            });
+          }
+        } else if (anyBlocked) {
+          // If any subtask is blocked, keep monitoring — don't stop
+          // (the user may retry the blocked subtask)
+          const blockedTasks = resolved.filter((t) => t.status === 'blocked');
+          console.log(
+            `[AgentWorker] Parent ${parentTaskId}: ${blockedTasks.length} subtask(s) blocked, still monitoring`,
+          );
+        }
+      } catch (err) {
+        console.error(`[AgentWorker] Error monitoring subtasks for ${parentTaskId}:`, err);
+      }
+    }, 10_000); // Check every 10 seconds
+
+    // Safety: stop monitoring after 30 minutes
+    setTimeout(() => clearInterval(checkInterval), 30 * 60 * 1000);
   }
 
   // ── Broadcasting ───────────────────────────────────────────────

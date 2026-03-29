@@ -19,6 +19,15 @@ export function useTask(id: string) {
   });
 }
 
+export function useSubtasks(parentId: string) {
+  return useQuery<Task[]>({
+    queryKey: ['tasks', parentId, 'subtasks'],
+    queryFn: () => api.get<Task[]>(`/api/tasks/${parentId}/subtasks`),
+    enabled: !!parentId,
+    refetchInterval: 15_000, // Poll every 15s for subtask progress
+  });
+}
+
 export function useUpdateTaskStatus() {
   const queryClient = useQueryClient();
 

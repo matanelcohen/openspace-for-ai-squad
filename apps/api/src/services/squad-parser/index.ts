@@ -134,6 +134,7 @@ export class SquadParser {
       'in-review': 0,
       done: 0,
       blocked: 0,
+      delegated: 0,
     };
     for (const task of tasks) {
       byStatus[task.status]++;

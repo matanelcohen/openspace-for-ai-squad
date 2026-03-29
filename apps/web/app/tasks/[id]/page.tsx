@@ -27,13 +27,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAgents } from '@/hooks/use-agents';
 import { useCreateBranch, useCreatePR } from '@/hooks/use-github';
 import { useTaskEvents } from '@/hooks/use-task-events';
-import {
-  useDeleteTask,
-  useEnqueueTask,
-  useTask,
-  useUpdateTask,
-  useUpdateTaskStatus,
-} from '@/hooks/use-tasks';
+import { useDeleteTask, useEnqueueTask, useSubtasks, useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
 import { selectTier } from '@/lib/tiers';
 
 export default function TaskDetailPage() {
@@ -51,6 +45,7 @@ export default function TaskDetailPage() {
   const { events, isWorking, clearEvents } = useTaskEvents(id);
   const createBranch = useCreateBranch();
   const createPR = useCreatePR();
+  const { data: subtasks } = useSubtasks(id);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll progress log
@@ -426,6 +421,81 @@ export default function TaskDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Subtasks Section */}
+      {subtasks && subtasks.length > 0 && (
+        <Card data-testid="subtasks-section">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Subtasks</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {/* Progress bar */}
+            {(() => {
+              const doneCount = subtasks.filter((s) => s.status === 'done').length;
+              const total = subtasks.length;
+              const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+              return (
+                <div className="space-y-1" data-testid="subtask-progress">
+                  <div className="flex justify-between text-xs text-muted-foreground">
+                    <span>{doneCount} of {total} subtasks complete</span>
+                    <span>{pct}%</span>
+                  </div>
+                  <div className="h-2 w-full rounded-full bg-muted">
+                    <div
+                      className="h-2 rounded-full bg-primary transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Subtask list */}
+            <div className="divide-y rounded-md border">
+              {subtasks.map((sub) => (
+                <Link
+                  key={sub.id}
+                  href={`/tasks/${sub.id}`}
+                  className="flex items-center justify-between px-3 py-2 hover:bg-muted/50 transition-colors"
+                  data-testid={`subtask-${sub.id}`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-sm truncate">{sub.title}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {sub.assignee && (
+                      <div className="flex items-center gap-1">
+                        <AgentAvatar agentId={sub.assignee} name={sub.assignee} size="sm" />
+                        <span className="text-xs text-muted-foreground capitalize">{sub.assignee}</span>
+                      </div>
+                    )}
+                    <Badge
+                      variant={
+                        sub.status === 'done'
+                          ? 'default'
+                          : sub.status === 'blocked'
+                            ? 'destructive'
+                            : sub.status === 'in-progress'
+                              ? 'default'
+                              : 'secondary'
+                      }
+                      className={
+                        sub.status === 'done'
+                          ? 'bg-green-600 text-white'
+                          : sub.status === 'in-progress'
+                            ? 'bg-blue-600 text-white'
+                            : ''
+                      }
+                    >
+                      {sub.status}
+                    </Badge>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Description */}
       <Card>

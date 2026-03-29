@@ -30,8 +30,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe('TASK_STATUSES', () => {
-  it('contains exactly six statuses in kanban order', () => {
-    expect(TASK_STATUSES).toEqual(['pending-approval', 'backlog', 'in-progress', 'in-review', 'done', 'blocked']);
+  it('contains exactly seven statuses in kanban order', () => {
+    expect(TASK_STATUSES).toEqual(['pending-approval', 'backlog', 'in-progress', 'in-review', 'done', 'blocked', 'delegated']);
   });
 
   it('has a label for every status', () => {
@@ -252,6 +252,7 @@ describe('Type structures (compile-time + runtime shape checks)', () => {
           'in-review': 0,
           done: 0,
           blocked: 0,
+          delegated: 0,
         },
         total: 0,
       },

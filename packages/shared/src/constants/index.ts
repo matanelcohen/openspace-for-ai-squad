@@ -34,6 +34,7 @@ export const TASK_STATUSES = [
   'in-review',
   'done',
   'blocked',
+  'delegated',
 ] as const satisfies readonly TaskStatus[];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
@@ -43,6 +44,7 @@ export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   'in-review': 'In Review',
   done: 'Done',
   blocked: 'Blocked',
+  delegated: 'Delegated',
 };
 
 // ---------------------------------------------------------------------------
