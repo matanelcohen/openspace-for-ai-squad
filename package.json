@@ -1,5 +1,5 @@
 {
-  "name": "openspace-ai",
+  "name": "@matanelcohen/openspace-ai",
   "version": "0.1.0",
   "description": "Visual workspace manager for Squad SDK — create, manage, and collaborate with AI agent teams",
   "keywords": [
@@ -20,6 +20,9 @@
   },
   "license": "MIT",
   "author": "Matan Cohen",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "openspace-mcp": "./packages/mcp-server/dist/cli.js"
   },
