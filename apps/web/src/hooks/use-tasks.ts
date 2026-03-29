@@ -202,3 +202,33 @@ export function useDeleteTask() {
     },
   });
 }
+
+export function useEnqueueTask() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ taskId, agentId }: { taskId: string; agentId: string }) =>
+      api.post<{ success: boolean; taskId: string; agentId: string }>(
+        `/api/tasks/${taskId}/enqueue`,
+        { agentId },
+      ),
+    onMutate: async ({ taskId, agentId }) => {
+      await queryClient.cancelQueries({ queryKey: ['tasks'] });
+      const previous = queryClient.getQueryData<Task[]>(['tasks']);
+      queryClient.setQueryData<Task[]>(['tasks'], (old) =>
+        old?.map((t) =>
+          t.id === taskId ? { ...t, assignee: agentId, status: 'in-progress' as TaskStatus } : t,
+        ),
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['tasks'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+  });
+}
