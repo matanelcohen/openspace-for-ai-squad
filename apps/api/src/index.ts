@@ -12,16 +12,15 @@ const SERVE_UI = process.env.SERVE_UI !== 'false';
 async function start() {
   const app = await buildApp();
 
-  // Serve Next.js UI on the same port (unless SERVE_UI=false or pnpm dev mode)
-  if (SERVE_UI && !process.env.TURBO_HASH) {
+  // Serve Next.js UI on the same port (only in production via openspace CLI)
+  if (SERVE_UI && !process.env.TURBO_HASH && process.env.NODE_ENV !== 'development') {
     try {
       const webDir = resolve(import.meta.dirname ?? __dirname, '../../web');
-      const isDev = process.env.NODE_ENV === 'development' || process.env.OPENSPACE_DEV === 'true';
-      await app.register(import('@fastify/nextjs'), { dir: webDir, dev: isDev });
+      await app.register(import('@fastify/nextjs'), { dir: webDir, dev: false });
       app.next('/*');
-      app.log.info(`[UI] Next.js serving from ${webDir} (${isDev ? 'dev' : 'production'})`);
-    } catch (err) {
-      app.log.warn(`[UI] Next.js not available — API-only mode: ${(err as Error).message}`);
+      app.log.info(`[UI] Next.js serving from ${webDir}`);
+    } catch {
+      // Next.js not available — API-only mode (normal for pnpm dev)
     }
   }
 
