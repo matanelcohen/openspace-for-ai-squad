@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>openspace.ai — Human-AI Squad Management</title>
+  <meta name="description" content="Build, manage, and collaborate with AI agent teams. Powered by Squad SDK and GitHub Copilot.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #09090b;
+      --bg-card: #18181b;
+      --bg-card-hover: #27272a;
+      --text: #fafafa;
+      --text-muted: #a1a1aa;
+      --text-dim: #71717a;
+      --accent: #6366f1;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --green: #22c55e;
+      --border: #27272a;
+      --radius: 12px;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Animated gradient background */
+    .hero-bg {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background:
+        radial-gradient(ellipse at 20% 50%, rgba(99, 102, 241, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 20%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 80%, rgba(59, 130, 246, 0.05) 0%, transparent 50%);
+      z-index: -1;
+    }
+
+    /* Nav */
+    nav {
+      position: fixed; top: 0; left: 0; right: 0;
+      padding: 1rem 2rem;
+      display: flex; align-items: center; justify-content: space-between;
+      backdrop-filter: blur(12px);
+      background: rgba(9, 9, 11, 0.8);
+      border-bottom: 1px solid var(--border);
+      z-index: 100;
+    }
+    .nav-brand { font-size: 1.25rem; font-weight: 700; display: flex; align-items: center; gap: 0.5rem; text-decoration: none; color: var(--text); }
+    .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; font-size: 0.875rem; transition: color 0.2s; }
+    .nav-links a:hover { color: var(--text); }
+    .btn-nav { background: var(--accent); color: white; padding: 0.5rem 1.25rem; border-radius: 8px; font-size: 0.875rem; font-weight: 500; text-decoration: none; transition: all 0.2s; }
+    .btn-nav:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.375rem 1rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      font-size: 0.8rem; color: var(--text-muted);
+      margin-bottom: 2rem;
+    }
+    .hero-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4.5rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+      background: linear-gradient(135deg, #fff 0%, #a1a1aa 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero h1 .accent { background: linear-gradient(135deg, #6366f1, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .hero p.subtitle {
+      font-size: 1.25rem; color: var(--text-muted);
+      max-width: 600px; margin: 0 auto 2.5rem;
+    }
+    .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; }
+    .btn-primary {
+      background: var(--accent); color: white;
+      padding: 0.875rem 2rem; border-radius: 10px;
+      font-size: 1rem; font-weight: 600;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;
+      transition: all 0.2s; border: none; cursor: pointer;
+    }
+    .btn-primary:hover { filter: brightness(1.1); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(99, 102, 241, 0.3); }
+    .btn-secondary {
+      background: var(--bg-card); color: var(--text);
+      padding: 0.875rem 2rem; border-radius: 10px;
+      font-size: 1rem; font-weight: 500;
+      text-decoration: none; display: inline-flex; align-items: center; gap: 0.5rem;
+      border: 1px solid var(--border); transition: all 0.2s;
+    }
+    .btn-secondary:hover { background: var(--bg-card-hover); transform: translateY(-2px); }
+
+    /* Terminal preview */
+    .terminal {
+      margin: 4rem auto 0;
+      max-width: 700px; width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.4);
+    }
+    .terminal-bar { padding: 0.75rem 1rem; display: flex; gap: 6px; background: rgba(255,255,255,0.03); }
+    .terminal-dot { width: 12px; height: 12px; border-radius: 50%; }
+    .terminal-dot.r { background: #ef4444; }
+    .terminal-dot.y { background: #eab308; }
+    .terminal-dot.g { background: #22c55e; }
+    .terminal-code { padding: 1.5rem; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.875rem; line-height: 1.8; }
+    .terminal-code .prompt { color: var(--green); }
+    .terminal-code .cmd { color: var(--text); }
+    .terminal-code .output { color: var(--text-dim); }
+    .terminal-code .highlight { color: var(--accent); }
+
+    /* Sections */
+    section { padding: 6rem 2rem; max-width: 1200px; margin: 0 auto; }
+    .section-header { text-align: center; margin-bottom: 4rem; }
+    .section-header h2 { font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; letter-spacing: -0.02em; }
+    .section-header p { color: var(--text-muted); font-size: 1.125rem; max-width: 600px; margin: 0 auto; }
+
+    /* Feature grid */
+    .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; }
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 2rem;
+      transition: all 0.3s;
+    }
+    .feature-card:hover { border-color: rgba(99, 102, 241, 0.3); background: var(--bg-card-hover); transform: translateY(-4px); box-shadow: 0 12px 40px rgba(0,0,0,0.2); }
+    .feature-icon { font-size: 2rem; margin-bottom: 1rem; }
+    .feature-card h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .feature-card p { color: var(--text-muted); font-size: 0.9rem; }
+
+    /* Architecture */
+    .arch-flow {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1rem; flex-wrap: wrap;
+      padding: 3rem; background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius);
+    }
+    .arch-node {
+      padding: 1rem 1.5rem; border-radius: 10px;
+      text-align: center; font-size: 0.9rem; font-weight: 500;
+      min-width: 140px;
+    }
+    .arch-node.user { background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.3); color: #4ade80; }
+    .arch-node.app { background: var(--accent-glow); border: 1px solid rgba(99, 102, 241, 0.3); color: #818cf8; }
+    .arch-node.sdk { background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3); color: #a78bfa; }
+    .arch-node.copilot { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); color: #60a5fa; }
+    .arch-arrow { color: var(--text-dim); font-size: 1.5rem; }
+    .arch-node small { display: block; font-size: 0.7rem; color: var(--text-dim); font-weight: 400; margin-top: 0.25rem; }
+
+    /* Agent cards */
+    .agents-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1rem; }
+    .agent-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem;
+      display: flex; align-items: flex-start; gap: 1rem;
+    }
+    .agent-avatar { font-size: 2.5rem; line-height: 1; }
+    .agent-name { font-weight: 600; font-size: 1rem; }
+    .agent-role { color: var(--text-muted); font-size: 0.8rem; }
+    .agent-personality { color: var(--text-dim); font-size: 0.8rem; font-style: italic; margin-top: 0.25rem; }
+
+    /* Stats */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.5rem; margin: 4rem 0; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 2.5rem; font-weight: 800; background: linear-gradient(135deg, var(--accent), #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .stat-label { color: var(--text-muted); font-size: 0.875rem; margin-top: 0.25rem; }
+
+    /* CTA */
+    .cta {
+      text-align: center; padding: 6rem 2rem;
+      background: linear-gradient(180deg, transparent, var(--accent-glow));
+    }
+    .cta h2 { font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem; }
+    .cta p { color: var(--text-muted); font-size: 1.125rem; margin-bottom: 2rem; }
+
+    /* Footer */
+    footer {
+      padding: 3rem 2rem; text-align: center;
+      border-top: 1px solid var(--border);
+      color: var(--text-dim); font-size: 0.85rem;
+    }
+    footer a { color: var(--text-muted); text-decoration: none; }
+    footer a:hover { color: var(--text); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .nav-links { display: none; }
+      .arch-flow { flex-direction: column; }
+      .arch-arrow { transform: rotate(90deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="hero-bg"></div>
+
+  <nav>
+    <a href="#" class="nav-brand">🚀 openspace.ai</a>
+    <div class="nav-links">
+      <a href="#features">Features</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#agents">Agents</a>
+      <a href="https://github.com/matanelcohen/openspace-for-ai-squad" class="btn-nav">GitHub →</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-badge">
+      <span class="dot"></span>
+      Built with Squad SDK + GitHub Copilot
+    </div>
+    <h1>Your AI Team,<br><span class="accent">One Dashboard.</span></h1>
+    <p class="subtitle">
+      Build, manage, and collaborate with themed AI agent squads.
+      Each agent has a role, personality, skills, and memory — powered by the Squad SDK.
+    </p>
+    <div class="hero-actions">
+      <a href="https://github.com/matanelcohen/openspace-for-ai-squad" class="btn-primary">
+        ⚡ Get Started
+      </a>
+      <a href="#features" class="btn-secondary">
+        Learn More ↓
+      </a>
+    </div>
+
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="terminal-dot r"></div>
+        <div class="terminal-dot y"></div>
+        <div class="terminal-dot g"></div>
+      </div>
+      <div class="terminal-code">
+        <span class="prompt">$</span> <span class="cmd">pnpm dev</span><br>
+        <span class="output">🚀 API listening on localhost:3001</span><br>
+        <span class="output">🌐 Web ready at localhost:3000</span><br>
+        <span class="output">[AI] Copilot SDK initialized (<span class="highlight">claude-opus-4.6</span>)</span><br>
+        <span class="output">[Skills] Seeded <span class="highlight">60 skills</span> from .squad/templates</span><br>
+        <span class="output">[Knowledge] Loaded <span class="highlight">all-MiniLM-L6-v2</span> (384d)</span><br>
+        <span class="output">[Embedder] 741 chunks indexed with vectors ✓</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="section-header">
+      <h2>Everything You Need</h2>
+      <p>A complete platform for managing AI agent teams with real-time collaboration.</p>
+    </div>
+    <div class="features">
+      <div class="feature-card">
+        <div class="feature-icon">🎭</div>
+        <h3>Themed Agent Teams</h3>
+        <p>Create squads with themed characters — Marvel heroes, Ocean's Eleven, Diablo — or let the LLM generate custom themes. Each agent gets a personality and backstory.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🧠</div>
+        <h3>Agent Memory</h3>
+        <p>Agents learn from past work. Memories are synced from history.md, scored by vector similarity, and injected into context for relevant tasks.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⚡</div>
+        <h3>SDK-Powered Skills</h3>
+        <p>Skills are matched dynamically per task using keyword + role + domain scoring. Override with Always/Never per agent. Tracked in traces.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💬</div>
+        <h3>Real-time Chat</h3>
+        <p>ChatGPT-style chat with agent avatars, typing indicators, and channel-based routing. Messages scoped per workspace.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>AI Traces</h3>
+        <p>Full observability: every LLM call traced with prompt, response, model, tokens, skills used, and duration. OTel-compatible.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔍</div>
+        <h3>Knowledge Base</h3>
+        <p>RAG pipeline indexes docs, tasks, commits, PRs, chat, memories, and charters. Local embeddings with all-MiniLM-L6-v2 for semantic search.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <h3>Rich Charters</h3>
+        <p>Generated from Squad SDK's role catalog with identity, expertise, boundaries, collaboration rules, and model preferences. Full <code>useRole()</code> integration.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔄</div>
+        <h3>Multi-Workspace</h3>
+        <p>Switch between projects instantly. Each workspace has its own team, chat, traces, skills, and knowledge — fully isolated.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">⏰</div>
+        <h3>Cron & Ceremonies</h3>
+        <p>Schedule standups, retros, and custom ceremonies. Full CRUD with cron expression preview and execution history.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="stats">
+      <div class="stat">
+        <div class="stat-value">7</div>
+        <div class="stat-label">Knowledge Connectors</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">29</div>
+        <div class="stat-label">SDK Template Skills</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">20</div>
+        <div class="stat-label">Base Agent Roles</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value">384d</div>
+        <div class="stat-label">Local Embeddings</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="architecture">
+    <div class="section-header">
+      <h2>How It Works</h2>
+      <p>Built on the Squad SDK with GitHub Copilot as the AI backbone.</p>
+    </div>
+    <div class="arch-flow">
+      <div class="arch-node user">👤 You<small>Dashboard UI</small></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node app">🚀 openspace.ai<small>Next.js + Fastify</small></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node sdk">📦 Squad SDK<small>initSquad · useRole · CastingEngine</small></div>
+      <div class="arch-arrow">→</div>
+      <div class="arch-node copilot">🤖 Copilot SDK<small>claude-opus-4.6</small></div>
+    </div>
+  </section>
+
+  <section id="agents">
+    <div class="section-header">
+      <h2>Meet the Squad</h2>
+      <p>Pick a theme — the SDK generates character-accurate agents with full charters.</p>
+    </div>
+    <div class="agents-grid">
+      <div class="agent-card">
+        <div class="agent-avatar">⚔️</div>
+        <div>
+          <div class="agent-name">Tyrael</div>
+          <div class="agent-role">Lead / Architect</div>
+          <div class="agent-personality">"Righteous and unwavering, architects systems with divine precision."</div>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-avatar">🔮</div>
+        <div>
+          <div class="agent-name">Lilith</div>
+          <div class="agent-role">Frontend Developer</div>
+          <div class="agent-personality">"Visionary crafter of interfaces so beautiful they ensnare users."</div>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-avatar">🛡️</div>
+        <div>
+          <div class="agent-name">Imperius</div>
+          <div class="agent-role">Test Engineer</div>
+          <div class="agent-personality">"Fierce and uncompromising — no bug survives his judgment."</div>
+        </div>
+      </div>
+      <div class="agent-card">
+        <div class="agent-avatar">📜</div>
+        <div>
+          <div class="agent-name">Deckard Cain</div>
+          <div class="agent-role">Code Reviewer</div>
+          <div class="agent-personality">"Stay a while and listen... to my code review."</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="cta">
+    <h2>Ready to build your squad?</h2>
+    <p>Clone the repo, run <code>pnpm dev</code>, and create your first AI team in minutes.</p>
+    <div class="hero-actions">
+      <a href="https://github.com/matanelcohen/openspace-for-ai-squad" class="btn-primary">
+        View on GitHub →
+      </a>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      Built by <a href="https://github.com/matanelcohen">Matan Cohen</a> ·
+      Powered by <a href="https://github.com/bradygaster/squad">Squad SDK</a> &
+      <a href="https://github.com/features/copilot">GitHub Copilot</a>
+    </p>
+  </footer>
+</body>
+</html>
