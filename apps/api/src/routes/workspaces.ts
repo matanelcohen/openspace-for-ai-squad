@@ -298,11 +298,6 @@ ${agentImports}
         const memberRows = agentDefs
           .map((a) => `| ${agents.find((x) => x.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-') === a.name)?.name ?? a.name} | ${a.role} | \`.squad/agents/${a.name}/charter.md\` | ✅ Active |`)
           .join('\n');
-        writeFileSync(
-          join(result.squadDir, 'team.md'),
-          `# ${teamName}\n${descLine}\n## Members\n\n| Name | Role | Charter | Status |\n|------|------|---------|--------|\n${memberRows}\n\n## Project Context\n\n- **Project:** ${teamName}\n- **Stack:** ${stack ?? 'N/A'}\n- **Created:** ${new Date().toISOString().slice(0, 10)}\n`,
-          'utf-8',
-        );
 
         // Write rich charters from useRole agent definitions
         for (const agentDef of agentDefs) {
@@ -323,6 +318,49 @@ ${agentImports}
 
           writeFileSync(join(agentDir, 'charter.md'), lines.join('\n'), 'utf-8');
         }
+
+        // Add system agents: Scribe (session logger) and Ralph (work monitor)
+        const systemAgents = [
+          {
+            slug: 'scribe',
+            name: 'Scribe',
+            role: 'Session Logger',
+            status: '📋 Silent',
+            charter: `# Scribe — Session Logger\n\n> Merges decision inbox entries into decisions.md and maintains session logs.\n\n## Role\n\nSilent observer that records team activity. Does not generate domain artifacts.\n\n## Responsibilities\n\n- Merge .squad/decisions/inbox/*.md into .squad/decisions.md\n- Maintain session logs in .squad/sessions/\n- Update agent history.md files with learnings\n- Never modify code or make architectural decisions\n`,
+          },
+          {
+            slug: 'ralph',
+            name: 'Ralph',
+            role: 'Work Monitor',
+            status: '🔄 Monitor',
+            charter: `# Ralph — Work Monitor\n\n> Scans for stale tasks, blocked work, and quality issues.\n\n## Role\n\nBackground monitor that watches for problems. Reports issues but does not fix them.\n\n## Responsibilities\n\n- Detect tasks stuck in-progress for too long\n- Flag blocked tasks that need attention\n- Monitor agent error rates\n- Report quality metrics\n- Never modify code or reassign tasks directly\n`,
+          },
+        ];
+
+        for (const sa of systemAgents) {
+          const agentDir = join(result.squadDir, 'agents', sa.slug);
+          if (!existsSync(agentDir)) mkdirSync(agentDir, { recursive: true });
+          const charterPath = join(agentDir, 'charter.md');
+          if (!existsSync(charterPath)) {
+            writeFileSync(charterPath, sa.charter, 'utf-8');
+          }
+          // Create empty history.md
+          const historyPath = join(agentDir, 'history.md');
+          if (!existsSync(historyPath)) {
+            writeFileSync(historyPath, `# ${sa.name} History\n\n## Learnings\n\n<!-- Append new learnings below -->\n`, 'utf-8');
+          }
+        }
+
+        // Update team.md to include system agents
+        const systemRows = systemAgents
+          .map((sa) => `| ${sa.name} | ${sa.role} | \`.squad/agents/${sa.slug}/charter.md\` | ${sa.status} |`)
+          .join('\n');
+        const fullMemberRows = memberRows + '\n' + systemRows;
+        writeFileSync(
+          join(result.squadDir, 'team.md'),
+          `# ${teamName}\n${descLine}\n## Members\n\n| Name | Role | Charter | Status |\n|------|------|---------|--------|\n${fullMemberRows}\n\n## Project Context\n\n- **Project:** ${teamName}\n- **Stack:** ${stack ?? 'N/A'}\n- **Created:** ${new Date().toISOString().slice(0, 10)}\n`,
+          'utf-8',
+        );
 
         app.log.info('Wrote squad.config.ts, team.md, and agent charters via SDK');
 

@@ -22,6 +22,8 @@ export interface SystemConfig {
   fallbackModel?: string;
   failoverActive?: boolean;
   cliUrl?: string;
+  copilotConnected?: boolean;
+  providerType?: string;
   agentCount?: number;
   taskCount?: number;
   skillCount?: number;

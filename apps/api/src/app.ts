@@ -387,6 +387,7 @@ export async function buildApp(opts: AppOptions = {}) {
 
   // Routes
   app.register(healthRoute);
+  app.register(healthRoute, { prefix: '/api' });
   app.register(a2aRoute);
   app.register(otlpCollectorRoute); // OTLP collector at /v1/traces (no prefix)
   app.register(agentsRoute, { prefix: '/api' });

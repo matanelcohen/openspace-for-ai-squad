@@ -235,12 +235,11 @@ export function SquadInitWizard({
               </div>
             </div>
 
-            <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <DialogFooter>
               <Button
-                variant="outline"
-                className="w-full sm:w-auto"
+                className="w-full"
                 onClick={handleAutoDetect}
-                disabled={analyzeWorkspace.isPending}
+                disabled={analyzeWorkspace.isPending || !canProceedStep1}
               >
                 {analyzeWorkspace.isPending ? (
                   <>
@@ -250,15 +249,9 @@ export function SquadInitWizard({
                 ) : (
                   <>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    ✨ Auto-detect
+                    ✨ Analyze & Build Team
                   </>
                 )}
-              </Button>
-              <Button
-                onClick={() => setStep(1)}
-                disabled={!canProceedStep1}
-              >
-                Next: Team Members
               </Button>
             </DialogFooter>
 

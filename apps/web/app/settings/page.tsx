@@ -111,6 +111,24 @@ function ModelConfigSection() {
         ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-md border px-3 py-2">
+              <p className="text-xs text-muted-foreground">Copilot SDK</p>
+              <div className="flex items-center gap-2">
+                {config?.copilotConnected ? (
+                  <>
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    <span className="font-medium text-green-700 dark:text-green-400">Connected</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="h-4 w-4 text-red-500" />
+                    <span className="font-medium text-red-700 dark:text-red-400">
+                      {config?.providerType === 'mock' ? 'Mock Mode' : 'Disconnected'}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="rounded-md border px-3 py-2">
               <p className="text-xs text-muted-foreground">Primary Model</p>
               <p className="font-medium">{config?.model ?? 'Default'}</p>
             </div>
@@ -127,8 +145,8 @@ function ModelConfigSection() {
               </div>
             </div>
             {config?.cliUrl && (
-              <div className="rounded-md border px-3 py-2">
-                <p className="text-xs text-muted-foreground">CLI URL</p>
+              <div className="rounded-md border px-3 py-2 sm:col-span-2">
+                <p className="text-xs text-muted-foreground">CLI Server</p>
                 <p className="truncate font-mono text-sm">{config.cliUrl}</p>
               </div>
             )}
