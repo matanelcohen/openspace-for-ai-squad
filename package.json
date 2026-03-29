@@ -1,8 +1,25 @@
 {
   "name": "openspace-ai",
-  "version": "0.0.1",
-  "private": true,
-  "description": "Human-AI squad management tool",
+  "version": "0.1.0",
+  "description": "Visual workspace manager for Squad SDK — create, manage, and collaborate with AI agent teams",
+  "keywords": [
+    "ai",
+    "agents",
+    "squad",
+    "squad-sdk",
+    "copilot",
+    "team-management",
+    "llm",
+    "rag",
+    "openspace"
+  ],
+  "homepage": "https://matanelcohen.github.io/openspace-for-ai-squad/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/matanelcohen/openspace-for-ai-squad.git"
+  },
+  "license": "MIT",
+  "author": "Matan Cohen",
   "bin": {
     "openspace-mcp": "./packages/mcp-server/dist/cli.js"
   },
@@ -20,7 +37,8 @@
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean",
     "e2e": "playwright test",
-    "prepare": "husky"
+    "prepare": "husky",
+    "prepublishOnly": "pnpm build"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs}": [
