@@ -21,8 +21,11 @@ const ROOT = resolve(__dirname, '..');
 
 const args = process.argv.slice(2);
 const port = getArg('--port') ?? '3000';
+const copilotPort = getArg('--copilot-port') ?? '3100';
+const copilotModel = getArg('--model') ?? process.env.COPILOT_MODEL ?? 'claude-opus-4.6';
 const apiOnly = args.includes('--api-only');
 const isDev = args.includes('--dev');
+const noCopilot = args.includes('--no-copilot');
 const help = args.includes('--help') || args.includes('-h');
 
 function getArg(flag) {
@@ -35,9 +38,12 @@ if (help) {
 🚀 openspace.ai — AI Squad Management Platform
 
 Usage:
-  openspace              Start on port 3000 (API + UI, production)
+  openspace              Start on port 3000 (API + UI + Copilot server)
   openspace --dev        Start in development mode (with HMR)
   openspace --port 8080  Custom port
+  openspace --model gpt-5.4  Copilot model (default: claude-opus-4.6)
+  openspace --copilot-port 3100  Copilot CLI server port
+  openspace --no-copilot Skip starting Copilot CLI server
   openspace --api-only   Start API without UI
   openspace --help       Show this help
 
@@ -88,6 +94,37 @@ if (!isDev && !apiOnly) {
 
 console.log('');
 
+// Start Copilot CLI server in parallel (unless --no-copilot)
+let copilotProc = null;
+if (!noCopilot) {
+  try {
+    const { execSync: execSyncCheck } = await import('node:child_process');
+    const agencyPath = execSyncCheck('which agency', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    if (agencyPath) {
+      console.log(`🤖 Starting Copilot CLI server on port ${copilotPort} (model: ${copilotModel})`);
+      copilotProc = spawn('agency', ['copilot', '--headless', '--port', copilotPort, '--model', copilotModel], {
+        cwd: process.cwd(),
+        env: process.env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      copilotProc.stdout?.on('data', (d) => {
+        const line = d.toString().trim();
+        if (line) console.log(`[copilot] ${line}`);
+      });
+      copilotProc.stderr?.on('data', (d) => {
+        const line = d.toString().trim();
+        if (line && !line.includes('ExperimentalWarning')) console.log(`[copilot] ${line}`);
+      });
+      copilotProc.on('exit', (code) => {
+        if (code !== 0 && code !== null) console.warn(`[copilot] exited with code ${code}`);
+      });
+    }
+  } catch {
+    console.log('⚠️  agency CLI not found — Copilot server not started');
+    console.log('   Install: npm i -g @anthropic/agency');
+  }
+}
+
 const env = {
   ...process.env,
   PORT: port,
@@ -96,6 +133,8 @@ const env = {
   SERVE_UI: apiOnly ? 'false' : 'true',
   NODE_ENV: isDev ? 'development' : 'production',
   OPENSPACE_DEV: isDev ? 'true' : 'false',
+  COPILOT_CLI_URL: noCopilot ? '' : `localhost:${copilotPort}`,
+  COPILOT_MODEL: copilotModel,
 };
 
 const proc = tsxBin
@@ -105,9 +144,13 @@ const proc = tsxBin
 function shutdown(signal) {
   console.log(`\n${signal}, shutting down...`);
   proc.kill('SIGTERM');
+  if (copilotProc) copilotProc.kill('SIGTERM');
   setTimeout(() => process.exit(0), 2000);
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
-proc.on('exit', (code) => process.exit(code ?? 0));
+proc.on('exit', (code) => {
+  if (copilotProc) copilotProc.kill('SIGTERM');
+  process.exit(code ?? 0);
+});
