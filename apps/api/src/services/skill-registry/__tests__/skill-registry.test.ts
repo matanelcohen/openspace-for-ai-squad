@@ -850,3 +850,5 @@ describe('SkillRegistryImpl', () => {
       expect(registry.get('hc-timestamp')!.lastHealthCheck).toBeGreaterThan(0);
     });
   });
+
+});

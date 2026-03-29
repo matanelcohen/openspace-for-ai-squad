@@ -506,7 +506,7 @@ export function matchTaskToSkills(
   results.sort((a, b) => {
     const confDiff = b.confidence - a.confidence;
     if (Math.abs(confDiff) > 1e-9) return confDiff;
-    return (b.priority ?? 0) - (a.priority ?? 0);
+    return ((b as unknown as Record<string, number>).priority ?? 0) - ((a as unknown as Record<string, number>).priority ?? 0);
   });
 
   return results;

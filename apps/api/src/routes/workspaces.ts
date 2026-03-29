@@ -756,7 +756,7 @@ declare module 'fastify' {
     chatService: ChatService;
     agentRegistry: AgentRegistry;
     db: import('better-sqlite3').Database;
-    squadParser: { setSquadDir?: (dir: string) => void };
+    squadParser: import('../services/squad-parser/index.js').SquadParser;
     voiceServices: VoiceServices;
   }
 }

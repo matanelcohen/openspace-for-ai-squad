@@ -215,11 +215,12 @@ export class CustomToolProvider extends BaseToolProvider {
       }
 
       case 'glob': {
-        const { glob } = await import('node:fs');
-        const { promisify } = await import('node:util');
-        const globAsync = promisify(glob);
+        const { readdir } = await import('node:fs/promises');
         const pattern = config.pattern ?? (params.pattern as string) ?? '*';
-        const files = await globAsync(pattern, { cwd: basePath });
+        // Simple glob: list files matching pattern (basic wildcard support)
+        const allFiles = await readdir(basePath, { recursive: true });
+        const regex = new RegExp('^' + pattern.replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+        const files = allFiles.filter((f) => regex.test(f.toString()));
         return { basePath, pattern, files };
       }
 
