@@ -12,8 +12,8 @@ const SERVE_UI = process.env.SERVE_UI !== 'false';
 async function start() {
   const app = await buildApp();
 
-  // Serve Next.js UI on the same port (unless SERVE_UI=false)
-  if (SERVE_UI) {
+  // Serve Next.js UI on the same port (unless SERVE_UI=false or pnpm dev mode)
+  if (SERVE_UI && !process.env.TURBO_HASH) {
     try {
       const webDir = resolve(import.meta.dirname ?? __dirname, '../../web');
       const isDev = process.env.NODE_ENV === 'development' || process.env.OPENSPACE_DEV === 'true';
