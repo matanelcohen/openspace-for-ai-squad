@@ -12,7 +12,7 @@ import { dirname, join } from 'node:path';
 import type { Task } from '@openspace/shared';
 
 import type { ActivityFeed } from '../activity/index.js';
-import type { AIProvider } from '../ai/copilot-provider.js';
+import type { AIProvider, AgenticCompletionOptions } from '../ai/copilot-provider.js';
 import { getTierDefinition, selectTier } from '../routing/tiers.js';
 import {
   buildSkillsPrompt,
@@ -444,7 +444,92 @@ export class AgentWorkerService {
         }
       } catch { /* best effort */ }
 
-      const result = await this.config.aiProvider.chatCompletion({
+      // ── Build shared event handler ────────────────────────────────
+      const onEvent = (event: { type: string; data?: Record<string, unknown> }) => {
+        const ts = new Date().toISOString().replace('T', ' ').substring(0, 19);
+        let logEntry = '';
+
+        switch (event.type) {
+          case 'intent':
+            logEntry = `🎯 Intent: ${(event.data?.intent as string) ?? 'analyzing'}`;
+            break;
+          case 'thinking':
+            logEntry = `🧠 Thinking: ${((event.data?.content as string) ?? '').substring(0, 200)}`;
+            break;
+          case 'tool_start': {
+            const toolName = (event.data?.name as string) ?? 'unknown';
+            const toolArgs = event.data?.arguments;
+            let argSummary = '';
+            if (typeof toolArgs === 'string') {
+              argSummary = toolArgs.substring(0, 120);
+            } else if (toolArgs && typeof toolArgs === 'object') {
+              const argObj = toolArgs as Record<string, unknown>;
+              if (argObj.command) argSummary = ` — \`${String(argObj.command).substring(0, 100)}\``;
+              else if (argObj.path) argSummary = ` — ${String(argObj.path)}`;
+              else argSummary = ` — ${JSON.stringify(toolArgs).substring(0, 100)}`;
+            }
+            logEntry = `🔧 Using tool: \`${toolName}\`${argSummary}`;
+            break;
+          }
+          case 'tool_result':
+            logEntry = `✅ Tool result: ${((event.data?.output as string) ?? '').substring(0, 150)}`;
+            break;
+          case 'info':
+            logEntry = `ℹ️ ${(event.data?.message as string) ?? ''}`;
+            break;
+        }
+
+        if (logEntry) {
+          progressLog.push(`**[${ts}]** ${logEntry}`);
+          // Broadcast progress in real-time with enriched payload
+          const payload: Record<string, unknown> = {
+            id: taskId,
+            taskId,
+            agentId,
+            progressEvent: event.type,
+            progressMessage: logEntry,
+          };
+
+          // Enrich WebSocket events with structured data
+          if (event.type === 'tool_start' && event.data) {
+            payload.tool_name = event.data.name;
+            payload.tool_args = event.data.arguments;
+            if (event.data.arguments && typeof event.data.arguments === 'object') {
+              const args = event.data.arguments as Record<string, unknown>;
+              if (args.command) payload.command = args.command;
+              if (args.path) payload.file_path = args.path;
+            }
+          }
+          if (event.type === 'tool_result' && event.data) {
+            payload.tool_output = ((event.data.output as string) ?? '').substring(0, 500);
+          }
+
+          this.config.wsManager?.broadcast({
+            type: 'task:updated',
+            payload,
+            timestamp: new Date().toISOString(),
+          });
+        }
+      };
+
+      // ── AI completion — prefer agentic mode when available ──────
+      const systemPrompt =
+        `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
+        `Personality: ${agent.personality}\n\n` +
+        `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
+        `Do the actual work, don't just describe what you would do.\n\n` +
+        (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
+        (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
+        `When done, provide a brief summary of what you did.`;
+
+      const messages = [
+        {
+          role: 'user' as const,
+          content: `Task: ${task.title}\n\nDescription: ${task.description || '(none)'}\n\nPriority: ${task.priority}\n\nPlease complete this task.`,
+        },
+      ];
+
+      const sharedOpts = {
         taskTitle: task.title,
         agentId: agent.id,
         metadata: {
@@ -452,56 +537,25 @@ export class AgentWorkerService {
           skillCount: finalSkills.length,
           memoryCount: memoriesPrompt ? memoriesPrompt.split('\n- ').length - 1 : 0,
         },
-        systemPrompt:
-          `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
-          `Personality: ${agent.personality}\n\n` +
-          `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
-          `Do the actual work, don't just describe what you would do.\n\n` +
-          (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
-          (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
-          `When done, provide a brief summary of what you did.`,
-        messages: [
-          {
-            role: 'user',
-            content: `Task: ${task.title}\n\nDescription: ${task.description || '(none)'}\n\nPriority: ${task.priority}\n\nPlease complete this task.`,
-          },
-        ],
-        onEvent: (event) => {
-          const ts = new Date().toISOString().replace('T', ' ').substring(0, 19);
-          let logEntry = '';
+        systemPrompt,
+        messages,
+        onEvent,
+      };
 
-          switch (event.type) {
-            case 'intent':
-              logEntry = `🎯 Intent: ${(event.data?.intent as string) ?? 'analyzing'}`;
-              break;
-            case 'thinking':
-              logEntry = `🧠 Thinking: ${((event.data?.content as string) ?? '').substring(0, 150)}`;
-              break;
-            case 'tool_start':
-              logEntry = `🔧 Using tool: \`${(event.data?.name as string) ?? 'unknown'}\``;
-              break;
-            case 'info':
-              logEntry = `ℹ️ ${(event.data?.message as string) ?? ''}`;
-              break;
-          }
-
-          if (logEntry) {
-            progressLog.push(`**[${ts}]** ${logEntry}`);
-            // Broadcast progress in real-time
-            this.config.wsManager?.broadcast({
-              type: 'task:updated',
-              payload: {
-                id: taskId,
-                taskId,
-                agentId,
-                progressEvent: event.type,
-                progressMessage: logEntry,
-              },
-              timestamp: new Date().toISOString(),
-            });
-          }
-        },
-      });
+      let result;
+      if (this.config.aiProvider.agenticCompletion) {
+        // Agentic mode: agent can read files, write code, run commands
+        const projectRoot = join(this.config.squadDir, '..');
+        console.log(`[AgentWorker] ${agent.name} using agentic mode in ${projectRoot}`);
+        result = await this.config.aiProvider.agenticCompletion({
+          ...sharedOpts,
+          workingDirectory: projectRoot,
+          metadata: { ...sharedOpts.metadata, agentic: true },
+        } satisfies AgenticCompletionOptions);
+      } else {
+        // Fallback: single-shot chat completion (mock provider)
+        result = await this.config.aiProvider.chatCompletion(sharedOpts);
+      }
 
       const progressSection =
         progressLog.length > 0 ? `\n\n**Progress:**\n${progressLog.join('\n')}` : '';

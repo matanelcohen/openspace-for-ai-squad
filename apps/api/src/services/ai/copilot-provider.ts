@@ -108,6 +108,13 @@ export interface ChatCompletionOptions {
   metadata?: Record<string, unknown>;
 }
 
+export interface AgenticCompletionOptions extends ChatCompletionOptions {
+  /** Project directory where the agent can read files, write code, and run commands. */
+  workingDirectory: string;
+  /** Maximum agentic iterations before stopping (default: 50). */
+  maxTurns?: number;
+}
+
 export interface ChatCompletionResult {
   content: string;
   model: string;
@@ -258,6 +265,285 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
         span.end();
       }
     });
+  }
+
+  // -- Agentic Completion ---------------------------------------------------
+
+  /**
+   * Run an agentic completion through the Copilot SDK.
+   * Unlike chatCompletion(), this gives the agent a working directory where it
+   * can read files, write code, and run commands — iterating autonomously.
+   */
+  async agenticCompletion(options: AgenticCompletionOptions): Promise<ChatCompletionResult> {
+    const spanName = options.taskTitle
+      ? `ai.agentic ${options.agentId ?? 'unknown'}:${options.taskTitle}`
+      : `ai.agentic ${options.agentId ?? 'completion'}`;
+
+    return tracer.startActiveSpan(spanName, async (span: Span) => {
+      try {
+        const result = await this._agenticCompletionImpl(options, span);
+        span.setStatus({ code: SpanStatusCode.OK });
+        return result;
+      } catch (err) {
+        span.setStatus({
+          code: SpanStatusCode.ERROR,
+          message: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      } finally {
+        span.end();
+      }
+    });
+  }
+
+  private async _agenticCompletionImpl(
+    options: AgenticCompletionOptions,
+    span: Span,
+  ): Promise<ChatCompletionResult> {
+    if (!this.client) {
+      throw new Error('CopilotProvider not initialized. Call initialize() first.');
+    }
+
+    await this.acquireSlot();
+
+    // ── Model failover logic (same as chatCompletion) ─────────
+    const requestedModel = options.model ?? this.config.model;
+    let model = requestedModel;
+
+    if (this.usingFallback && !options.model) {
+      const elapsed = Date.now() - this.fallbackSwitchTime;
+      if (elapsed >= this.primaryRetryCooldownMs) {
+        console.log(`[AI] Cooldown elapsed, retrying primary model: ${this.config.model}`);
+        this.usingFallback = false;
+        this.consecutiveFailures = 0;
+        model = this.config.model;
+      } else {
+        model = this.fallbackModel;
+      }
+    }
+
+    const prompt = this.buildPrompt(options.messages, options.systemPrompt);
+    const promptTokensEstimate = Math.ceil(prompt.length / 4);
+
+    // ── Trace setup ──────────────────────────────────────────
+    let traceIds: { traceId: string; spanId: string } | null = null;
+    const otelTraceId = span.spanContext().traceId;
+    const otelSpanId = span.spanContext().spanId;
+    try {
+      if (this.traceService) {
+        traceIds = this.traceService.startTrace({
+          traceId: otelTraceId,
+          spanId: otelSpanId,
+          agentId: options.agentId,
+          taskTitle: options.taskTitle,
+          model,
+          systemPrompt: options.systemPrompt,
+          prompt,
+          metadata: { ...options.metadata, agentic: true },
+        });
+      }
+    } catch { /* best effort */ }
+
+    span.setAttribute('ai.model', model);
+    span.setAttribute('ai.agent_id', options.agentId ?? 'unknown');
+    span.setAttribute('ai.task_title', options.taskTitle ?? '');
+    span.setAttribute('ai.prompt', prompt);
+    span.setAttribute('ai.system_prompt', options.systemPrompt ?? '');
+    span.setAttribute('ai.prompt_tokens_estimate', promptTokensEstimate);
+    span.setAttribute('ai.agentic', true);
+    span.setAttribute('ai.working_directory', options.workingDirectory);
+
+    if (options.metadata) {
+      for (const [key, value] of Object.entries(options.metadata)) {
+        span.setAttribute(`ai.metadata.${key}`, typeof value === 'string' ? value : JSON.stringify(value));
+      }
+    }
+
+    // ── Session config — use the project's working directory ──
+    const sessionConfig: Record<string, unknown> = {
+      model,
+      onPermissionRequest: approveAll,
+      onUserInputRequest: () => ({ response: '' }),
+      workingDirectory: options.workingDirectory,
+    };
+
+    if (options.systemPrompt) {
+      sessionConfig.systemMessage = { content: options.systemPrompt };
+    }
+
+    let session: CopilotSessionLike | null = null;
+    const sessionCreateStart = Date.now();
+    try {
+      session = await this.createSessionWithRetry(sessionConfig);
+      const sessionCreateEnd = Date.now();
+
+      // ── Trace sub-spans for AI events ──────────────────────
+      if (this.traceService?.addSubSpan && traceIds) {
+        const addSub = this.traceService.addSubSpan.bind(this.traceService);
+        const tId = traceIds.traceId;
+        const sId = traceIds.spanId;
+
+        addSub(tId, sId, {
+          name: '🔌 Agentic session created',
+          kind: 'internal',
+          startTime: sessionCreateStart,
+          endTime: sessionCreateEnd,
+          attributes: { workingDirectory: options.workingDirectory },
+        });
+
+        const eventListener = (event: { type: string; data?: Record<string, unknown> }) => {
+          try {
+            const now = Date.now();
+            switch (event.type) {
+              case 'intent':
+                addSub(tId, sId, {
+                  name: `🎯 ${event.data?.intent ?? 'analyzing'}`,
+                  kind: 'internal',
+                  startTime: now,
+                  attributes: event.data,
+                });
+                break;
+              case 'thinking':
+                addSub(tId, sId, {
+                  name: `🧠 ${((event.data?.content as string) ?? '').substring(0, 80)}`,
+                  kind: 'llm',
+                  startTime: now,
+                  attributes: event.data,
+                });
+                break;
+              case 'tool_start':
+                addSub(tId, sId, {
+                  name: `🔧 ${event.data?.name ?? 'tool'}`,
+                  kind: 'tool',
+                  startTime: now,
+                  attributes: event.data,
+                });
+                break;
+              case 'info':
+                addSub(tId, sId, {
+                  name: `ℹ️ ${event.data?.message ?? ''}`,
+                  kind: 'internal',
+                  startTime: now,
+                  attributes: event.data,
+                });
+                break;
+              case 'progress':
+                addSub(tId, sId, { name: '📝 Generating response', kind: 'llm', startTime: now });
+                break;
+            }
+          } catch { /* best effort */ }
+        };
+
+        session.on('assistant.intent', (e: unknown) =>
+          eventListener({ type: 'intent', data: (e as { data?: Record<string, unknown> }).data }),
+        );
+        session.on('assistant.reasoning', (e: unknown) =>
+          eventListener({ type: 'thinking', data: (e as { data?: Record<string, unknown> }).data }),
+        );
+        session.on('tool.execution_start', (e: unknown) =>
+          eventListener({
+            type: 'tool_start',
+            data: (e as { data?: Record<string, unknown> }).data,
+          }),
+        );
+        session.on('session.info', (e: unknown) =>
+          eventListener({ type: 'info', data: (e as { data?: Record<string, unknown> }).data }),
+        );
+        let firstDelta = true;
+        session.on('assistant.message_delta', () => {
+          if (firstDelta) {
+            firstDelta = false;
+            eventListener({ type: 'progress' });
+          }
+        });
+      }
+
+      // Forward events to the caller
+      if (options.onEvent) {
+        this.attachEventListeners(session, options.onEvent);
+      }
+
+      // ── Send with generous timeout for agentic tasks (30 min) ──
+      const agenticTimeout = 30 * 60 * 1000;
+
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          if (attempt > 0) {
+            const delay = 2000 * attempt;
+            console.log(`[AI] agentic sendAndWait retry ${attempt}/2 after ${delay}ms...`);
+            span.addEvent('retry', { attempt, delay });
+            await new Promise((r) => setTimeout(r, delay));
+            await session.disconnect().catch(() => {});
+            session = await this.createSessionWithRetry(sessionConfig);
+            if (options.onEvent) this.attachEventListeners(session, options.onEvent);
+          }
+
+          this.logInteraction('agentic-request', model, prompt);
+          const result = await session.sendAndWait({ prompt }, agenticTimeout);
+          const content = (result?.data?.content as string) ?? '';
+          this.logInteraction('agentic-response', model, prompt, content);
+          span.setAttribute('ai.response', content);
+          const completionTokensEstimate = Math.ceil(content.length / 4);
+          span.setAttribute('ai.completion_tokens_estimate', completionTokensEstimate);
+          this.recordSuccessFailover();
+          try {
+            if (this.traceService && traceIds) {
+              this.traceService.completeTrace(traceIds.traceId, traceIds.spanId, {
+                response: content,
+                model,
+                promptTokens: promptTokensEstimate,
+                completionTokens: completionTokensEstimate,
+              });
+            }
+          } catch { /* best effort */ }
+          return {
+            content,
+            model,
+            usage: {
+              promptTokens: promptTokensEstimate,
+              completionTokens: completionTokensEstimate,
+            },
+          };
+        } catch (err) {
+          lastError = err instanceof Error ? err : new Error(String(err));
+          const msg = lastError.message;
+          console.warn(`[AI] agentic sendAndWait attempt ${attempt + 1} failed: ${msg}`);
+          this.logInteraction('error', model, prompt, msg);
+          this.recordFailureFailover(model);
+
+          const isTransient =
+            msg.includes('fetch failed') ||
+            msg.includes('ECONNRE') ||
+            msg.includes('ETIMEDOUT') ||
+            msg.includes('socket') ||
+            msg.includes('Timeout');
+          if (!isTransient) {
+            try {
+              if (this.traceService && traceIds) {
+                this.traceService.failTrace(traceIds.traceId, traceIds.spanId, msg);
+              }
+            } catch { /* best effort */ }
+            throw lastError;
+          }
+        }
+      }
+      try {
+        if (this.traceService && traceIds) {
+          this.traceService.failTrace(
+            traceIds.traceId,
+            traceIds.spanId,
+            lastError?.message ?? 'agentic sendAndWait failed after retries',
+          );
+        }
+      } catch { /* best effort */ }
+      throw lastError ?? new Error('agentic sendAndWait failed after retries');
+    } finally {
+      if (session) {
+        await session.disconnect().catch(() => { /* ok */ });
+      }
+      this.releaseSlot();
+    }
   }
 
   private async _chatCompletionImpl(
@@ -944,6 +1230,8 @@ export type AIProviderType = 'copilot-sdk' | 'mock';
 
 export interface AIProvider {
   chatCompletion(options: ChatCompletionOptions): Promise<ChatCompletionResult>;
+  /** Optional agentic completion — allows the agent to iterate with tools in a working directory. */
+  agenticCompletion?(options: AgenticCompletionOptions): Promise<ChatCompletionResult>;
   route: LLMRouter['route'];
   parse: LLMIntentParser['parse'];
 }
