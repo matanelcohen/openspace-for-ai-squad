@@ -1,7 +1,8 @@
+// Detect API URL: env var (build-time) → meta tag (runtime) → same-origin
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL ??
   (typeof window !== 'undefined'
-    ? ''  // Same origin — API and UI on same port
+    ? (document.querySelector('meta[name="api-url"]')?.getAttribute('content') ?? '')
     : 'http://localhost:3000');
 
 export class ApiError extends Error {
