@@ -256,6 +256,20 @@
     .reveal{opacity:0;transform:translateY(30px);transition:opacity .7s ease-out,transform .7s ease-out}
     .reveal.visible{opacity:1;transform:translateY(0)}
     .section-divider{max-width:1200px;margin:0 auto;height:1px;background:linear-gradient(90deg,transparent,var(--border-b),transparent)}
+
+    /* Demo carousel */
+    .demo-carousel{max-width:1000px;margin:0 auto}
+    .demo-tabs{display:flex;gap:.5rem;justify-content:center;flex-wrap:wrap;margin-bottom:1.5rem}
+    .demo-tab{background:rgba(255,255,255,.04);border:1px solid var(--border);color:var(--text-muted);padding:.5rem 1rem;border-radius:8px;cursor:pointer;font-size:.85rem;font-weight:500;transition:all .2s}
+    .demo-tab:hover{background:rgba(255,255,255,.08);color:var(--text)}
+    .demo-tab.active{background:var(--accent);border-color:var(--accent);color:#fff}
+    .demo-frame{background:var(--bg-card);border:1px solid var(--border-b);border-radius:var(--r);overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.5)}
+    .demo-titlebar{display:flex;align-items:center;gap:.5rem;padding:.65rem 1rem;background:rgba(255,255,255,.02);border-bottom:1px solid var(--border)}
+    .demo-url{margin-left:.75rem;font-size:.7rem;color:var(--text-dim);background:rgba(255,255,255,.04);padding:.2rem .6rem;border-radius:4px}
+    .demo-slides{position:relative;aspect-ratio:1440/900;overflow:hidden}
+    .demo-slide{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .5s ease}
+    .demo-slide.active{opacity:1}
+    .demo-progress{height:3px;background:var(--accent);border-radius:2px;transition:width .1s linear;margin-top:0}
   </style>
 </head>
 <body>
@@ -420,6 +434,45 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="section-divider"></div>
+
+  <!-- SCREENSHOT DEMO -->
+  <section class="section reveal" id="demo">
+    <div class="section-header">
+      <div class="section-label">See it in action</div>
+      <h2 class="section-title">The full experience</h2>
+      <p class="section-subtitle">Dashboard, tasks, chat, team management, traces, and knowledge — all in one place.</p>
+    </div>
+    <div class="demo-carousel">
+      <div class="demo-tabs">
+        <button class="demo-tab active" data-slide="0">Dashboard</button>
+        <button class="demo-tab" data-slide="1">Tasks</button>
+        <button class="demo-tab" data-slide="2">Chat</button>
+        <button class="demo-tab" data-slide="3">Team</button>
+        <button class="demo-tab" data-slide="4">Traces</button>
+        <button class="demo-tab" data-slide="5">Knowledge</button>
+        <button class="demo-tab" data-slide="6">Settings</button>
+      </div>
+      <div class="demo-frame">
+        <div class="demo-titlebar">
+          <div class="mockup-dot mockup-dot-r"></div>
+          <div class="mockup-dot mockup-dot-y"></div>
+          <div class="mockup-dot mockup-dot-g"></div>
+          <span class="demo-url">localhost:3000</span>
+        </div>
+        <div class="demo-slides">
+          <img src="screenshots/dashboard.png" alt="Dashboard" class="demo-slide active" />
+          <img src="screenshots/tasks.png" alt="Tasks" class="demo-slide" />
+          <img src="screenshots/chat.png" alt="Chat" class="demo-slide" />
+          <img src="screenshots/team-members.png" alt="Team" class="demo-slide" />
+          <img src="screenshots/traces.png" alt="Traces" class="demo-slide" />
+          <img src="screenshots/knowledge.png" alt="Knowledge" class="demo-slide" />
+          <img src="screenshots/settings.png" alt="Settings" class="demo-slide" />
         </div>
       </div>
     </div>
@@ -746,6 +799,37 @@
       });
     },{threshold:0.1,rootMargin:'0px 0px -50px 0px'});
     document.querySelectorAll('.reveal').forEach(function(el){observer.observe(el)});
+
+    // Demo carousel — auto-play + click tabs
+    (function(){
+      var slides=document.querySelectorAll('.demo-slide');
+      var tabs=document.querySelectorAll('.demo-tab');
+      var current=0;
+      var interval;
+
+      function show(idx){
+        slides.forEach(function(s){s.classList.remove('active')});
+        tabs.forEach(function(t){t.classList.remove('active')});
+        slides[idx].classList.add('active');
+        tabs[idx].classList.add('active');
+        current=idx;
+      }
+
+      function next(){show((current+1)%slides.length)}
+
+      function startAuto(){interval=setInterval(next,4000)}
+      function stopAuto(){clearInterval(interval)}
+
+      tabs.forEach(function(tab){
+        tab.addEventListener('click',function(){
+          stopAuto();
+          show(parseInt(tab.getAttribute('data-slide')));
+          startAuto();
+        });
+      });
+
+      startAuto();
+    })();
   </script>
 </body>
 </html>
