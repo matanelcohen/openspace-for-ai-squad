@@ -7,6 +7,7 @@ import { useCallback } from 'react';
 import { ChannelHeader } from '@/components/chat/channel-header';
 import { MessageInput } from '@/components/chat/message-input';
 import { MessageList } from '@/components/chat/message-list';
+import { TaskSuggestion } from '@/components/chat/task-suggestion';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useChannelMessages, useSendChannelMessage } from '@/hooks/use-channels';
 import { cn } from '@/lib/utils';
@@ -132,6 +133,9 @@ export function ChannelMessageView({
           />
         )}
       </div>
+
+      {/* Task suggestion card */}
+      <TaskSuggestion />
 
       {/* Message input */}
       <MessageInput

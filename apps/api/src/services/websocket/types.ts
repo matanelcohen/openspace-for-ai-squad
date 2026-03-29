@@ -25,6 +25,7 @@ export const WS_EVENT_TYPES = [
   'voice:transcript',
   'voice:audio',
   'voice:speaking',
+  'task:suggestion',
 ] as const;
 
 export type WsEventType = (typeof WS_EVENT_TYPES)[number];

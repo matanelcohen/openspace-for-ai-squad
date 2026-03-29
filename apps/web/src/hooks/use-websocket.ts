@@ -21,7 +21,8 @@ export type WsEventType =
   | 'voice:audio'
   | 'voice:speaking'
   | 'escalation:created'
-  | 'escalation:updated';
+  | 'escalation:updated'
+  | 'task:suggestion';
 
 export interface WsEnvelope {
   type: string;

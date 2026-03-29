@@ -12,6 +12,7 @@ import activityRoute from './routes/activity.js';
 import agentsRoute from './routes/agents.js';
 import channelsRoute from './routes/channels.js';
 import chatRoute from './routes/chat.js';
+import costsRoute from './routes/costs.js';
 import cronRoute from './routes/cron.js';
 import decisionsRoute from './routes/decisions.js';
 import healthRoute from './routes/health.js';
@@ -36,6 +37,7 @@ import type { AIProvider } from './services/ai/copilot-provider.js';
 import { createAIProvider } from './services/ai/copilot-provider.js';
 import { AuthService } from './services/auth/index.js';
 import { ChatService } from './services/chat/index.js';
+import { CostService } from './services/cost/index.js';
 import { loadSquadConfig } from './services/config/index.js';
 import { CronService } from './services/cron/index.js';
 import { openDatabase } from './services/db/index.js';
@@ -369,6 +371,10 @@ export async function buildApp(opts: AppOptions = {}) {
     cronService.start();
   });
 
+  // Cost service — derives spend from trace + span data
+  const costService = new CostService(db);
+  app.decorate('costService', costService);
+
   // Trace service for recording AI interactions
   const traceService = new TraceService(db);
   // Set initial workspace ID from auto-registered workspace
@@ -403,6 +409,7 @@ export async function buildApp(opts: AppOptions = {}) {
   app.register(teamMembersRoute, { prefix: '/api' });
   app.register(sandboxesRoute, { prefix: '/api' });
   app.register(tracesRoute, { prefix: '/api' });
+  app.register(costsRoute, { prefix: '/api' });
   app.register(skillsRoute, { prefix: '/api' });
   app.register(cronRoute, { prefix: '/api' });
   app.register(workspacesRoute, { prefix: '/api' });

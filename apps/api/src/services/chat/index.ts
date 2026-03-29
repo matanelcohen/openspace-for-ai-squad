@@ -193,6 +193,73 @@ export class ChatService {
     this.routingRules = rules;
   }
 
+  // ── Task intent detection (H4) ──────────────────────────────
+
+  private static readonly TASK_VERBS = [
+    'fix', 'implement', 'build', 'add', 'create', 'update', 'refactor',
+    'write', 'deploy', 'test', 'debug', 'remove', 'delete', 'migrate',
+    'upgrade', 'optimize', 'design', 'review', 'set up', 'configure',
+  ];
+
+  private static readonly TASK_PHRASES = [
+    'create task', 'assign', 'add feature', 'can you', 'please',
+  ];
+
+  /**
+   * Check if a user message looks like a task request. If so, emit a
+   * `task:suggestion` WebSocket event so the UI can offer one-click task creation.
+   */
+  private detectAndEmitTaskSuggestion(message: ChatMessage): void {
+    // Only detect from human users, not agent responses
+    const agents = this.getAgents();
+    if (agents.some((a) => a.id === message.sender)) return;
+
+    const content = message.content.trim();
+    const lower = content.toLowerCase();
+
+    // Detect @agentname prefix for explicit assignment
+    let assignee: string | null = null;
+    let taskText = content;
+    const mentionMatch = content.match(/^@(\S+)\s+(.+)/);
+    if (mentionMatch && mentionMatch[1] && mentionMatch[2]) {
+      const mentionedName = mentionMatch[1].toLowerCase();
+      const agent = agents.find(
+        (a) => a.id.toLowerCase() === mentionedName || a.name.toLowerCase() === mentionedName,
+      );
+      if (agent) {
+        assignee = agent.id;
+        taskText = mentionMatch[2];
+      }
+    }
+
+    // Check for task-like intent
+    const hasTaskPhrase = ChatService.TASK_PHRASES.some((p) => lower.includes(p));
+    const startsWithVerb = ChatService.TASK_VERBS.some((v) => {
+      const textToCheck = taskText.toLowerCase();
+      return textToCheck.startsWith(v + ' ') || textToCheck.startsWith(v + ':');
+    });
+    const hasMentionWithVerb = assignee !== null && ChatService.TASK_VERBS.some((v) => {
+      return taskText.toLowerCase().startsWith(v + ' ') || taskText.toLowerCase().startsWith(v + ':');
+    });
+
+    if (!hasTaskPhrase && !startsWithVerb && !hasMentionWithVerb) return;
+
+    // Build a suggested title from the message
+    const title = taskText.length > 80 ? taskText.slice(0, 77) + '...' : taskText;
+
+    this.wsManager?.broadcast({
+      type: 'task:suggestion' as 'chat:message',
+      payload: {
+        title,
+        assignee,
+        originalMessage: content,
+        sender: message.sender,
+        messageId: message.id,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   // ── Send message ────────────────────────────────────────────
 
   /**
@@ -224,6 +291,9 @@ export class ChatService {
 
     // Broadcast via WebSocket
     this.emitChatMessage(message, messageWorkspaceId);
+
+    // H4: Detect task-like intent and emit suggestion via WebSocket
+    this.detectAndEmitTaskSuggestion(message);
 
     // Route to agents — team messages go through routing, direct messages go to the specific agent
     if (input.recipient === CHAT_TEAM_RECIPIENT) {

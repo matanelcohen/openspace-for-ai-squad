@@ -3,6 +3,7 @@
 import { Rocket } from 'lucide-react';
 import { useState } from 'react';
 
+import { DashboardActivitySidebar } from '@/components/dashboard/activity-sidebar';
 import { AgentGrid } from '@/components/dashboard/agent-grid';
 import { SummaryStats } from '@/components/dashboard/summary-stats';
 import { SystemStatus } from '@/components/dashboard/system-status';
@@ -56,21 +57,28 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Your squad at a glance.</p>
+    <div className="flex gap-6">
+      <div className="min-w-0 flex-1 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground">Your squad at a glance.</p>
+        </div>
+        <SummaryStats />
+        <SystemStatus />
+        <div>
+          <h2 className="mb-4 text-xl font-semibold">Team Overview</h2>
+          <TeamSummaryStats />
+        </div>
+        <div>
+          <h2 className="mb-4 text-xl font-semibold">Squad Members</h2>
+          <AgentGrid />
+        </div>
       </div>
-      <SummaryStats />
-      <SystemStatus />
-      <div>
-        <h2 className="mb-4 text-xl font-semibold">Team Overview</h2>
-        <TeamSummaryStats />
-      </div>
-      <div>
-        <h2 className="mb-4 text-xl font-semibold">Squad Members</h2>
-        <AgentGrid />
-      </div>
+      <aside className="hidden w-72 shrink-0 xl:block">
+        <div className="sticky top-4 h-[calc(100vh-6rem)]">
+          <DashboardActivitySidebar />
+        </div>
+      </aside>
     </div>
   );
 }
