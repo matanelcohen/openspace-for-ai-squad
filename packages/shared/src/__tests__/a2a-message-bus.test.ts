@@ -1,9 +1,9 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
 
-import { A2AMessageBus } from '../a2a/message-bus.js';
 import type { AgentInfo, AgentResolver, MessageHandler } from '../a2a/message-bus.js';
-import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
+import { A2AMessageBus } from '../a2a/message-bus.js';
 import type { A2ABusEvent } from '../a2a/status-broadcaster.js';
+import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
 import type {
   A2AMessage,
   A2AMessageStatus,

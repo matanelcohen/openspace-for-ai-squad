@@ -20,7 +20,6 @@ import type {
   A2AStatusUpdatePayload,
 } from '../types/a2a.js';
 import { A2A_DEFAULT_RETRY_POLICY, A2A_PROTOCOL_VERSION } from '../types/a2a.js';
-
 import type { CorrelationStatus, CorrelationTracker } from './correlation-tracker.js';
 import type { A2AMessageBus } from './message-bus.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';

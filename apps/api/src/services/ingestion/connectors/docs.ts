@@ -5,7 +5,7 @@
  * files and produces source documents for ingestion.
  */
 
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { extname, join, relative } from 'node:path';
 
 import type { SourceType } from '@openspace/shared';

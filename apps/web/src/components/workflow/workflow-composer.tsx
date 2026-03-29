@@ -1,5 +1,7 @@
 'use client';
 
+import '@xyflow/react/dist/style.css';
+
 import type { WorkflowDefinition, WorkflowNodeType } from '@openspace/shared';
 import {
   addEdge,
@@ -14,7 +16,6 @@ import {
   useNodesState,
   useReactFlow,
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import { useCallback, useRef, useState } from 'react';
 
 import { cn } from '@/lib/utils';

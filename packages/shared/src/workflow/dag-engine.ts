@@ -34,13 +34,13 @@ import type {
   InterruptTimeoutPolicy,
 } from '../types/interrupt.js';
 import { recoverState } from './checkpoint.js';
-import { evaluatePredicate } from './predicate-evaluator.js';
-import { resolveToolParams } from './parameter-resolver.js';
 import {
   createInterruptState,
   isInterruptError,
   shouldInterrupt,
 } from './interrupt.js';
+import { resolveToolParams } from './parameter-resolver.js';
+import { evaluatePredicate } from './predicate-evaluator.js';
 
 // ── Validation ──────────────────────────────────────────────────
 
@@ -321,7 +321,7 @@ export class DAGWorkflowEngine {
     };
 
     // Build initial state
-    let state: EnhancedWorkflowExecutionState = {
+    const state: EnhancedWorkflowExecutionState = {
       executionId,
       workflowId: workflow.id,
       workflowVersion: workflow.version,
@@ -839,7 +839,7 @@ export class DAGWorkflowEngine {
 
     switch (policy) {
       case 'skip': {
-        let current = updateNodeState(state, node.id, {
+        const current = updateNodeState(state, node.id, {
           status: 'skipped',
           completedAt: new Date().toISOString(),
           error,
@@ -849,7 +849,7 @@ export class DAGWorkflowEngine {
         return current;
       }
       case 'continue': {
-        let current = updateNodeState(state, node.id, {
+        const current = updateNodeState(state, node.id, {
           status: 'completed',
           completedAt: new Date().toISOString(),
           output: null,
@@ -861,7 +861,7 @@ export class DAGWorkflowEngine {
       }
       case 'fail_workflow':
       default: {
-        let current = updateNodeState(state, node.id, {
+        const current = updateNodeState(state, node.id, {
           status: 'failed',
           completedAt: new Date().toISOString(),
           error,
@@ -936,5 +936,5 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
 
 // Re-export key functions
 export { recoverState } from './checkpoint.js';
-export { evaluatePredicate } from './predicate-evaluator.js';
 export { resolveToolParams } from './parameter-resolver.js';
+export { evaluatePredicate } from './predicate-evaluator.js';

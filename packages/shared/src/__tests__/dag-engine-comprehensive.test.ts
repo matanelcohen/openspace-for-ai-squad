@@ -5,17 +5,8 @@
  * conditional edges, checkpoint/resume, error handling, and edge cases.
  */
 
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
 
-import {
-  DAGWorkflowEngine,
-  getDAGReadyNodes,
-  hasDAGCycle,
-  topologicalLevels,
-  validateDAGWorkflow,
-} from '../workflow/dag-engine.js';
-import { DAGBuilder } from '../workflow/dag-builder.js';
-import { InMemoryCheckpointStore, recoverState } from '../workflow/checkpoint.js';
 import type {
   DAGWorkflow,
   DAGWorkflowEngineConfig,
@@ -26,6 +17,15 @@ import type {
   ToolRegistryRef,
   WorkflowEventPayload,
 } from '../types/dag-workflow.js';
+import { InMemoryCheckpointStore, recoverState } from '../workflow/checkpoint.js';
+import { DAGBuilder } from '../workflow/dag-builder.js';
+import {
+  DAGWorkflowEngine,
+  getDAGReadyNodes,
+  hasDAGCycle,
+  topologicalLevels,
+  validateDAGWorkflow,
+} from '../workflow/dag-engine.js';
 
 // ── Test Helpers ────────────────────────────────────────────────
 

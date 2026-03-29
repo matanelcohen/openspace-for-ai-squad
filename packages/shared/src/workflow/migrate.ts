@@ -6,16 +6,16 @@
  */
 
 import type {
-  DAGEdge,
-  DAGNode,
-  WorkflowDefinition,
-} from '../types/workflow.js';
-import type {
   DAGWorkflow,
   Edge,
   StepNode,
   StepNodeType,
 } from '../types/dag-workflow.js';
+import type {
+  DAGEdge,
+  DAGNode,
+  WorkflowDefinition,
+} from '../types/workflow.js';
 
 /**
  * Convert a legacy WorkflowDefinition to the enhanced DAGWorkflow format.

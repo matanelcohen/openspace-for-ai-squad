@@ -4,7 +4,7 @@
  * Uses @sinclair/typebox so the schemas double as TypeScript types.
  */
 
-import { Type, type Static } from '@sinclair/typebox';
+import { type Static,Type } from '@sinclair/typebox';
 
 // ── Reusable fragments ──────────────────────────────────────────
 

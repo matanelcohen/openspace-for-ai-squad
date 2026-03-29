@@ -1,5 +1,7 @@
 'use client';
 
+import '@xyflow/react/dist/style.css';
+
 import type { WorkflowDefinition, WorkflowExecutionState } from '@openspace/shared';
 import {
   Background,
@@ -11,7 +13,6 @@ import {
   useEdgesState,
   useNodesState,
 } from '@xyflow/react';
-import '@xyflow/react/dist/style.css';
 import { useEffect, useMemo } from 'react';
 
 import { cn } from '@/lib/utils';

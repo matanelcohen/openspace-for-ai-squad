@@ -1,6 +1,6 @@
 'use client';
 
-import { useQueryClient, useQuery } from '@tanstack/react-query';
+import { useQuery,useQueryClient } from '@tanstack/react-query';
 
 import { useWsEvent } from '@/components/providers/websocket-provider';
 import { api } from '@/lib/api-client';

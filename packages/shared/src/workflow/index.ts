@@ -505,25 +505,21 @@ export class WorkflowEngine {
 // ── Re-exports: Enhanced DAG Engine ─────────────────────────────
 
 export {
+  deserializeState,
+  InMemoryCheckpointStore,
+  recoverState,
+  serializeState,
+} from './checkpoint.js';
+export type { DAGBuilderOptions, StepInput } from './dag-builder.js';
+export { DAGBuilder, DAGBuilderError } from './dag-builder.js';
+export {
   DAGWorkflowEngine,
   getDAGReadyNodes,
   hasDAGCycle,
   topologicalLevels,
   validateDAGWorkflow,
 } from './dag-engine.js';
-
-export { DAGBuilder, DAGBuilderError } from './dag-builder.js';
-export type { DAGBuilderOptions, StepInput } from './dag-builder.js';
-
-export { DAGExecutor } from './dag-executor.js';
 export type { DAGExecutorConfig } from './dag-executor.js';
-
-export {
-  InMemoryCheckpointStore,
-  recoverState,
-  serializeState,
-  deserializeState,
-} from './checkpoint.js';
-
-export { evaluatePredicate, PredicateEvaluationError, compareValues, resolveField } from './predicate-evaluator.js';
-export { resolveToolParams, resolvePath } from './parameter-resolver.js';
+export { DAGExecutor } from './dag-executor.js';
+export { resolvePath,resolveToolParams } from './parameter-resolver.js';
+export { compareValues, evaluatePredicate, PredicateEvaluationError, resolveField } from './predicate-evaluator.js';

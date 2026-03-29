@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  InMemoryCheckpointStore,
-  recoverState,
-  serializeState,
-  deserializeState,
-} from '../workflow/checkpoint.js';
 import type {
   EnhancedWorkflowExecutionState,
 } from '../types/dag-workflow.js';
+import {
+  deserializeState,
+  InMemoryCheckpointStore,
+  recoverState,
+  serializeState,
+} from '../workflow/checkpoint.js';
 
 // ── Test Helpers ────────────────────────────────────────────────
 

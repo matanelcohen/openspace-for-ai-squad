@@ -12,9 +12,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { hasMemorySchema, initializeMemorySchema, MemoryStoreService } from '@openspace/memory-store';
 import type { FastifyPluginAsync } from 'fastify';
-
-import { initializeMemorySchema, hasMemorySchema, MemoryStoreService } from '@openspace/memory-store';
 
 const memoriesRoute: FastifyPluginAsync = async (app) => {
   // Ensure schema exists

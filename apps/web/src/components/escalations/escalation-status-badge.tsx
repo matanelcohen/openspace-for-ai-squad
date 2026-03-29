@@ -1,5 +1,6 @@
 import type { EscalationStatus } from '@openspace/shared';
-import { CheckCircle, Circle, Clock, Eye, RotateCcw, XCircle } from 'lucide-react';
+import type { Circle} from 'lucide-react';
+import { CheckCircle, Clock, Eye, RotateCcw, XCircle } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';

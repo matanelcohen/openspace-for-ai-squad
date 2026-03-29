@@ -1,5 +1,6 @@
 'use client';
 
+import type { PromptRole } from '@openspace/shared';
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -13,7 +14,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import type { PromptRole } from '@openspace/shared';
 import type { WizardFormState } from '@/hooks/use-skill-manifest-form';
 
 import type { FormAction } from './wizard-types';

@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -8,7 +9,6 @@ import { TraceStatsView } from '@/components/traces/trace-stats';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { useQueryClient } from '@tanstack/react-query';
 
 type Tab = 'traces' | 'stats';
 

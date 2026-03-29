@@ -28,7 +28,7 @@ import type {
   EscalationReason,
   HITLGateNodeConfig,
 } from '../types/escalation.js';
-import { HITLManager } from './hitl-manager.js';
+import type { HITLManager } from './hitl-manager.js';
 
 // ── Callback types matching DAGWorkflowEngineConfig ─────────────
 

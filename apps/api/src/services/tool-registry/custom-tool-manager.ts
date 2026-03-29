@@ -17,6 +17,7 @@ import type { FSWatcher } from 'chokidar';
 import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 
 import { CustomToolProvider } from './custom-tool-provider.js';
+import type { ToolRegistry } from './tool-registry.js';
 import { generateFromTemplate, getTemplate, getTemplates } from './tool-templates.js';
 import { ToolValidator } from './tool-validator.js';
 import type {
@@ -26,7 +27,6 @@ import type {
   ToolParameter,
   ToolTemplate,
 } from './types.js';
-import { ToolRegistry } from './tool-registry.js';
 
 // ── Events ─────────────────────────────────────────────────────
 

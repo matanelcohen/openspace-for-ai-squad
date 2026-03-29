@@ -6,8 +6,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 
-import { WorkflowComposer } from '@/components/workflow/workflow-composer';
 import { Button } from '@/components/ui/button';
+import { WorkflowComposer } from '@/components/workflow/workflow-composer';
 import { useCreateWorkflow } from '@/hooks/use-workflows';
 
 export default function WorkflowComposePage() {

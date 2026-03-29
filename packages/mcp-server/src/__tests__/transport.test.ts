@@ -155,7 +155,9 @@ describe('Transport — SSE', () => {
   const originalFetch = globalThis.fetch;
 
   // We import express and spin up the SSE server inline to test the transport
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   let expressApp: ReturnType<typeof import('express')['default']> | undefined;
+  // eslint-disable-next-line @typescript-eslint/consistent-type-imports
   let httpServer: import('node:http').Server | undefined;
   const SSE_PORT = 19283; // high ephemeral port to avoid collisions
 

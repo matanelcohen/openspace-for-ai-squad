@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { A2AMessageBus } from '../a2a/message-bus.js';
-import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
-import { NegotiationManager } from '../a2a/negotiation.js';
-import type { NegotiationProposal } from '../a2a/negotiation.js';
 import type { AgentResolver } from '../a2a/message-bus.js';
+import { A2AMessageBus } from '../a2a/message-bus.js';
+import type { NegotiationProposal } from '../a2a/negotiation.js';
+import { NegotiationManager } from '../a2a/negotiation.js';
+import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
 
 // ── Helpers ──────────────────────────────────────────────────────
 

@@ -16,8 +16,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
-import { useCreateSkill, useUpdateSkill } from '@/hooks/use-skills';
 import type { SkillDetail } from '@/hooks/use-skills';
+import { useCreateSkill, useUpdateSkill } from '@/hooks/use-skills';
 import { cn } from '@/lib/utils';
 
 // ── Types ────────────────────────────────────────────────────────

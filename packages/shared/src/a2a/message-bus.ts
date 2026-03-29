@@ -18,7 +18,6 @@ import type {
   A2ARouter,
   A2ARoutingInfo,
 } from '../types/a2a.js';
-
 import type { CorrelationTracker } from './correlation-tracker.js';
 import { A2AMessageStore } from './message-store.js';
 import type { StatusBroadcaster } from './status-broadcaster.js';

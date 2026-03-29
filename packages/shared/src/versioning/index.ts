@@ -1,6 +1,7 @@
 /**
  * Versioning module — semantic versioning utilities for skill management.
  */
+export type { ParsedSemVer, VersionDiff } from './semver.js';
 export {
   compareSemVer,
   isUpgrade,
@@ -9,5 +10,3 @@ export {
   satisfiesRange,
   versionDiff,
 } from './semver.js';
-
-export type { ParsedSemVer, VersionDiff } from './semver.js';

@@ -12,11 +12,11 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import { CHAT_CHANNEL_PREFIX } from '@openspace/shared';
 import type Database from 'better-sqlite3';
 import BetterSqlite3 from 'better-sqlite3';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { CHAT_CHANNEL_PREFIX } from '@openspace/shared';
 import { initializeSchema } from '../db/schema.js';
 import type { WebSocketManager } from '../websocket/index.js';
 import { ChannelMembershipError, ChannelValidationError, ChatService } from './index.js';

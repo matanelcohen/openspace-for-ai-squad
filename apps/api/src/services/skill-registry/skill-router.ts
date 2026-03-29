@@ -18,16 +18,16 @@
  */
 
 import type {
-  SkillTrigger,
-  SkillTaskContext,
-  SkillMatchResult,
-  SkillRegistryEntry,
-  SkillConfidenceWeights,
-  TaskTypeTrigger,
+  CompositeTrigger,
+  FileTrigger,
   LabelTrigger,
   PatternTrigger,
-  FileTrigger,
-  CompositeTrigger,
+  SkillConfidenceWeights,
+  SkillMatchResult,
+  SkillRegistryEntry,
+  SkillTaskContext,
+  SkillTrigger,
+  TaskTypeTrigger,
 } from '@openspace/shared';
 
 // ── Default Confidence Constants ─────────────────────────────────
@@ -478,7 +478,7 @@ export function matchTaskToSkills(
         (_, i) => triggerResults[i].matches,
       );
 
-      let rawConfidence = best.confidence;
+      const rawConfidence = best.confidence;
       let finalConfidence = rawConfidence;
       let relevanceAdjustment = 0;
 

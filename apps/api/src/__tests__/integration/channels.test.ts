@@ -21,10 +21,10 @@ import type { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import channelsRoute from '../../routes/channels.js';
 import { ChatService } from '../../services/chat/index.js';
 import { initializeSchema } from '../../services/db/schema.js';
 import type { WebSocketManager } from '../../services/websocket/index.js';
-import channelsRoute from '../../routes/channels.js';
 
 // ── Mock WebSocket Manager ────────────────────────────────────────
 

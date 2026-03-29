@@ -17,8 +17,8 @@ import { getTierDefinition, selectTier } from '../routing/tiers.js';
 import {
   buildSkillsPrompt,
   getSkillsForRole,
-  matchSkillsForTask,
   loadSkillsFromDirectory,
+  matchSkillsForTask,
   type ParsedSkill,
 } from '../seed-skills.js';
 import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';

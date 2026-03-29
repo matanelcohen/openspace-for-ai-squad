@@ -15,8 +15,8 @@ import { dirname, resolve } from 'node:path';
 import type Database from 'better-sqlite3';
 import BetterSqlite3 from 'better-sqlite3';
 
-import { initializeSchema } from './schema.js';
 import { applyMigrations } from './migrations.js';
+import { initializeSchema } from './schema.js';
 
 export type { Database };
 

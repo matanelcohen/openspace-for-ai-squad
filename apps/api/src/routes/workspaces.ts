@@ -1,9 +1,9 @@
 import type { FastifyPluginAsync } from 'fastify';
 
-import type { WorkspaceService } from '../services/workspace/index.js';
-import type { ChatService } from '../services/chat/index.js';
-import type { AgentRegistry } from '../services/agent-registry.js';
 import type { VoiceServices } from '../app.js';
+import type { AgentRegistry } from '../services/agent-registry.js';
+import type { ChatService } from '../services/chat/index.js';
+import type { WorkspaceService } from '../services/workspace/index.js';
 
 interface InitSquadBody {
   teamName: string;

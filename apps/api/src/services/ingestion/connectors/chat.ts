@@ -4,9 +4,8 @@
  * Groups messages by channel/thread for context-rich ingestion.
  */
 
-import type Database from 'better-sqlite3';
-
 import type { SourceType } from '@openspace/shared';
+import type Database from 'better-sqlite3';
 
 import type { ConnectorOptions, SourceConnector, SourceDocument } from './types.js';
 

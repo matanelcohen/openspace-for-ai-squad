@@ -5,7 +5,7 @@
  * that operate on the tools.config.yaml file via CustomToolManager.
  */
 
-import { CustomToolManager } from '../custom-tool-manager.js';
+import type { CustomToolManager } from '../custom-tool-manager.js';
 import type {
   CustomToolDescriptor,
   CustomToolExecution,

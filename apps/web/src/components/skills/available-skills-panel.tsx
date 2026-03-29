@@ -10,8 +10,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
   useAgentSkills,
-  useToggleAgentSkill,
   useSkills,
+  useToggleAgentSkill,
 } from '@/hooks/use-skills';
 
 import { SkillIcon } from './skill-icon';

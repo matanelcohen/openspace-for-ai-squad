@@ -1,15 +1,17 @@
-import { describe, it, expect } from 'vitest';
-import {
-  SKILL_IDS,
-  loadManifest,
-  loadTools,
-  loadPrompts,
-  loadAllManifests,
-  getSkillPath,
-} from '../index.js';
+import { existsSync } from 'node:fs';
+
 import type { SkillManifest } from '@openspace/shared/src/types/skill.js';
 import type { Tool } from '@openspace/shared/src/types/tool.js';
-import { existsSync } from 'node:fs';
+import { describe, expect,it } from 'vitest';
+
+import {
+  getSkillPath,
+  loadAllManifests,
+  loadManifest,
+  loadPrompts,
+  loadTools,
+  SKILL_IDS,
+} from '../index.js';
 
 describe('skills-core', () => {
   describe('SKILL_IDS', () => {

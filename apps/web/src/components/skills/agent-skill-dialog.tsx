@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { useAgentSkillsManagement, useToggleAgentSkill, type AgentSkillEntry } from '@/hooks/use-skills';
+import { type AgentSkillEntry,useAgentSkillsManagement, useToggleAgentSkill } from '@/hooks/use-skills';
 import { cn } from '@/lib/utils';
 
 import { SkillIcon } from './skill-icon';

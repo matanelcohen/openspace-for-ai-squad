@@ -23,17 +23,17 @@ import type { FastifyError, FastifyPluginAsync } from 'fastify';
 import { ErrorCodes, sendError } from '../lib/api-errors.js';
 import { ChannelValidationError } from '../services/chat/index.js';
 import {
-  createChannelSchema,
-  deleteChannelSchema,
-  getChannelSchema,
-  listChannelsSchema,
-  updateChannelSchema,
   type CreateChannelBody,
+  createChannelSchema,
   type DeleteChannelParams,
+  deleteChannelSchema,
   type GetChannelParams,
+  getChannelSchema,
   type ListChannelsQuery,
+  listChannelsSchema,
   type UpdateChannelBody,
   type UpdateChannelParams,
+  updateChannelSchema,
 } from './channels.schemas.js';
 
 /** Map ChannelValidationError codes to HTTP status + error code. */

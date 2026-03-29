@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 
-import { WorkflowViewer } from '@/components/workflow/workflow-viewer';
-import { WorkflowStatusBadge } from '@/components/workflow/workflow-status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { WorkflowStatusBadge } from '@/components/workflow/workflow-status-badge';
+import { WorkflowViewer } from '@/components/workflow/workflow-viewer';
 import { useWorkflow } from '@/hooks/use-workflow';
 import { useStartExecution } from '@/hooks/use-workflows';
 

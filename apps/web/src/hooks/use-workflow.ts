@@ -4,8 +4,8 @@ import type { WorkflowDefinition, WorkflowExecutionState } from '@openspace/shar
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 
-import { api } from '@/lib/api-client';
 import { useWebSocket, type WsEnvelope } from '@/hooks/use-websocket';
+import { api } from '@/lib/api-client';
 
 // ── Types ────────────────────────────────────────────────────────
 

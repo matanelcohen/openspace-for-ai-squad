@@ -4,6 +4,7 @@ export { WorkflowComposer } from './workflow-composer';
 export { WorkflowEdge } from './workflow-edge';
 export { WorkflowNode } from './workflow-node';
 export { NodeStatusBadge, WorkflowStatusBadge } from './workflow-status-badge';
+export type { WorkflowNodeData } from './workflow-utils';
 export {
   computeLayout,
   formatDuration,
@@ -11,6 +12,5 @@ export {
   toFlowEdges,
   toFlowNodes,
 } from './workflow-utils';
-export type { WorkflowNodeData } from './workflow-utils';
-export { WorkflowViewer } from './workflow-viewer';
 export type { WorkflowViewerProps } from './workflow-viewer';
+export { WorkflowViewer } from './workflow-viewer';

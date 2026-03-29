@@ -15,8 +15,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { initializeSchema } from '../db/schema.js';
 import type { WebSocketManager } from '../websocket/index.js';
-import { ChannelValidationError, ChatService } from './index.js';
 import type { DeleteChannelResult } from './index.js';
+import { ChannelValidationError, ChatService } from './index.js';
 
 // ── Mock WebSocket Manager ────────────────────────────────────────
 

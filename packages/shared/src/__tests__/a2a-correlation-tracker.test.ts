@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { CorrelationStatus,SubTaskEntry } from '../a2a/correlation-tracker.js';
 import {
   CorrelationTracker,
   findSubTaskMessages,
 } from '../a2a/correlation-tracker.js';
-import type { SubTaskEntry, CorrelationStatus } from '../a2a/correlation-tracker.js';
 import type { A2AMessage } from '../types/a2a.js';
 
 // ── Helpers ──────────────────────────────────────────────────────

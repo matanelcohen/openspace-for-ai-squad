@@ -12,8 +12,8 @@ import type {
   EscalationPriority,
   EscalationStatus,
 } from '../types/escalation.js';
-import { isReviewerEligible } from './index.js';
 import type { HITLManager } from './hitl-manager.js';
+import { isReviewerEligible } from './index.js';
 
 // ── Filter Options ──────────────────────────────────────────────
 

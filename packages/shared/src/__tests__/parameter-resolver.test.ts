@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveToolParams, resolvePath } from '../workflow/parameter-resolver.js';
 import type { ExecutionContext, ParameterMapping } from '../types/dag-workflow.js';
+import { resolvePath,resolveToolParams } from '../workflow/parameter-resolver.js';
 
 // ── Test Helpers ────────────────────────────────────────────────
 

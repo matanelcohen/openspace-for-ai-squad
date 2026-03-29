@@ -6,13 +6,12 @@
  * ingestion of project history into the RAG vector store.
  */
 
-import type Database from 'better-sqlite3';
-
 import type { ChunkingConfig, Embedder, SourceType } from '@openspace/shared';
+import type Database from 'better-sqlite3';
 
 import { ChunkStore } from './chunk-store.js';
 import { chunkContent, contentHash } from './chunker.js';
-import type { SourceConnector, ConnectorOptions, SourceDocument } from './connectors/types.js';
+import type { ConnectorOptions, SourceConnector, SourceDocument } from './connectors/types.js';
 import { IngestionStateTracker } from './state.js';
 
 // ── Types ──────────────────────────────────────────────────────────

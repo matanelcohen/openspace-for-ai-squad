@@ -1,12 +1,12 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { beforeEach,describe, expect, it } from 'vitest';
 
 import { A2AMessageStore } from '../a2a/message-store.js';
 import type {
-  A2AMessage,
   A2ALifecycleEvent,
-  A2AMessageType,
-  A2AMessageStatus,
+  A2AMessage,
   A2AMessagePriority,
+  A2AMessageStatus,
+  A2AMessageType,
 } from '../types/a2a.js';
 
 // ── Helpers ─────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useInitSquad, useAnalyzeWorkspace } from '@/hooks/use-workspaces';
+import { useAnalyzeWorkspace,useInitSquad } from '@/hooks/use-workspaces';
 
 // ── Types ───────────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { Tracer } from '../tracer.js';
 import { TraceCollector } from '../trace-collector.js';
+import { Tracer } from '../tracer.js';
 import type { Span, SpanContext } from '../types.js';
 
 describe('Tracer', () => {

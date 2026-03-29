@@ -1,8 +1,8 @@
 'use client';
 
+import type { Workspace } from '@openspace/shared';
 import { Check, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import type { Workspace } from '@openspace/shared';
 
 import {
   AlertDialog,
@@ -29,15 +29,15 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
+import { Input } from '@/components/ui/input';
 import {
+  getStoredWorkspaceId,
   useActivateWorkspace,
   useActiveWorkspace,
   useDeleteWorkspace,
   useUpdateWorkspace,
   useWorkspaces,
-  getStoredWorkspaceId,
 } from '@/hooks/use-workspaces';
 
 import { AddWorkspaceDialog } from './add-workspace-dialog';

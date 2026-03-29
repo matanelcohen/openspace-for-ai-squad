@@ -76,7 +76,7 @@ function loadAllWorkspaceSkills(squadDir: string): ReturnType<typeof loadSkillsF
     join(projectDir, '.copilot', 'skills'),
     join(squadDir, 'templates', 'skills'),
   ];
-  let all: ReturnType<typeof loadSkillsFromDirectory> = [];
+  const all: ReturnType<typeof loadSkillsFromDirectory> = [];
   const seen = new Set<string>();
   for (const dir of dirs) {
     for (const skill of loadSkillsFromDirectory(dir)) {

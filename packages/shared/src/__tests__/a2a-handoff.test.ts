@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { A2AMessageBus } from '../a2a/message-bus.js';
 import { CorrelationTracker } from '../a2a/correlation-tracker.js';
-import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
-import { HandoffManager } from '../a2a/handoff.js';
 import type { HandoffRequest } from '../a2a/handoff.js';
+import { HandoffManager } from '../a2a/handoff.js';
 import type { AgentResolver } from '../a2a/message-bus.js';
+import { A2AMessageBus } from '../a2a/message-bus.js';
+import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
 
 // ── Helpers ──────────────────────────────────────────────────────
 

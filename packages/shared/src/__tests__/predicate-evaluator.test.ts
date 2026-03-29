@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-  evaluatePredicate,
-  compareValues,
-  resolveField,
-  PredicateEvaluationError,
-} from '../workflow/predicate-evaluator.js';
 import type { ConditionalPredicate, ExecutionContext } from '../types/dag-workflow.js';
+import {
+  compareValues,
+  evaluatePredicate,
+  PredicateEvaluationError,
+  resolveField,
+} from '../workflow/predicate-evaluator.js';
 
 // ── Test Helpers ────────────────────────────────────────────────
 

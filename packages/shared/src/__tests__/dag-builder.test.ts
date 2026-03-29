@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { DAGBuilder, DAGBuilderError } from '../workflow/dag-builder.js';
 import type { ConditionalPredicate, DAGWorkflow, StepNode } from '../types/dag-workflow.js';
+import { DAGBuilder, DAGBuilderError } from '../workflow/dag-builder.js';
 
 // ── Helpers ─────────────────────────────────────────────────────
 

@@ -1,7 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { beforeEach,describe, expect, it, vi } from 'vitest';
 
-import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
 import type { A2ABusEvent, A2ABusEventType } from '../a2a/status-broadcaster.js';
+import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
 import type { A2AMessage, A2AMessageStatus } from '../types/a2a.js';
 
 // ── Helpers ─────────────────────────────────────────────────────

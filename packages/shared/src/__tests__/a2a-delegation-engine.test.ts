@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { A2AMessageBus } from '../a2a/message-bus.js';
 import { CorrelationTracker } from '../a2a/correlation-tracker.js';
-import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
-import { DelegationEngine } from '../a2a/delegation-engine.js';
 import type { DelegationRequest, SplitWorkPlan } from '../a2a/delegation-engine.js';
-import type { A2ADelegationRequest } from '../types/a2a.js';
+import { DelegationEngine } from '../a2a/delegation-engine.js';
 import type { AgentResolver } from '../a2a/message-bus.js';
+import { A2AMessageBus } from '../a2a/message-bus.js';
+import { StatusBroadcaster } from '../a2a/status-broadcaster.js';
+import type { A2ADelegationRequest } from '../types/a2a.js';
 
 // ── Helpers ──────────────────────────────────────────────────────
 

@@ -5,10 +5,10 @@
  */
 
 import type {
-  SkillLifecycleHooks,
-  SkillContext,
-  SkillRetryPolicy,
   BackoffStrategy,
+  SkillContext,
+  SkillLifecycleHooks,
+  SkillRetryPolicy,
 } from '@openspace/shared';
 import { DEFAULT_RETRY_POLICY } from '@openspace/shared';
 

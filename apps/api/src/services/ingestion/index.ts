@@ -4,19 +4,19 @@
  * Re-exports the pipeline, connectors, chunker, and state tracker.
  */
 
-export { IngestionPipeline, type IngestionPipelineConfig, type IngestionResult, type PipelineStats } from './pipeline.js';
 export { ChunkStore } from './chunk-store.js';
-export { chunkContent, contentHash, estimateTokens, chunkId, type ChunkInput } from './chunker.js';
-export { IngestionStateTracker } from './state.js';
+export { chunkContent, chunkId, type ChunkInput,contentHash, estimateTokens } from './chunker.js';
 export { migration_v3 } from './migration-v3.js';
+export { IngestionPipeline, type IngestionPipelineConfig, type IngestionResult, type PipelineStats } from './pipeline.js';
+export { IngestionStateTracker } from './state.js';
 
 // Connectors
 export {
+  type ConnectorOptions,
+  DocsConnector,
   GitCommitsConnector,
   PullRequestsConnector,
-  DocsConnector,
-  TasksConnector,
   type SourceConnector,
   type SourceDocument,
-  type ConnectorOptions,
+  TasksConnector,
 } from './connectors/index.js';

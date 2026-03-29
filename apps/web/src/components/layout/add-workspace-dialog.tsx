@@ -13,11 +13,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { EmojiPicker } from '@/components/ui/emoji-picker';
+import { Input } from '@/components/ui/input';
+import { useActivateWorkspace, useCreateWorkspace } from '@/hooks/use-workspaces';
 import { api } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
-import { useActivateWorkspace, useCreateWorkspace } from '@/hooks/use-workspaces';
 
 interface BrowseEntry {
   name: string;
