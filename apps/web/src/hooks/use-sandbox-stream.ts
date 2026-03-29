@@ -9,8 +9,8 @@ function buildStreamUrl(sandboxId: string): string {
   const base =
     process.env.NEXT_PUBLIC_API_URL ??
     (typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.hostname}:3001`
-      : 'http://localhost:3001');
+      ? `${window.location.protocol}//${window.location.host}`
+      : 'http://localhost:3000');
   const wsBase = base.replace(/^http/, 'ws');
   return `${wsBase}/ws/sandboxes/${sandboxId}/stream`;
 }

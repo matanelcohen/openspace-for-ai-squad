@@ -11,14 +11,14 @@ import { cn } from '@/lib/utils';
 const API_HOST =
   typeof window !== 'undefined'
     ? (process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') ??
-      `${window.location.hostname}:3001`)
-    : 'localhost:3001';
+      `${window.location.host}`)
+    : 'localhost:3000';
 
 const WS_BASE =
   typeof window !== 'undefined'
     ? (process.env.NEXT_PUBLIC_WS_URL ??
       `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${API_HOST}`)
-    : 'ws://localhost:3001';
+    : 'ws://localhost:3000';
 
 const RECONNECT_DELAY_MS = 2000;
 const MAX_RECONNECT_DELAY_MS = 30000;
