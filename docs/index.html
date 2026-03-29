@@ -234,8 +234,9 @@
     </div>
     <h1>Your AI Team,<br><span class="accent">One Dashboard.</span></h1>
     <p class="subtitle">
-      Build, manage, and collaborate with themed AI agent squads.
-      Each agent has a role, personality, skills, and memory — powered by the Squad SDK.
+      A visual workspace manager for <a href="https://www.npmjs.com/package/@bradygaster/squad-sdk" style="color: var(--accent); text-decoration: underline;">Squad SDK</a> teams.
+      Create, manage, and collaborate with your AI agent squads across multiple projects —
+      with themed characters, skills, memory, and full observability.
     </p>
     <div class="hero-actions">
       <a href="https://github.com/matanelcohen/openspace-for-ai-squad" class="btn-primary">
@@ -265,6 +266,28 @@
   </section>
 
   <section id="features">
+    <!-- Built on Squad banner -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2.5rem; margin-bottom: 4rem; text-align: center;">
+      <p style="font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-dim); margin-bottom: 1rem;">Built on top of</p>
+      <h3 style="font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem;">
+        📦 <a href="https://github.com/bradygaster/squad" style="color: var(--text); text-decoration: none; border-bottom: 2px solid var(--accent);">Squad SDK</a>
+        <span style="color: var(--text-dim); font-weight: 400; font-size: 1rem;"> by Brady Gaster</span>
+      </h3>
+      <p style="color: var(--text-muted); max-width: 700px; margin: 0 auto 1.5rem; font-size: 0.95rem;">
+        Squad gives you the CLI and SDK to create AI agent teams with <code style="background: var(--bg-card-hover); padding: 0.15rem 0.5rem; border-radius: 4px;">squad init</code> and <code style="background: var(--bg-card-hover); padding: 0.15rem 0.5rem; border-radius: 4px;">squad build</code>.
+        <strong>openspace.ai</strong> enhances it with a visual dashboard — letting you manage multiple squad workspaces,
+        see what agents are doing in real-time, search across all project knowledge, and configure skills and memories through a UI instead of editing files.
+      </p>
+      <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
+        <a href="https://www.npmjs.com/package/@bradygaster/squad-sdk" class="btn-secondary" style="font-size: 0.875rem; padding: 0.625rem 1.25rem;">
+          npm i @bradygaster/squad-sdk →
+        </a>
+        <a href="https://github.com/bradygaster/squad" class="btn-secondary" style="font-size: 0.875rem; padding: 0.625rem 1.25rem;">
+          Squad GitHub →
+        </a>
+      </div>
+    </div>
+
     <div class="section-header">
       <h2>Everything You Need</h2>
       <p>A complete platform for managing AI agent teams with real-time collaboration.</p>
@@ -342,7 +365,7 @@
   <section id="architecture">
     <div class="section-header">
       <h2>How It Works</h2>
-      <p>Built on the Squad SDK with GitHub Copilot as the AI backbone.</p>
+      <p>openspace.ai is a UI layer on top of Squad SDK — it reads and writes the same <code>.squad/</code> files the CLI uses.</p>
     </div>
     <div class="arch-flow">
       <div class="arch-node user">👤 You<small>Dashboard UI</small></div>
@@ -398,7 +421,18 @@
 
   <section class="cta">
     <h2>Ready to build your squad?</h2>
-    <p>Clone the repo, run <code>pnpm dev</code>, and create your first AI team in minutes.</p>
+    <p>Install Squad SDK, clone this repo, and manage your AI teams visually.</p>
+    <div class="terminal" style="max-width: 500px; margin: 0 auto 2rem; text-align: left;">
+      <div class="terminal-bar">
+        <div class="terminal-dot r"></div><div class="terminal-dot y"></div><div class="terminal-dot g"></div>
+      </div>
+      <div class="terminal-code">
+        <span class="prompt">$</span> <span class="cmd">npm i -g @bradygaster/squad-cli</span><br>
+        <span class="prompt">$</span> <span class="cmd">git clone https://github.com/matanelcohen/openspace-for-ai-squad</span><br>
+        <span class="prompt">$</span> <span class="cmd">pnpm install && pnpm dev</span><br>
+        <span class="output">🚀 Open <span class="highlight">http://localhost:3000</span></span>
+      </div>
+    </div>
     <div class="hero-actions">
       <a href="https://github.com/matanelcohen/openspace-for-ai-squad" class="btn-primary">
         View on GitHub →
