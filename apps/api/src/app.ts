@@ -15,6 +15,7 @@ import chatRoute from './routes/chat.js';
 import costsRoute from './routes/costs.js';
 import cronRoute from './routes/cron.js';
 import decisionsRoute from './routes/decisions.js';
+import githubRoute from './routes/github.js';
 import healthRoute from './routes/health.js';
 import knowledgeRoute from './routes/knowledge.js';
 import memoriesRoute from './routes/memories.js';
@@ -413,6 +414,7 @@ export async function buildApp(opts: AppOptions = {}) {
   app.register(skillsRoute, { prefix: '/api' });
   app.register(cronRoute, { prefix: '/api' });
   app.register(workspacesRoute, { prefix: '/api' });
+  app.register(githubRoute, { prefix: '/api' });
   // Terminal route
   app.register(terminalRoute, { prefix: '/api' });
 

@@ -2,7 +2,7 @@
 
 import type { TaskStatus } from '@openspace/shared';
 import { TASK_STATUS_LABELS, TASK_STATUSES } from '@openspace/shared';
-import { ArrowLeft, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, GitBranch, GitPullRequest, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAgents } from '@/hooks/use-agents';
+import { useCreateBranch, useCreatePR } from '@/hooks/use-github';
 import { useTaskEvents } from '@/hooks/use-task-events';
 import {
   useDeleteTask,
@@ -48,6 +49,8 @@ export default function TaskDetailPage() {
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const { data: agents } = useAgents();
   const { events, isWorking, clearEvents } = useTaskEvents(id);
+  const createBranch = useCreateBranch();
+  const createPR = useCreatePR();
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll progress log
@@ -347,6 +350,82 @@ export default function TaskDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* GitHub Integration */}
+      <Card data-testid="github-section">
+        <CardHeader className="pb-2">
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <GitBranch className="h-4 w-4" />
+            GitHub
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Linked issue badge */}
+            {task.labels
+              .filter((l) => l.startsWith('github-issue:'))
+              .map((l) => (
+                <Badge key={l} variant="outline" className="text-xs">
+                  Issue #{l.split(':')[1]}
+                </Badge>
+              ))}
+
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={createBranch.isPending}
+              onClick={() => createBranch.mutate({ taskId: task.id })}
+              data-testid="create-branch-btn"
+            >
+              <GitBranch className="mr-1 h-3 w-3" />
+              {createBranch.isPending ? 'Creating…' : 'Create Branch'}
+            </Button>
+
+            {createBranch.isSuccess && (
+              <Badge variant="secondary" className="text-xs font-mono">
+                {createBranch.data.branch}
+              </Badge>
+            )}
+
+            {task.status === 'done' && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={createPR.isPending}
+                onClick={() =>
+                  createPR.mutate({
+                    taskId: task.id,
+                    head: `agent/${task.id}`,
+                  })
+                }
+                data-testid="create-pr-btn"
+              >
+                <GitPullRequest className="mr-1 h-3 w-3" />
+                {createPR.isPending ? 'Creating…' : 'Create PR'}
+              </Button>
+            )}
+
+            {createPR.isSuccess && (
+              <a
+                href={createPR.data.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+              >
+                PR #{createPR.data.number}
+              </a>
+            )}
+
+            {(createBranch.isError || createPR.isError) && (
+              <span className="text-xs text-destructive">
+                {(createBranch.error as Error)?.message ??
+                  (createPR.error as Error)?.message ??
+                  'Operation failed'}
+              </span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Description */}
       <Card>

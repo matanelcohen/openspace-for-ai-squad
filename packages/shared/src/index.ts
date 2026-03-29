@@ -79,6 +79,8 @@ export type {
   ExecutionContext,
   ExpressionPredicate,
   ExtractedMemory,
+  GitHubIssue,
+  GitHubPR,
   HITLGateNodeConfig,
   IngestionState,
   LogicalPredicate,

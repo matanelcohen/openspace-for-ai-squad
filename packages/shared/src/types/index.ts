@@ -72,6 +72,7 @@ export type {
   WorkflowStartOptions,
 } from './dag-workflow.js';
 export type { Decision, DecisionStatus } from './decision.js';
+export type { GitHubIssue, GitHubPR } from './github.js';
 export type {
   AuditEntry,
   ConfidenceThreshold,

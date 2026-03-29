@@ -5,6 +5,7 @@ import {
   Brain,
   Clock,
   DollarSign,
+  GitBranch,
   LayoutDashboard,
   ListTodo,
   MessageSquare,
@@ -32,6 +33,7 @@ const navItems = [
   { href: '/skills', label: 'Skills', icon: Puzzle },
   { href: '/memories', label: 'Memories', icon: Brain },
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+  { href: '/github', label: 'GitHub', icon: GitBranch },
   { href: '/cron', label: 'Cron', icon: Clock },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
