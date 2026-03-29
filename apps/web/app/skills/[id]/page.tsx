@@ -163,10 +163,10 @@ function SkillAgentRow({ agent, skillId }: { agent: { id: string; name: string; 
   const { data } = useAgentSkillsManagement(agent.id);
   const skills = data?.skills ?? [];
   const match = skills.find((s: { id: string }) => s.id === skillId);
-  const enabled = match?.enabled ?? false;
-  const source = match?.source;
+  const isActive = match?.mode === 'always' || match?.mode === 'auto';
+  const mode = match?.mode ?? 'auto';
 
-  if (!enabled) return null;
+  if (!isActive) return null;
 
   return (
     <div className="flex items-center gap-3 rounded-lg border p-3">
@@ -176,7 +176,7 @@ function SkillAgentRow({ agent, skillId }: { agent: { id: string; name: string; 
         <div className="text-xs text-muted-foreground">{agent.role}</div>
       </div>
       <Badge variant="outline" className="text-xs">
-        {source === 'role-match' ? 'Auto' : 'Custom'}
+        {mode === 'always' ? '✅ Always' : '🟢 Auto'}
       </Badge>
     </div>
   );

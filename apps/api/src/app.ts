@@ -16,6 +16,7 @@ import cronRoute from './routes/cron.js';
 import decisionsRoute from './routes/decisions.js';
 import healthRoute from './routes/health.js';
 import knowledgeRoute from './routes/knowledge.js';
+import memoriesRoute from './routes/memories.js';
 import otlpCollectorRoute from './routes/otlp-collector.js';
 import sandboxesRoute from './routes/sandboxes.js';
 import skillsRoute from './routes/skills.js';
@@ -78,7 +79,7 @@ export interface AppOptions {
   aiProvider?: AIProvider | null;
 }
 
-export function buildApp(opts: AppOptions = {}) {
+export async function buildApp(opts: AppOptions = {}) {
   const app = Fastify({
     logger: opts.logger ?? true,
   });
@@ -93,6 +94,12 @@ export function buildApp(opts: AppOptions = {}) {
   const squadDir = activeWsOnStartup?.squadDir ?? defaultSquadDir;
 
   const db = opts.db ?? openDatabase({ squadDir });
+
+  // Run RAG tables migration
+  try {
+    const { migration_v3 } = await import('./services/ingestion/migration-v3.js');
+    migration_v3(db);
+  } catch { /* best effort */ }
 
   // Seed team members from .squad/team.md
   syncTeamMembers(db, squadDir);
@@ -141,8 +148,16 @@ export function buildApp(opts: AppOptions = {}) {
   cronService.setChatService(chatService);
   app.decorate('cronService', cronService);
 
-  // Knowledge search service
-  const knowledgeSearch = new KnowledgeSearchService({ db });
+  // Knowledge search service with local embedder
+  let knowledgeEmbedder: import('@openspace/shared').Embedder | undefined;
+  try {
+    const mod = await (import('./services/embeddings/local-embedder.js') as Promise<{ LocalEmbedder: new () => import('@openspace/shared').Embedder }>);
+    knowledgeEmbedder = new mod.LocalEmbedder();
+    console.log('[Knowledge] Local embedder initialized (lazy load on first query)');
+  } catch (e) {
+    console.log(`[Knowledge] Local embedder not available — keyword search only: ${(e as Error).message}`);
+  }
+  const knowledgeSearch = new KnowledgeSearchService({ db, embedder: knowledgeEmbedder });
   app.decorate('knowledgeSearch', knowledgeSearch);
 
   // Sandbox service (Docker container management)
@@ -287,10 +302,12 @@ export function buildApp(opts: AppOptions = {}) {
       // Start agent worker service with A2A delegation capability
       const workerService = new AgentWorkerService({
         tasksDir: resolve(squadDir, 'tasks'),
+        squadDir,
         aiProvider: provider,
         activityFeed,
         wsManager: app.wsManager ?? null,
         agents: AGENT_PROFILES,
+        db,
         a2aBaseUrl,
       });
       await workerService.start();
@@ -381,6 +398,7 @@ export function buildApp(opts: AppOptions = {}) {
   app.register(voiceRoute, { prefix: '/api' });
   app.register(channelsRoute, { prefix: '/api' });
   app.register(knowledgeRoute, { prefix: '/api' });
+  app.register(memoriesRoute, { prefix: '/api' });
   app.register(teamMembersRoute, { prefix: '/api' });
   app.register(sandboxesRoute, { prefix: '/api' });
   app.register(tracesRoute, { prefix: '/api' });

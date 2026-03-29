@@ -19,9 +19,18 @@ import { ErrorCodes, sendError } from '../lib/api-errors.js';
 import { getSkillsForRole, loadSkillsFromDirectory } from '../services/seed-skills.js';
 import { getTask } from '../services/squad-writer/task-writer.js';
 
+/** Resolve the .squad dir from the active workspace, falling back to cwd. */
+function getSquadDir(app: { workspaceService?: { getActive?: () => { squadDir: string } | null } }): string {
+  const active = app.workspaceService?.getActive?.();
+  if (active?.squadDir) return active.squadDir;
+  return resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+}
+
 // ── Skill override persistence helpers ────────────────────────────
 
-type OverrideMap = Record<string, Record<string, boolean>>;
+/** Override mode: 'always' = force-inject, 'never' = exclude, absent = auto-match */
+type SkillOverrideMode = 'always' | 'never';
+type OverrideMap = Record<string, Record<string, SkillOverrideMode>>;
 
 function getOverridesPath(squadDir: string): string {
   return join(squadDir, '.cache', 'agent-skill-overrides.json');
@@ -31,7 +40,22 @@ function readOverrides(squadDir: string): OverrideMap {
   const path = getOverridesPath(squadDir);
   if (!existsSync(path)) return {};
   try {
-    return JSON.parse(readFileSync(path, 'utf-8')) as OverrideMap;
+    const raw = JSON.parse(readFileSync(path, 'utf-8')) as Record<string, Record<string, unknown>>;
+    // Migrate old boolean format to new mode format
+    const migrated: OverrideMap = {};
+    for (const [agentId, skills] of Object.entries(raw)) {
+      migrated[agentId] = {};
+      for (const [skillId, val] of Object.entries(skills)) {
+        if (val === 'always' || val === 'never') {
+          migrated[agentId][skillId] = val;
+        } else if (val === true) {
+          migrated[agentId][skillId] = 'always';
+        } else if (val === false) {
+          migrated[agentId][skillId] = 'never';
+        }
+      }
+    }
+    return migrated;
   } catch {
     return {};
   }
@@ -42,6 +66,27 @@ function writeOverrides(squadDir: string, overrides: OverrideMap): void {
   const cacheDir = join(squadDir, '.cache');
   if (!existsSync(cacheDir)) mkdirSync(cacheDir, { recursive: true });
   writeFileSync(path, JSON.stringify(overrides, null, 2), 'utf-8');
+}
+
+/** Load all skills from workspace directories. */
+function loadAllWorkspaceSkills(squadDir: string): ReturnType<typeof loadSkillsFromDirectory> {
+  const projectDir = resolve(squadDir, '..');
+  const dirs = [
+    join(squadDir, 'skills'),
+    join(projectDir, '.copilot', 'skills'),
+    join(squadDir, 'templates', 'skills'),
+  ];
+  let all: ReturnType<typeof loadSkillsFromDirectory> = [];
+  const seen = new Set<string>();
+  for (const dir of dirs) {
+    for (const skill of loadSkillsFromDirectory(dir)) {
+      if (!seen.has(skill.id)) {
+        seen.add(skill.id);
+        all.push(skill);
+      }
+    }
+  }
+  return all;
 }
 
 const agentsRoute: FastifyPluginAsync = async (app) => {
@@ -58,7 +103,7 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
 
     const status = worker.getStatus();
     const queuedIds = worker.getQueuedTaskIds();
-    const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+    const squadDir = getSquadDir(app);
     const tasksDir = resolve(squadDir, 'tasks');
 
     const agents: Record<
@@ -131,7 +176,7 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
       return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
     }
 
-    const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+    const squadDir = getSquadDir(app);
     const charterPath = join(squadDir, 'agents', id, 'charter.md');
 
     if (!existsSync(charterPath)) {
@@ -163,7 +208,7 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
         return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
       }
 
-      const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
+      const squadDir = getSquadDir(app);
       const agentDir = join(squadDir, 'agents', id);
 
       if (!existsSync(agentDir)) {
@@ -177,7 +222,7 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // GET /api/agents/:id/skills — per-agent skills (role-matched + overrides)
+  // GET /api/agents/:id/skills — per-agent skills with override modes
   app.get<{ Params: { id: string } }>('/agents/:id/skills', async (request, reply) => {
     const { id } = request.params;
     const agent = await app.squadParser.getAgent(id);
@@ -186,30 +231,24 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
       return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
     }
 
-    const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
-    const skillsDir = join(squadDir, 'skills');
-    const allSkills = loadSkillsFromDirectory(skillsDir);
-    const roleMatched = getSkillsForRole(allSkills, agent.role);
-    const roleMatchedIds = new Set(roleMatched.map((s) => s.id));
+    const squadDir = getSquadDir(app);
+    const allSkills = loadAllWorkspaceSkills(squadDir);
 
     const overrides = readOverrides(squadDir);
     const agentOverrides = overrides[id] ?? {};
 
-    // Build merged skill list: start with all skills, mark enabled/source
+    // Build skill list with 3-state mode: auto | always | never
     const skills = allSkills.map((skill) => {
-      const matchedByRole = roleMatchedIds.has(skill.id);
-      const hasOverride = skill.id in agentOverrides;
-      const enabled = hasOverride ? agentOverrides[skill.id] : matchedByRole;
-      const source: 'role-match' | 'manual' = hasOverride ? 'manual' : 'role-match';
+      const override = agentOverrides[skill.id] as 'always' | 'never' | undefined;
+      const mode: 'auto' | 'always' | 'never' = override ?? 'auto';
 
       return {
         id: skill.id,
         name: skill.frontmatter.name,
         description: skill.frontmatter.description,
+        domain: skill.frontmatter.domain ?? '',
         tags: skill.frontmatter.tags,
-        enabled,
-        source,
-        matchedByRole,
+        mode,
       };
     });
 
@@ -220,19 +259,19 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
     });
   });
 
-  // PATCH /api/agents/:id/skills — toggle a skill for an agent
-  app.patch<{ Params: { id: string }; Body: { skillId: string; enabled: boolean } }>(
+  // PATCH /api/agents/:id/skills — set skill mode for an agent (auto | always | never)
+  app.patch<{ Params: { id: string }; Body: { skillId: string; mode: 'auto' | 'always' | 'never' } }>(
     '/agents/:id/skills',
     async (request, reply) => {
       const { id } = request.params;
-      const { skillId, enabled } = request.body ?? {};
+      const { skillId, mode } = request.body ?? {};
 
-      if (!skillId || typeof enabled !== 'boolean') {
+      if (!skillId || !['auto', 'always', 'never'].includes(mode)) {
         return sendError(
           reply,
           400,
           ErrorCodes.VALIDATION_ERROR,
-          'Missing required fields: skillId (string) and enabled (boolean)',
+          'Required: skillId (string) and mode ("auto" | "always" | "never")',
         );
       }
 
@@ -241,33 +280,28 @@ const agentsRoute: FastifyPluginAsync = async (app) => {
         return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Agent not found: ${id}`);
       }
 
-      const squadDir = resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
-      const skillsDir = join(squadDir, 'skills');
-      const allSkills = loadSkillsFromDirectory(skillsDir);
+      const squadDir = getSquadDir(app);
+      const allSkills = loadAllWorkspaceSkills(squadDir);
       const skill = allSkills.find((s) => s.id === skillId);
 
       if (!skill) {
         return sendError(reply, 404, ErrorCodes.NOT_FOUND, `Skill not found: ${skillId}`);
       }
 
-      // Check if this is just the role-match default — if so, remove override
-      const roleMatched = getSkillsForRole(allSkills, agent.role);
-      const isRoleMatch = roleMatched.some((s) => s.id === skillId);
-
       const overrides = readOverrides(squadDir);
       if (!overrides[id]) overrides[id] = {};
 
-      if (enabled === isRoleMatch) {
-        // Override matches default — remove it
+      if (mode === 'auto') {
+        // Remove override — back to auto-matching
         delete overrides[id][skillId];
         if (Object.keys(overrides[id]).length === 0) delete overrides[id];
       } else {
-        overrides[id][skillId] = enabled;
+        overrides[id][skillId] = mode;
       }
 
       writeOverrides(squadDir, overrides);
 
-      return reply.send({ success: true, agentId: id, skillId, enabled });
+      return reply.send({ success: true, agentId: id, skillId, mode });
     },
   );
 };

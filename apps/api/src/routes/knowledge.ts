@@ -122,6 +122,77 @@ const knowledgeRoute: FastifyPluginAsync = async (app) => {
     const stats = app.knowledgeSearch.getStats();
     return reply.send(stats);
   });
+
+  /**
+   * POST /api/knowledge/ingest
+   *
+   * Starts ingestion as a background job. Returns immediately.
+   * Progress broadcast via WebSocket: knowledge:progress, knowledge:complete, knowledge:error.
+   */
+  app.post('/knowledge/ingest', async (_request, reply) => {
+    const active = app.workspaceService?.getActive?.();
+    const squadDir = active?.squadDir ?? '.squad';
+    const projectDir = active?.projectDir ?? process.cwd();
+
+    // Return immediately
+    reply.send({ success: true, status: 'started', message: 'Ingestion running in background' });
+
+    // Run in background
+    setImmediate(async () => {
+      try {
+        const { IngestionPipeline } = await import('../services/ingestion/pipeline.js');
+        const { DocsConnector, TasksConnector, GitCommitsConnector, PullRequestsConnector, ChatConnector, MemoriesConnector, ChartersConnector } = await import('../services/ingestion/connectors/index.js');
+        const { migration_v3 } = await import('../services/ingestion/migration-v3.js');
+
+        migration_v3(app.db);
+
+        let embedder: import('@openspace/shared').Embedder | undefined;
+        try {
+          const { LocalEmbedder } = await import('../services/embeddings/local-embedder.js');
+          embedder = new LocalEmbedder();
+        } catch { /* no embedder */ }
+
+        const pipeline = new IngestionPipeline({ db: app.db, embedder, embeddingBatchSize: 5 });
+
+        pipeline.registerConnector(new DocsConnector({ repoPath: projectDir, squadDir, scanPaths: ['docs', squadDir, 'README.md'] }));
+        pipeline.registerConnector(new TasksConnector({ squadDir }));
+        pipeline.registerConnector(new GitCommitsConnector({ repoPath: projectDir, includeDiffs: false, maxCommits: 200 }));
+        pipeline.registerConnector(new PullRequestsConnector({ repoPath: projectDir, maxPRs: 50 }));
+        pipeline.registerConnector(new ChatConnector({ db: app.db, workspaceId: active?.id ?? '' }));
+        pipeline.registerConnector(new MemoriesConnector({ db: app.db }));
+        pipeline.registerConnector(new ChartersConnector({ squadDir }));
+
+        // Process each source type one at a time, broadcasting progress
+        for (const sourceType of pipeline.getSourceTypes()) {
+          try {
+            const result = await pipeline.ingestSourceType(sourceType, { squadDir, projectDir });
+
+            if (app.wsManager) {
+              app.wsManager.broadcast(JSON.stringify({
+                type: 'knowledge:progress',
+                sourceType,
+                documentsProcessed: (result as Record<string, unknown>).documentsProcessed ?? 0,
+                chunksCreated: (result as Record<string, unknown>).chunksCreated ?? 0,
+              }));
+            }
+            app.log.info(`[Knowledge] ${sourceType}: ${(result as Record<string, unknown>).chunksCreated ?? 0} chunks`);
+          } catch (err) {
+            app.log.warn(`[Knowledge] ${sourceType} failed: ${(err as Error).message}`);
+          }
+        }
+
+        if (app.wsManager) {
+          app.wsManager.broadcast(JSON.stringify({ type: 'knowledge:complete' }));
+        }
+        app.log.info('[Knowledge] Background ingestion complete');
+      } catch (err) {
+        app.log.error(`[Knowledge] Ingestion failed: ${(err as Error).message}`);
+        if (app.wsManager) {
+          app.wsManager.broadcast(JSON.stringify({ type: 'knowledge:error', error: (err as Error).message }));
+        }
+      }
+    });
+  });
 };
 
 export default knowledgeRoute;

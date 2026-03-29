@@ -1,128 +1,104 @@
 /**
- * Tasks connector — reads task records from the SQLite database.
+ * Tasks connector — reads task .md files from .squad/tasks/.
  *
- * Formats task title, description, status, priority, and assignee
- * as ingestable documents for the RAG pipeline.
+ * Parses YAML frontmatter for metadata and includes the full
+ * markdown body as content for RAG ingestion.
  */
 
-import type Database from 'better-sqlite3';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import type { SourceType } from '@openspace/shared';
 
 import type { ConnectorOptions, SourceConnector, SourceDocument } from './types.js';
 
-// ── DB row type ────────────────────────────────────────────────────
-
-interface TaskRow {
-  id: string;
-  title: string;
-  description: string;
-  status: string;
-  priority: string;
-  assignee: string | null;
-  labels: string;
-  created_at: string;
-  updated_at: string;
-}
-
-// ── Content formatting ─────────────────────────────────────────────
-
-function formatTaskContent(task: TaskRow): string {
-  const parts: string[] = [];
-
-  parts.push(`# Task: ${task.title}`);
-  parts.push(`ID: ${task.id}`);
-  parts.push(`Status: ${task.status}`);
-  parts.push(`Priority: ${task.priority}`);
-
-  if (task.assignee) {
-    parts.push(`Assignee: ${task.assignee}`);
-  }
-
-  const labels = parseLabels(task.labels);
-  if (labels.length > 0) {
-    parts.push(`Labels: ${labels.join(', ')}`);
-  }
-
-  parts.push(`Created: ${task.created_at}`);
-  parts.push(`Updated: ${task.updated_at}`);
-
-  if (task.description) {
-    parts.push('');
-    parts.push('## Description');
-    parts.push(task.description);
-  }
-
-  return parts.join('\n');
-}
-
-function parseLabels(raw: string): string[] {
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-// ── Connector ──────────────────────────────────────────────────────
-
 export interface TasksConnectorConfig {
-  /** SQLite database instance. */
-  db: Database.Database;
+  /** Path to the .squad directory. */
+  squadDir: string;
 }
 
 export class TasksConnector implements SourceConnector {
   readonly sourceType: SourceType = 'task';
-  private readonly db: Database.Database;
+  private readonly tasksDir: string;
 
   constructor(config: TasksConnectorConfig) {
-    this.db = config.db;
+    this.tasksDir = join(config.squadDir, 'tasks');
   }
 
   async fetchSources(options?: ConnectorOptions): Promise<SourceDocument[]> {
-    let query = `SELECT id, title, description, status, priority, assignee, labels, created_at, updated_at
-                 FROM tasks ORDER BY updated_at DESC`;
+    if (!existsSync(this.tasksDir)) return [];
 
-    const params: string[] = [];
+    const files = readdirSync(this.tasksDir).filter((f) => f.endsWith('.md'));
+    const limit = options?.limit ?? files.length;
+    const documents: SourceDocument[] = [];
 
-    if (options?.since) {
-      query = `SELECT id, title, description, status, priority, assignee, labels, created_at, updated_at
-               FROM tasks WHERE updated_at >= ? ORDER BY updated_at DESC`;
-      params.push(options.since);
+    for (const file of files.slice(0, limit)) {
+      try {
+        const content = readFileSync(join(this.tasksDir, file), 'utf-8');
+        const fm = parseFrontmatter(content);
+
+        // Skip if incremental and not updated since
+        if (options?.since && fm.updated && fm.updated < options.since) continue;
+
+        documents.push({
+          sourceId: `task-${fm.id ?? file.replace('.md', '')}`,
+          sourceType: 'task',
+          content,
+          metadata: {
+            sourceType: 'task' as const,
+            sourceId: `task-${fm.id ?? file.replace('.md', '')}`,
+            squadPath: `tasks/${file}`,
+            filePath: join(this.tasksDir, file),
+            agentIds: fm.assignee ? [fm.assignee] : [],
+            author: fm.assignee ?? null,
+            createdAt: fm.created ?? null,
+            updatedAt: fm.updated ?? null,
+            tags: fm.labels ?? [],
+            status: fm.status ?? null,
+            priority: fm.priority ?? null,
+            headingPath: null,
+            threadId: null,
+            sessionId: null,
+          },
+        });
+      } catch {
+        // skip unreadable files
+      }
     }
 
-    if (options?.limit) {
-      query += ` LIMIT ${options.limit}`;
-    }
-
-    const rows = params.length > 0
-      ? this.db.prepare<[string], TaskRow>(query).all(params[0]!)
-      : this.db.prepare<[], TaskRow>(query).all();
-
-    return rows.map((task) => {
-      const labels = parseLabels(task.labels);
-      return {
-        sourceId: `task-${task.id}`,
-        sourceType: 'task' as const,
-        content: formatTaskContent(task),
-        metadata: {
-          sourceType: 'task' as const,
-          sourceId: `task-${task.id}`,
-          squadPath: `tasks/${task.id}.md`,
-          filePath: null,
-          agentIds: task.assignee ? [task.assignee] : [],
-          author: task.assignee,
-          createdAt: task.created_at,
-          updatedAt: task.updated_at,
-          tags: labels,
-          status: task.status,
-          priority: task.priority,
-          headingPath: null,
-          threadId: null,
-          sessionId: null,
-        },
-      };
-    });
+    return documents;
   }
+}
+
+/** Simple frontmatter parser for task files. */
+function parseFrontmatter(content: string): Record<string, unknown> {
+  const match = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!match) return {};
+
+  const yaml = match[1]!;
+  const result: Record<string, unknown> = {};
+
+  for (const line of yaml.split('\n')) {
+    const kv = line.match(/^(\w+):\s*(.+)/);
+    if (kv) {
+      let val: unknown = kv[2]!.trim();
+      // Strip quotes
+      if (typeof val === 'string' && val.startsWith("'") && val.endsWith("'")) {
+        val = val.slice(1, -1);
+      }
+      result[kv[1]!] = val;
+    }
+    // Parse array items
+    if (line.trim().startsWith('- ') && Object.keys(result).length > 0) {
+      const lastKey = Object.keys(result).pop()!;
+      if (!Array.isArray(result[lastKey])) {
+        result[lastKey] = [];
+      }
+      let item = line.trim().slice(2).trim();
+      if (item.startsWith("'") && item.endsWith("'")) item = item.slice(1, -1);
+      (result[lastKey] as string[]).push(item);
+    }
+  }
+
+  return result;
 }

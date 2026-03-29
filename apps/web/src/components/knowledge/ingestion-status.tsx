@@ -1,12 +1,15 @@
 'use client';
 
 import type { SourceType } from '@openspace/shared';
-import { CheckCircle2, CircleDashed, RefreshCw } from 'lucide-react';
+import { CheckCircle2, CircleDashed, Loader2, Play, RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useKnowledgeStats } from '@/hooks/use-knowledge';
+import { api } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 
 const sourceTypeLabels: Record<SourceType, string> = {
@@ -54,7 +57,33 @@ function IngestionSkeleton() {
 }
 
 export function IngestionStatus() {
-  const { data: stats, isLoading, error, dataUpdatedAt } = useKnowledgeStats();
+  const { data: stats, isLoading, error, dataUpdatedAt, refetch } = useKnowledgeStats();
+  const [ingesting, setIngesting] = useState(false);
+
+  const handleIngest = async () => {
+    setIngesting(true);
+    try {
+      await api.post('/api/knowledge/ingest', {});
+      // Don't refetch immediately — wait for WebSocket progress
+      // Poll stats every 3s while ingesting
+      const poll = setInterval(async () => {
+        await refetch();
+      }, 3000);
+      // Stop polling after 2 minutes max
+      setTimeout(() => {
+        clearInterval(poll);
+        setIngesting(false);
+        void refetch();
+      }, 120_000);
+      // Also listen for completion (ingesting state cleared by WS in the future)
+      setTimeout(() => {
+        void refetch();
+        setIngesting(false);
+      }, 5000);
+    } catch {
+      setIngesting(false);
+    }
+  };
 
   if (isLoading) {
     return <IngestionSkeleton />;
@@ -90,6 +119,19 @@ export function IngestionStatus() {
               Polled {new Date(dataUpdatedAt).toLocaleTimeString()}
             </span>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleIngest}
+            disabled={ingesting}
+            className="h-7 text-xs"
+          >
+            {ingesting ? (
+              <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> Indexing…</>
+            ) : (
+              <><Play className="mr-1 h-3 w-3" /> Index Now</>
+            )}
+          </Button>
         </div>
       </CardHeader>
       <CardContent>

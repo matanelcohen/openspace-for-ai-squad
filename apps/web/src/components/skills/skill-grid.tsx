@@ -19,7 +19,7 @@ interface SkillGridProps {
 function useEnabledSkillIds(agentId: string) {
   const { data } = useAgentSkillsManagement(agentId);
   return useMemo(
-    () => new Set(data?.skills.filter((s) => s.enabled).map((s) => s.id) ?? []),
+    () => new Set(data?.skills.filter((s) => s.mode === 'always').map((s) => s.id) ?? []),
     [data],
   );
 }

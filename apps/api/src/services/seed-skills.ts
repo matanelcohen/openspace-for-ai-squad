@@ -99,6 +99,61 @@ export function getSkillsForRole(skills: ParsedSkill[], role: string): ParsedSki
 }
 
 /**
+ * Match skills relevant to a task using keyword + domain + role scoring.
+ * Mirrors the Squad SDK SkillRegistry.matchSkills() approach.
+ */
+export function matchSkillsForTask(
+  skills: ParsedSkill[],
+  taskText: string,
+  agentRole: string,
+): ParsedSkill[] {
+  const lowerTask = taskText.toLowerCase();
+  const lowerRole = agentRole.toLowerCase();
+
+  const scored = skills.map((s) => {
+    let score = 0;
+
+    // Role match: +0.3
+    const roles = s.frontmatter.agentMatch?.roles ?? [];
+    if (roles.includes('*') || roles.some((r) => lowerRole.includes(r.toLowerCase()))) {
+      score += 0.3;
+    }
+
+    // Domain match: +0.3 if task mentions the skill domain
+    const domain = (s.frontmatter.domain ?? s.frontmatter.description ?? '').toLowerCase();
+    const domainWords = domain.split(/[,\s]+/).filter((w) => w.length > 3);
+    for (const word of domainWords) {
+      if (lowerTask.includes(word)) {
+        score += 0.3;
+        break;
+      }
+    }
+
+    // Content keyword match: +0.2 for each matching keyword (max 0.4)
+    const contentWords = (s.frontmatter.name + ' ' + s.frontmatter.description)
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 3);
+    let keywordHits = 0;
+    for (const word of contentWords) {
+      if (lowerTask.includes(word)) {
+        keywordHits++;
+        if (keywordHits >= 2) break;
+      }
+    }
+    score += keywordHits * 0.2;
+
+    return { skill: s, score };
+  });
+
+  return scored
+    .filter((s) => s.score > 0.2)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map((s) => s.skill);
+}
+
+/**
  * Build a system prompt fragment with full skill instructions for an agent.
  * Includes the SKILL.md content (not just name/description) so the AI
  * learns HOW to use each tool.
@@ -129,14 +184,25 @@ export function buildSkillsPrompt(skills: ParsedSkill[]): string {
  */
 export function seedBuiltinSkills(registry: SkillRegistryImpl, squadDir?: string): void {
   const resolvedSquadDir = squadDir ?? resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
-  const skillsDir = join(resolvedSquadDir, 'skills');
 
-  const skills = loadSkillsFromDirectory(skillsDir);
+  // Check multiple skill locations: .squad/skills, .copilot/skills, .squad/templates/skills
+  const projectDir = resolve(resolvedSquadDir, '..');
+  const skillsDirs = [
+    join(resolvedSquadDir, 'skills'),
+    join(projectDir, '.copilot', 'skills'),
+    join(resolvedSquadDir, 'templates', 'skills'),
+  ];
+
+  let allSkills: ReturnType<typeof loadSkillsFromDirectory> = [];
+  for (const dir of skillsDirs) {
+    const skills = loadSkillsFromDirectory(dir);
+    allSkills = allSkills.concat(skills);
+  }
 
   // Access the internal entries map via discover simulation
   const entries = (registry as unknown as { entries: Map<string, unknown> }).entries;
 
-  for (const skill of skills) {
+  for (const skill of allSkills) {
     if (entries.has(skill.id)) continue;
 
     // Pretty-print the skill name from the directory name
@@ -167,11 +233,11 @@ export function seedBuiltinSkills(registry: SkillRegistryImpl, squadDir?: string
       activeAgents: new Set<string>(),
       lastTransition: Date.now(),
       error: null,
-      sourcePath: join(skillsDir, skill.id, 'SKILL.md'),
+      sourcePath: skill.sourcePath ?? skill.id,
       retryState: null,
       circuitBreaker: null,
     });
   }
 
-  console.log(`[Skills] Seeded ${skills.length} skills from ${skillsDir}`);
+  console.log(`[Skills] Seeded ${allSkills.length} skills from ${skillsDirs.filter(d => existsSync(d)).join(', ') || 'none'}`);
 }

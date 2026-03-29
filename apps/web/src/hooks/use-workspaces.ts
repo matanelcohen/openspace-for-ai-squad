@@ -80,6 +80,20 @@ export function getStoredWorkspaceId(): string | null {
   return localStorage.getItem(STORAGE_KEY);
 }
 
+/** Update workspace metadata (name, icon, description). */
+export function useUpdateWorkspace() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; name?: string; icon?: string; description?: string }) =>
+      api.put<Workspace>(`/api/workspaces/${encodeURIComponent(id)}`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.active });
+    },
+  });
+}
+
 /** Delete a workspace by ID. */
 export function useDeleteWorkspace() {
   const queryClient = useQueryClient();
@@ -126,6 +140,47 @@ export function useInitSquad() {
   return useMutation({
     mutationFn: ({ workspaceId, ...body }: InitSquadInput & { workspaceId: string }) =>
       api.post<Workspace>(`/api/workspaces/${encodeURIComponent(workspaceId)}/init`, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
+      queryClient.invalidateQueries({ queryKey: workspaceKeys.active });
+      queryClient.invalidateQueries({ queryKey: ['workspaces'] });
+    },
+  });
+}
+
+// ── Analyze hooks ───────────────────────────────────────────────────
+
+export interface AnalyzeResult {
+  teamName: string;
+  description: string;
+  stack: string;
+  agents: Array<{ name: string; role: string; personality?: string; backstory?: string }>;
+}
+
+export interface AnalyzeInput {
+  workspaceId: string;
+  teamName?: string;
+  description?: string;
+  stack?: string;
+  theme?: string;
+  universe?: string;
+}
+
+/** Analyze a workspace project to auto-detect team composition. */
+export function useAnalyzeWorkspace() {
+  return useMutation({
+    mutationFn: ({ workspaceId, ...body }: AnalyzeInput) =>
+      api.post<AnalyzeResult>(`/api/workspaces/${encodeURIComponent(workspaceId)}/analyze`, body),
+  });
+}
+
+/** Delete the .squad directory from a workspace. */
+export function useDeleteSquad() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (workspaceId: string) =>
+      api.delete<{ success: boolean }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/squad`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: workspaceKeys.all });
       queryClient.invalidateQueries({ queryKey: workspaceKeys.active });

@@ -83,12 +83,12 @@ function ResultCard({ chunk, index }: { chunk: RetrievedChunk; index: number }) 
 
           {/* Metadata tags */}
           <div className="flex flex-wrap gap-1 mt-2">
-            {chunk.metadata?.tags?.map((tag) => (
+            {(Array.isArray(chunk.metadata?.tags) ? chunk.metadata.tags : []).map((tag) => (
               <Badge key={tag} variant="outline" className="text-[10px] px-1.5 py-0">
                 {tag}
               </Badge>
             ))}
-            {chunk.metadata?.agentIds?.map((agentId) => (
+            {(Array.isArray(chunk.metadata?.agentIds) ? chunk.metadata.agentIds : []).map((agentId) => (
               <Badge key={agentId} variant="secondary" className="text-[10px] px-1.5 py-0">
                 🤖 {agentId}
               </Badge>

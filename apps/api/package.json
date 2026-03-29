@@ -18,6 +18,7 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/websocket": "^11.2.0",
     "@github/copilot-sdk": "^0.2.0",
+    "@huggingface/transformers": "^3.8.1",
     "@openspace/mcp-server": "workspace:*",
     "@openspace/memory-store": "workspace:*",
     "@openspace/shared": "workspace:*",

@@ -2,6 +2,7 @@
 
 import {
   Activity,
+  AlertTriangle,
   CheckCircle,
   Database,
   Info,
@@ -18,6 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useHealthCheck, usePruneMessages, useSystemConfig } from '@/hooks/use-settings';
 import { useSquad } from '@/hooks/use-squad';
+import { useActiveWorkspace, useDeleteSquad } from '@/hooks/use-workspaces';
 
 function HealthCheckSection() {
   const { data: health, isLoading, refetch, isFetching } = useHealthCheck();
@@ -251,6 +253,76 @@ function AboutSection() {
   );
 }
 
+function DangerZoneSection() {
+  const { data: workspace } = useActiveWorkspace();
+  const deleteSquad = useDeleteSquad();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const handleDelete = () => {
+    if (!workspace?.id) return;
+    deleteSquad.mutate(workspace.id, {
+      onSuccess: () => {
+        setConfirmOpen(false);
+        window.location.reload();
+      },
+    });
+  };
+
+  return (
+    <Card className="border-destructive/50">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-lg text-destructive">
+          <AlertTriangle className="h-5 w-5" />
+          Danger Zone
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center justify-between rounded-md border border-destructive/30 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Delete Squad</p>
+            <p className="text-xs text-muted-foreground">
+              Remove the .squad directory and all agent configs from the active workspace.
+            </p>
+          </div>
+          {!confirmOpen ? (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setConfirmOpen(true)}
+            >
+              <Trash2 className="mr-1 h-4 w-4" />
+              Delete Squad
+            </Button>
+          ) : (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setConfirmOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDelete}
+                disabled={deleteSquad.isPending}
+              >
+                {deleteSquad.isPending ? 'Deleting…' : 'Yes, delete it'}
+              </Button>
+            </div>
+          )}
+        </div>
+        {deleteSquad.isError && (
+          <p className="text-sm text-destructive">
+            Failed to delete: {deleteSquad.error?.message}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SettingsPage() {
   return (
     <div className="space-y-6">
@@ -268,6 +340,7 @@ export default function SettingsPage() {
       <ModelConfigSection />
       <ChatPruningSection />
       <AboutSection />
+      <DangerZoneSection />
     </div>
   );
 }

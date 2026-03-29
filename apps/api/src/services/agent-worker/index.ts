@@ -17,6 +17,7 @@ import { getTierDefinition, selectTier } from '../routing/tiers.js';
 import {
   buildSkillsPrompt,
   getSkillsForRole,
+  matchSkillsForTask,
   loadSkillsFromDirectory,
   type ParsedSkill,
 } from '../seed-skills.js';
@@ -34,6 +35,7 @@ interface AgentProfile {
 
 interface AgentWorkerConfig {
   tasksDir: string;
+  squadDir: string;
   /** Path to persist queue state. Default: <tasksDir>/../.cache/agent-queue.json */
   queueFilePath?: string;
   aiProvider: AIProvider;
@@ -41,6 +43,8 @@ interface AgentWorkerConfig {
   wsManager: WebSocketManager | null;
   agents: AgentProfile[];
   pollIntervalMs?: number;
+  /** SQLite database instance for memory store. */
+  db?: import('better-sqlite3').Database;
   /**
    * Base URL for the A2A service (e.g. http://localhost:3001).
    * When set, enables inter-agent delegation via A2A protocol.
@@ -350,18 +354,110 @@ export class AgentWorkerService {
       // Collect progress events during execution
       const progressLog: string[] = [];
 
-      // Build role-matched skills prompt
-      const agentSkills = getSkillsForRole(this.allSkills, agent.role);
-      const skillsPrompt = buildSkillsPrompt(agentSkills);
+      // Build task-matched skills prompt (SDK-style: matches by task content + role + domain)
+      const taskText = `${task.title} ${task.description ?? ''}`;
+      const autoMatched = matchSkillsForTask(this.allSkills, taskText, agent.role);
+      const matched = autoMatched.length > 0 ? autoMatched : getSkillsForRole(this.allSkills, agent.role);
+
+      // Apply per-agent overrides (always/never) from .cache/agent-skill-overrides.json
+      let finalSkills = matched;
+      try {
+        const { existsSync, readFileSync } = await import('node:fs');
+        const { join } = await import('node:path');
+        const overridesPath = join(this.config.squadDir, '.cache', 'agent-skill-overrides.json');
+        if (existsSync(overridesPath)) {
+          const overrides = JSON.parse(readFileSync(overridesPath, 'utf-8')) as Record<string, Record<string, string>>;
+          const agentOverrides = overrides[agent.id] ?? {};
+          // Remove 'never' skills
+          finalSkills = finalSkills.filter((s) => agentOverrides[s.id] !== 'never');
+          // Add 'always' skills not already included
+          const includedIds = new Set(finalSkills.map((s) => s.id));
+          for (const [skillId, mode] of Object.entries(agentOverrides)) {
+            if (mode === 'always' && !includedIds.has(skillId)) {
+              const skill = this.allSkills.find((s) => s.id === skillId);
+              if (skill) finalSkills.push(skill);
+            }
+          }
+        }
+      } catch { /* ignore override errors */ }
+
+      const skillsPrompt = buildSkillsPrompt(finalSkills);
+
+      // Retrieve relevant memories via vector similarity
+      let memoriesPrompt = '';
+      try {
+        const { hasMemorySchema, MemoryStoreService } = await import('@openspace/memory-store');
+        const db = this.config.db;
+        if (db && hasMemorySchema(db)) {
+          const memStore = new MemoryStoreService(db, {});
+          const allMemories = memStore.list(agent.id, 200);
+
+          if (allMemories.length > 0) {
+            let picked = allMemories.slice(0, 5); // default: most recent
+
+            // Try vector similarity if embedder is available
+            try {
+              const { LocalEmbedder } = await import('../embeddings/local-embedder.js');
+              const embedder = new LocalEmbedder();
+              const taskEmbedding = await embedder.embed(taskText);
+              const memEmbeddings = await embedder.embedBatch(allMemories.map((m) => m.content));
+
+              // Cosine similarity
+              const scored = allMemories.map((m, i) => {
+                const memVec = memEmbeddings[i]!;
+                let dot = 0, normA = 0, normB = 0;
+                for (let j = 0; j < taskEmbedding.length; j++) {
+                  dot += taskEmbedding[j]! * memVec[j]!;
+                  normA += taskEmbedding[j]! * taskEmbedding[j]!;
+                  normB += memVec[j]! * memVec[j]!;
+                }
+                const similarity = dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-8);
+                return { memory: m, score: similarity };
+              });
+
+              picked = scored
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 10)
+                .filter((s) => s.score > 0.3)
+                .map((s) => s.memory);
+
+              if (picked.length === 0) picked = allMemories.slice(0, 5);
+            } catch {
+              // Embedder not available — use keyword fallback
+              const taskWords = new Set(
+                taskText.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3),
+              );
+              const scored = allMemories.map((m) => {
+                const overlap = m.content.toLowerCase().split(/[^a-z0-9]+/)
+                  .filter((w) => w.length > 3 && taskWords.has(w)).length;
+                return { memory: m, score: overlap };
+              });
+              const relevant = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, 10);
+              if (relevant.length > 0) picked = relevant.map((s) => s.memory);
+            }
+
+            if (picked.length > 0) {
+              const memEntries = picked.map((m) => `- ${m.content}`).join('\n');
+              memoriesPrompt = `## Your Memories & Learnings\n\nRelevant things you've learned from past work:\n\n${memEntries}\n\n`;
+            }
+          }
+        }
+      } catch { /* best effort */ }
 
       const result = await this.config.aiProvider.chatCompletion({
         taskTitle: task.title,
         agentId: agent.id,
+        metadata: {
+          skills: finalSkills.map((s) => s.id),
+          skillCount: finalSkills.length,
+          memoryCount: memoriesPrompt ? memoriesPrompt.split('\n- ').length - 1 : 0,
+        },
         systemPrompt:
           `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
           `Personality: ${agent.personality}\n\n` +
           `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
           `Do the actual work, don't just describe what you would do.\n\n` +
+          (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
           (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
           `When done, provide a brief summary of what you did.`,
         messages: [
@@ -426,6 +522,25 @@ export class AgentWorkerService {
       );
 
       console.log(`[AgentWorker] ${agent.name} completed: ${task.title}`);
+
+      // Save a memory from this task
+      try {
+        const { hasMemorySchema, initializeMemorySchema, MemoryStoreService } = await import('@openspace/memory-store');
+        const db = this.config.db;
+        if (db) {
+          if (!hasMemorySchema(db)) initializeMemorySchema(db);
+          const memStore = new MemoryStoreService(db, {});
+          const summary = result.content.substring(0, 500);
+          await memStore.create({
+            agentId: agent.id,
+            type: 'pattern',
+            content: `Completed "${task.title}": ${summary}`,
+            sourceSession: `task-${taskId}`,
+            sourceTaskId: taskId,
+            tags: ['task-completion'],
+          });
+        }
+      } catch { /* best effort */ }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? err.stack?.substring(0, 500) : '';

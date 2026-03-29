@@ -68,69 +68,60 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-// ── Agent Skills Card (manage AI agent skills inline) ────────────
+// ── Agent Skills Section (per-agent skills with overrides) ───────
 
-function AgentSkillsCard({ agentId }: { agentId: string }) {
+function AgentSkillsSection({ agentId, agentName, agentRole }: { agentId: string; agentName: string; agentRole: string }) {
   const { data } = useAgentSkillsManagement(agentId);
-  const enabledCount = data?.skills.filter((s) => s.enabled).length ?? 0;
-  const totalCount = data?.skills.length ?? 0;
+  const [dialogOpen, setDialogOpen] = useState(false);
 
-  return (
-    <div className="text-sm">
-      <span className="font-medium">{enabledCount}</span>
-      <span className="text-muted-foreground">/{totalCount} skills</span>
-    </div>
-  );
-}
-
-function AgentSkillsSection() {
-  const { data: agents } = useAgents();
-  const [selectedAgent, setSelectedAgent] = useState<{
-    id: string;
-    name: string;
-    role: string;
-  } | null>(null);
-
-  if (!agents?.length) return null;
+  const alwaysCount = data?.skills?.filter((s) => s.mode === 'always').length ?? 0;
+  const neverCount = data?.skills?.filter((s) => s.mode === 'never').length ?? 0;
+  const totalCount = data?.skills?.length ?? 0;
 
   return (
     <Card data-testid="agent-skills-section">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
         <CardTitle className="text-sm font-medium flex items-center gap-2">
           <Bot className="h-4 w-4" />
-          AI Agent Skills
+          Skills
+          <span className="text-muted-foreground font-normal">
+            {totalCount} available · {alwaysCount} pinned{neverCount > 0 ? ` · ${neverCount} excluded` : ''}
+          </span>
         </CardTitle>
+        <Button variant="outline" size="sm" onClick={() => setDialogOpen(true)}>
+          Manage Skills
+        </Button>
       </CardHeader>
       <CardContent>
-        <div className="space-y-2">
-          {agents.map((agent) => (
-            <button
-              key={agent.id}
-              type="button"
-              onClick={() => setSelectedAgent({ id: agent.id, name: agent.name, role: agent.role })}
-              className="flex w-full items-center gap-3 rounded-md border p-2.5 transition-colors hover:bg-muted/50"
-              data-testid={`agent-skills-row-${agent.id}`}
-            >
-              <AgentAvatar agentId={agent.id} name={agent.name} size="sm" />
-              <div className="flex-1 text-left min-w-0">
-                <p className="text-sm font-medium truncate">{agent.name}</p>
-                <p className="text-xs text-muted-foreground">{agent.role}</p>
-              </div>
-              <AgentSkillsCard agentId={agent.id} />
-            </button>
-          ))}
-        </div>
-
-        {selectedAgent && (
-          <AgentSkillDialog
-            agentId={selectedAgent.id}
-            agentName={selectedAgent.name}
-            agentRole={selectedAgent.role}
-            open={!!selectedAgent}
-            onOpenChange={(open) => !open && setSelectedAgent(null)}
-          />
+        {totalCount === 0 ? (
+          <p className="text-sm text-muted-foreground">No skills available for this workspace.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {data?.skills
+              ?.filter((s) => s.mode === 'always')
+              .map((s) => (
+                <div key={s.id} className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm bg-green-500/5 border-green-500/30">
+                  <span>✅</span>
+                  <span className="font-medium truncate">{s.name}</span>
+                  {s.domain && <Badge variant="outline" className="text-[10px] ml-auto shrink-0">{s.domain}</Badge>}
+                </div>
+              ))}
+            {alwaysCount === 0 && (
+              <p className="text-xs text-muted-foreground">
+                All skills are in auto mode — matched dynamically per task.
+              </p>
+            )}
+          </div>
         )}
       </CardContent>
+
+      <AgentSkillDialog
+        agentId={agentId}
+        agentName={agentName}
+        agentRole={agentRole}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
     </Card>
   );
 }
@@ -658,7 +649,13 @@ export default function TeamMemberDetailPage() {
           </Card>
 
           {/* AI Agent Skills Management */}
-          <AgentSkillsSection />
+          {matchingAgent && (
+            <AgentSkillsSection
+              agentId={matchingAgent.id}
+              agentName={matchingAgent.name}
+              agentRole={matchingAgent.role}
+            />
+          )}
 
           {/* Agent Charter / Prompt */}
           {matchingAgent && (

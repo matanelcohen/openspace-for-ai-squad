@@ -89,7 +89,7 @@ export function AgentSkillList({ agentId }: AgentSkillListProps) {
 
   const handleToggle = useCallback(
     (skillId: string, enabled: boolean) => {
-      toggleMutation.mutate({ skillId, enabled });
+      toggleMutation.mutate({ skillId, mode: enabled ? 'always' : 'never' });
     },
     [toggleMutation],
   );

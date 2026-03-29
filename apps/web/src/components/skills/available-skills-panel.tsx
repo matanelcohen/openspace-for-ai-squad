@@ -103,7 +103,7 @@ export function AvailableSkillsPanel({ agentId }: AvailableSkillsPanelProps) {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => attachMutation.mutate({ skillId: skill.id, enabled: true })}
+                    onClick={() => attachMutation.mutate({ skillId: skill.id, mode: 'always' })}
                     disabled={attachMutation.isPending}
                     className="h-8 gap-1 text-xs shrink-0"
                     data-testid={`assign-skill-${skill.id}`}

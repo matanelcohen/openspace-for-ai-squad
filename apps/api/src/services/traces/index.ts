@@ -50,6 +50,7 @@ export interface CreateTraceInput {
   model: string;
   systemPrompt?: string;
   prompt: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface CompleteTraceInput {
@@ -239,6 +240,7 @@ export class TraceService {
       'ai.task_title': input.taskTitle ?? '',
       'ai.prompt': input.prompt,
       'ai.system_prompt': input.systemPrompt ?? '',
+      ...(input.metadata ?? {}),
     });
 
     this.insertSpan.run({

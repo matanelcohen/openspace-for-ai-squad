@@ -104,6 +104,8 @@ export interface ChatCompletionOptions {
   taskTitle?: string;
   /** Agent ID for tracing/logging context. */
   agentId?: string;
+  /** Extra metadata for tracing (e.g. matched skills). */
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatCompletionResult {
@@ -305,6 +307,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
           model,
           systemPrompt: options.systemPrompt,
           prompt,
+          metadata: options.metadata,
         });
       }
     } catch {
@@ -318,6 +321,13 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     span.setAttribute('ai.prompt', prompt);
     span.setAttribute('ai.system_prompt', options.systemPrompt ?? '');
     span.setAttribute('ai.prompt_tokens_estimate', promptTokensEstimate);
+
+    // Store extra metadata (skills, etc.) in trace
+    if (options.metadata) {
+      for (const [key, value] of Object.entries(options.metadata)) {
+        span.setAttribute(`ai.metadata.${key}`, typeof value === 'string' ? value : JSON.stringify(value));
+      }
+    }
 
     const sessionConfig: Record<string, unknown> = {
       model,

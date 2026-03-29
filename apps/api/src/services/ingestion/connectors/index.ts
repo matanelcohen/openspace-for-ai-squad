@@ -7,3 +7,6 @@ export { GitCommitsConnector, type GitCommitsConnectorConfig } from './git-commi
 export { PullRequestsConnector, type PullRequestsConnectorConfig } from './pull-requests.js';
 export { DocsConnector, type DocsConnectorConfig } from './docs.js';
 export { TasksConnector, type TasksConnectorConfig } from './tasks.js';
+export { ChatConnector, type ChatConnectorConfig } from './chat.js';
+export { MemoriesConnector, type MemoriesConnectorConfig } from './memories.js';
+export { ChartersConnector, type ChartersConnectorConfig } from './charters.js';

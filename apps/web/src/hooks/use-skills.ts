@@ -50,10 +50,9 @@ export interface AgentSkillEntry {
   id: string;
   name: string;
   description: string;
+  domain: string;
   tags: string[];
-  enabled: boolean;
-  source: 'role-match' | 'manual';
-  matchedByRole: boolean;
+  mode: 'auto' | 'always' | 'never';
 }
 
 export interface AgentSkillsResponse {
@@ -118,8 +117,8 @@ export function useAgentSkillsManagement(agentId: string) {
 export function useToggleAgentSkill(agentId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ skillId, enabled }: { skillId: string; enabled: boolean }) =>
-      api.patch(`/api/agents/${agentId}/skills`, { skillId, enabled }),
+    mutationFn: ({ skillId, mode }: { skillId: string; mode: 'auto' | 'always' | 'never' }) =>
+      api.patch(`/api/agents/${agentId}/skills`, { skillId, mode }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['agent-skills', agentId] });
       void queryClient.invalidateQueries({ queryKey: ['agent-skills-mgmt', agentId] });

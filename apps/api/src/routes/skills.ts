@@ -41,7 +41,9 @@ const SKILL_ICONS: Record<string, string> = {
 
 // ── Helpers ───────────────────────────────────────────────────────
 
-function getSquadDir(): string {
+function getSquadDir(app?: { workspaceService?: { getActive?: () => { squadDir: string } | null } }): string {
+  const active = app?.workspaceService?.getActive?.();
+  if (active?.squadDir) return active.squadDir;
   return resolve(process.cwd(), process.env.SQUAD_DIR ?? '.squad');
 }
 
@@ -294,7 +296,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       }
 
       // Write SKILL.md file
-      const squadDir = getSquadDir();
+      const squadDir = getSquadDir(app);
       const skillDir = join(squadDir, 'skills', skillId);
       const skillFile = join(skillDir, 'SKILL.md');
 
@@ -399,7 +401,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       const payload = body as SkillMdPayload;
 
       // Overwrite SKILL.md file
-      const squadDir = getSquadDir();
+      const squadDir = getSquadDir(app);
       const skillDir = join(squadDir, 'skills', skillId);
       const skillFile = join(skillDir, 'SKILL.md');
 
@@ -499,7 +501,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
       await registry.unload(skillId);
 
       // Remove skill directory from disk
-      const squadDir = getSquadDir();
+      const squadDir = getSquadDir(app);
       const skillDir = join(squadDir, 'skills', skillId);
       if (existsSync(skillDir)) {
         rmSync(skillDir, { recursive: true });
@@ -776,7 +778,7 @@ const skillsRoute: FastifyPluginAsync = async (app) => {
     }
 
     const { owner, repo, ref = 'main' } = body.source;
-    const squadDir = getSquadDir();
+    const squadDir = getSquadDir(app);
     const skillsDir = join(squadDir, 'skills');
 
     const imported: Array<{ id: string; name: string }> = [];

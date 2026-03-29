@@ -1,9 +1,10 @@
 'use client';
 
-import { Puzzle, Sparkles, User } from 'lucide-react';
+import { Puzzle } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -12,8 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { useAgentSkillsManagement, useToggleAgentSkill } from '@/hooks/use-skills';
+import { useAgentSkillsManagement, useToggleAgentSkill, type AgentSkillEntry } from '@/hooks/use-skills';
 import { cn } from '@/lib/utils';
 
 import { SkillIcon } from './skill-icon';
@@ -25,6 +25,16 @@ interface AgentSkillDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
+
+type SkillMode = 'auto' | 'always' | 'never';
+
+const MODE_CONFIG: Record<SkillMode, { label: string; badge: string; color: string }> = {
+  auto: { label: 'Auto', badge: '🟢 Auto', color: 'bg-background border-border' },
+  always: { label: 'Always', badge: '✅ Always', color: 'bg-green-500/5 border-green-500/30' },
+  never: { label: 'Never', badge: '❌ Never', color: 'bg-muted/30 border-transparent opacity-60' },
+};
+
+const MODE_CYCLE: SkillMode[] = ['auto', 'always', 'never'];
 
 export function AgentSkillDialog({
   agentId,
@@ -45,11 +55,18 @@ export function AgentSkillDialog({
       (s) =>
         s.name.toLowerCase().includes(q) ||
         s.description.toLowerCase().includes(q) ||
-        s.tags.some((t) => t.toLowerCase().includes(q)),
+        (s.tags ?? []).some((t) => t.toLowerCase().includes(q)),
     );
   }, [data?.skills, search]);
 
-  const enabledCount = data?.skills.filter((s) => s.enabled).length ?? 0;
+  const alwaysCount = data?.skills?.filter((s) => s.mode === 'always').length ?? 0;
+  const neverCount = data?.skills?.filter((s) => s.mode === 'never').length ?? 0;
+  const totalCount = data?.skills?.length ?? 0;
+
+  const cycleMode = (current: SkillMode) => {
+    const idx = MODE_CYCLE.indexOf(current);
+    return MODE_CYCLE[(idx + 1) % MODE_CYCLE.length]!;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -63,9 +80,15 @@ export function AgentSkillDialog({
             Skills — {agentName}
           </DialogTitle>
           <DialogDescription>
-            {agentRole} · {enabledCount} skill{enabledCount !== 1 ? 's' : ''} enabled
+            {agentRole} · {totalCount} skills · {alwaysCount} pinned{neverCount > 0 ? ` · ${neverCount} excluded` : ''}
           </DialogDescription>
         </DialogHeader>
+
+        <div className="rounded-md border bg-muted/30 p-2.5 text-xs text-muted-foreground space-y-1">
+          <p><strong>🟢 Auto</strong> — matched by task content + role (SDK-style)</p>
+          <p><strong>✅ Always</strong> — always injected for this agent</p>
+          <p><strong>❌ Never</strong> — excluded even if auto-matched</p>
+        </div>
 
         <Input
           placeholder="Search skills…"
@@ -90,51 +113,50 @@ export function AgentSkillDialog({
             </p>
           )}
 
-          {filteredSkills.map((skill) => (
-            <div
-              key={skill.id}
-              className={cn(
-                'flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors',
-                skill.enabled
-                  ? 'bg-background border-border'
-                  : 'bg-muted/30 border-transparent opacity-70',
-              )}
-              data-testid={`agent-skill-item-${skill.id}`}
-            >
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                <SkillIcon icon={undefined} className="h-4 w-4" />
-              </div>
+          {filteredSkills.map((skill) => {
+            const mode = skill.mode ?? 'auto';
+            const config = MODE_CONFIG[mode];
 
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-medium truncate">{skill.name}</span>
-                  {skill.source === 'role-match' && skill.matchedByRole && (
-                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 gap-0.5 shrink-0">
-                      <Sparkles className="h-2.5 w-2.5" />
-                      Auto
-                    </Badge>
-                  )}
-                  {skill.source === 'manual' && (
-                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0 gap-0.5 shrink-0">
-                      <User className="h-2.5 w-2.5" />
-                      Custom
-                    </Badge>
-                  )}
+            return (
+              <div
+                key={skill.id}
+                className={cn(
+                  'flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors',
+                  config.color,
+                )}
+                data-testid={`agent-skill-item-${skill.id}`}
+              >
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                  <SkillIcon icon={undefined} className="h-4 w-4" />
                 </div>
-                <p className="text-xs text-muted-foreground truncate">{skill.description}</p>
-              </div>
 
-              <Switch
-                checked={skill.enabled}
-                onCheckedChange={(checked) =>
-                  toggleMutation.mutate({ skillId: skill.id, enabled: checked })
-                }
-                disabled={toggleMutation.isPending}
-                aria-label={`Toggle ${skill.name}`}
-                data-testid={`agent-skill-toggle-${skill.id}`}
-              />
-            </div>
-          ))}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium truncate">{skill.name}</span>
+                    {skill.domain && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
+                        {skill.domain}
+                      </Badge>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground truncate">{skill.description}</p>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="shrink-0 text-xs h-7 px-2"
+                  onClick={() =>
+                    toggleMutation.mutate({ skillId: skill.id, mode: cycleMode(mode) })
+                  }
+                  disabled={toggleMutation.isPending}
+                  data-testid={`agent-skill-toggle-${skill.id}`}
+                >
+                  {config.badge}
+                </Button>
+              </div>
+            );
+          })}
         </div>
       </DialogContent>
     </Dialog>

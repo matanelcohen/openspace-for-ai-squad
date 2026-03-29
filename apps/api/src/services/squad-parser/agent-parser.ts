@@ -58,6 +58,8 @@ export async function parseAgentCharter(
 
 /**
  * Parse charter.md content into structured sections.
+ * Supports both SDK-generated charters (## Identity, ## Boundaries)
+ * and simple charters (## Character, ## Role, ## Responsibilities).
  * Exported for testing.
  */
 export function parseCharterContent(content: string): {
@@ -68,6 +70,60 @@ export function parseCharterContent(content: string): {
   const identity = extractIdentity(content);
   const boundaries = extractBoundaries(content);
   const expertise = extractExpertise(content);
+
+  // If SDK sections are empty, try extracting from simpler charter formats
+  if (!identity.expertise && !identity.style) {
+    // Try ## Character for personality info
+    const charSection = extractSection(content, 'Character');
+    if (charSection) {
+      identity.style = extractBoldField(charSection, 'Personality') ?? '';
+    }
+    // Try extracting from ## Role or description line
+    const roleSection = extractSection(content, 'Role');
+    if (roleSection) {
+      identity.expertise = roleSection.split('\n')[0]?.trim() ?? '';
+    }
+    // Try ## What I Own as expertise source
+    const ownsSection = extractSection(content, 'What I Own');
+    if (ownsSection) {
+      identity.expertise = ownsSection.split('\n')
+        .filter((l) => l.trim().startsWith('-'))
+        .map((l) => l.trim().slice(2).trim())
+        .join(', ');
+    }
+  }
+
+  if (!boundaries.handles) {
+    // Try ## Responsibilities as a fallback
+    const respSection = extractSection(content, 'Responsibilities');
+    if (respSection) {
+      boundaries.handles = respSection.split('\n')
+        .filter((l) => l.trim().startsWith('-'))
+        .map((l) => l.trim().slice(2).trim())
+        .join(', ');
+    }
+    // Try ## How I Work
+    const howSection = extractSection(content, 'How I Work');
+    if (howSection) {
+      boundaries.whenUnsure = howSection.split('\n')
+        .filter((l) => l.trim().startsWith('-'))
+        .map((l) => l.trim().slice(2).trim())
+        .slice(0, 2)
+        .join('; ');
+    }
+  }
+
+  // Extract expertise from Technical Expertise section too
+  if (expertise.length === 0) {
+    const techSection = extractSection(content, 'Technical Expertise');
+    if (techSection) {
+      const items = techSection.split('\n')
+        .filter((l) => l.trim().startsWith('-'))
+        .map((l) => l.trim().slice(2).trim())
+        .filter((l) => l.length > 0);
+      if (items.length > 0) return { identity, boundaries, expertise: items };
+    }
+  }
 
   return { identity, boundaries, expertise };
 }

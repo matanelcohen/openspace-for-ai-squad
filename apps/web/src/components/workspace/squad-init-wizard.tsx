@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2, Plus, Rocket, Trash2, Users } from 'lucide-react';
+import { Loader2, Plus, Rocket, Sparkles, Trash2, Users } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -15,13 +15,15 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { useInitSquad } from '@/hooks/use-workspaces';
+import { useInitSquad, useAnalyzeWorkspace } from '@/hooks/use-workspaces';
 
 // ── Types ───────────────────────────────────────────────────────────
 
 interface AgentEntry {
   name: string;
   role: string;
+  personality?: string;
+  backstory?: string;
 }
 
 interface SquadInitWizardProps {
@@ -31,30 +33,12 @@ interface SquadInitWizardProps {
   workspaceName: string;
 }
 
-// ── Presets ──────────────────────────────────────────────────────────
-
-const PRESETS: Record<string, AgentEntry[]> = {
-  'Small Team (2)': [
-    { name: 'Lead Agent', role: 'Lead' },
-    { name: 'Dev Agent', role: 'Full-Stack Dev' },
-  ],
-  'Standard Team (4)': [
-    { name: 'Lead Agent', role: 'Lead' },
-    { name: 'Frontend Agent', role: 'Frontend Dev' },
-    { name: 'Backend Agent', role: 'Backend Dev' },
-    { name: 'Test Agent', role: 'Tester' },
-  ],
-  'Full Team (6)': [
-    { name: 'Lead Agent', role: 'Lead' },
-    { name: 'Frontend Agent', role: 'Frontend Dev' },
-    { name: 'Backend Agent', role: 'Backend Dev' },
-    { name: 'Test Agent', role: 'Tester' },
-    { name: 'DevOps Agent', role: 'DevOps' },
-    { name: 'Docs Agent', role: 'Technical Writer' },
-  ],
-};
-
-const DEFAULT_AGENTS = PRESETS['Standard Team (4)']!;
+const DEFAULT_AGENTS: AgentEntry[] = [
+  { name: 'Lead Agent', role: 'Lead' },
+  { name: 'Frontend Agent', role: 'Frontend Dev' },
+  { name: 'Backend Agent', role: 'Backend Dev' },
+  { name: 'Test Agent', role: 'Tester' },
+];
 
 // ── Component ───────────────────────────────────────────────────────
 
@@ -66,17 +50,40 @@ export function SquadInitWizard({
 }: SquadInitWizardProps) {
   const [step, setStep] = useState(0);
 
-  // Step 1 state
+  // Step 0 state
   const [teamName, setTeamName] = useState(workspaceName);
   const [description, setDescription] = useState('');
   const [stack, setStack] = useState('');
+  const [theme, setTheme] = useState('');
 
-  // Step 2 state
+  // Step 1 state
   const [agents, setAgents] = useState<AgentEntry[]>(() =>
     DEFAULT_AGENTS.map((a) => ({ ...a })),
   );
 
   const initSquad = useInitSquad();
+  const analyzeWorkspace = useAnalyzeWorkspace();
+
+  const handleAutoDetect = useCallback(() => {
+    analyzeWorkspace.mutate(
+      {
+        workspaceId,
+        teamName: teamName.trim() || undefined,
+        description: description.trim() || undefined,
+        stack: stack.trim() || undefined,
+        theme: theme.trim() || undefined,
+      },
+      {
+        onSuccess: (data) => {
+          if (data.teamName) setTeamName(data.teamName);
+          if (data.description) setDescription(data.description);
+          if (data.stack) setStack(data.stack);
+          if (data.agents?.length) setAgents(data.agents.map((a) => ({ ...a })));
+          setStep(1);
+        },
+      },
+    );
+  }, [workspaceId, analyzeWorkspace, theme]);
 
   const handleAddAgent = useCallback(() => {
     setAgents((prev) => [...prev, { name: '', role: '' }]);
@@ -95,16 +102,11 @@ export function SquadInitWizard({
     [],
   );
 
-  const handlePreset = useCallback((presetName: string) => {
-    const preset = PRESETS[presetName];
-    if (preset) {
-      setAgents(preset.map((a) => ({ ...a })));
-    }
-  }, []);
-
   const handleSubmit = useCallback(() => {
     const validAgents = agents.filter((a) => a.name.trim() && a.role.trim());
     if (!teamName.trim() || validAgents.length === 0) return;
+
+    setStep(3); // Show building step
 
     initSquad.mutate(
       {
@@ -116,8 +118,14 @@ export function SquadInitWizard({
       },
       {
         onSuccess: () => {
-          onOpenChange(false);
-          window.location.reload();
+          // Small delay so user sees "Done!" before reload
+          setTimeout(() => {
+            onOpenChange(false);
+            window.location.reload();
+          }, 1000);
+        },
+        onError: () => {
+          setStep(2); // Go back to confirm on error
         },
       },
     );
@@ -128,8 +136,35 @@ export function SquadInitWizard({
   const canProceedStep2 = validAgents.length > 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+    <Dialog open={open} onOpenChange={(v) => { if (!initSquad.isPending) onOpenChange(v); }}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg" onPointerDownOutside={(e) => { if (initSquad.isPending) e.preventDefault(); }}>
+        {/* Step 3: Building */}
+        {step === 3 && (
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            {initSquad.isPending ? (
+              <>
+                <Loader2 className="h-12 w-12 animate-spin text-primary" />
+                <h2 className="text-lg font-semibold">Building your squad…</h2>
+                <p className="text-sm text-muted-foreground text-center">
+                  Creating agent charters, team roster, and project config via Squad SDK.
+                </p>
+              </>
+            ) : initSquad.isSuccess ? (
+              <>
+                <Rocket className="h-12 w-12 text-green-500" />
+                <h2 className="text-lg font-semibold">Squad ready!</h2>
+                <p className="text-sm text-muted-foreground">Reloading…</p>
+              </>
+            ) : (
+              <>
+                <Rocket className="h-12 w-12 text-destructive" />
+                <h2 className="text-lg font-semibold">Something went wrong</h2>
+                <p className="text-sm text-destructive">{initSquad.error?.message}</p>
+              </>
+            )}
+          </div>
+        )}
+
         {/* Step 0: Team Info */}
         {step === 0 && (
           <>
@@ -183,9 +218,42 @@ export function SquadInitWizard({
                   Comma-separated. Helps tailor agent expertise.
                 </p>
               </div>
+
+              <div className="space-y-2">
+                <label htmlFor="theme" className="text-sm font-medium">
+                  🎭 Team Theme
+                </label>
+                <Input
+                  id="theme"
+                  placeholder="e.g. Marvel heroes, Star Wars, Pirates, Anime characters..."
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Optional. The AI will name agents to match your theme.
+                </p>
+              </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex-col gap-2 sm:flex-row">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={handleAutoDetect}
+                disabled={analyzeWorkspace.isPending}
+              >
+                {analyzeWorkspace.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Analyzing project…
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    ✨ Auto-detect
+                  </>
+                )}
+              </Button>
               <Button
                 onClick={() => setStep(1)}
                 disabled={!canProceedStep1}
@@ -193,6 +261,12 @@ export function SquadInitWizard({
                 Next: Team Members
               </Button>
             </DialogFooter>
+
+            {analyzeWorkspace.isError && (
+              <p className="text-sm text-destructive">
+                Auto-detect failed. You can still fill in the fields manually.
+              </p>
+            )}
           </>
         )}
 
@@ -205,49 +279,42 @@ export function SquadInitWizard({
                 Team Members
               </DialogTitle>
               <DialogDescription>
-                Configure your squad agents. Each needs a name and role.
+                Review and edit your squad agents. Each needs a name and role.
               </DialogDescription>
             </DialogHeader>
 
             <div className="space-y-4 py-4">
-              {/* Presets */}
-              <div className="flex flex-wrap gap-2">
-                {Object.keys(PRESETS).map((presetName) => (
-                  <Button
-                    key={presetName}
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handlePreset(presetName)}
-                  >
-                    {presetName}
-                  </Button>
-                ))}
-              </div>
-
               {/* Agent rows */}
               <div className="space-y-3">
                 {agents.map((agent, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <Input
-                      placeholder="Name"
-                      value={agent.name}
-                      onChange={(e) => handleAgentChange(index, 'name', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="Role"
-                      value={agent.role}
-                      onChange={(e) => handleAgentChange(index, 'role', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveAgent(index)}
-                      disabled={agents.length <= 1}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <div key={index} className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        placeholder="Name"
+                        value={agent.name}
+                        onChange={(e) => handleAgentChange(index, 'name', e.target.value)}
+                        className="flex-1"
+                      />
+                      <Input
+                        placeholder="Role"
+                        value={agent.role}
+                        onChange={(e) => handleAgentChange(index, 'role', e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveAgent(index)}
+                        disabled={agents.length <= 1}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {agent.personality && (
+                      <p className="text-xs text-muted-foreground italic pl-1">
+                        {agent.personality}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -312,6 +379,13 @@ export function SquadInitWizard({
                   </div>
                 )}
 
+                {theme && (
+                  <div>
+                    <p className="text-sm font-medium">Theme</p>
+                    <Badge variant="outline">🎭 {theme}</Badge>
+                  </div>
+                )}
+
                 <div>
                   <p className="text-sm font-medium mb-2">
                     Agents ({validAgents.length})
@@ -322,7 +396,12 @@ export function SquadInitWizard({
                         key={i}
                         className="flex items-center justify-between text-sm rounded px-2 py-1 bg-muted/50"
                       >
-                        <span className="font-medium">{a.name}</span>
+                        <div>
+                          <span className="font-medium">{a.name}</span>
+                          {a.personality && (
+                            <p className="text-xs text-muted-foreground italic">{a.personality}</p>
+                          )}
+                        </div>
                         <Badge variant="outline">{a.role}</Badge>
                       </div>
                     ))}
@@ -331,13 +410,13 @@ export function SquadInitWizard({
               </div>
 
               <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground space-y-1">
-                <p className="font-medium text-foreground">What will be created:</p>
+                <p className="font-medium text-foreground">What will be created (via Squad SDK):</p>
                 <ul className="list-disc list-inside space-y-0.5">
                   <li><code>.squad/team.md</code> — team roster</li>
-                  <li><code>.squad/config.json</code> — squad configuration</li>
+                  <li><code>.squad/squad.agent.md</code> — squad agent config</li>
                   <li><code>.squad/agents/*/charter.md</code> — agent charters</li>
                   <li><code>.squad/tasks/</code> — task directory</li>
-                  <li><code>.squad/sessions/</code> — session logs</li>
+                  <li><code>.squad/templates/</code> — SDK templates</li>
                 </ul>
               </div>
             </div>

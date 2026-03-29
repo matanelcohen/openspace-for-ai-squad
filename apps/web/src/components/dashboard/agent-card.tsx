@@ -1,16 +1,12 @@
 'use client';
 
 import type { Agent } from '@openspace/shared';
-import { Puzzle } from 'lucide-react';
-import { useState } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';
-import { AgentSkillDialog } from '@/components/skills/agent-skill-dialog';
 import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import type { AgentWorkStatus } from '@/hooks/use-agent-status';
-import { useAgentSkillsManagement } from '@/hooks/use-skills';
 
 interface AgentCardProps {
   agent: Agent;
@@ -20,10 +16,6 @@ interface AgentCardProps {
 export function AgentCard({ agent, workStatus }: AgentCardProps) {
   const isWorking = !!workStatus?.activeTask;
   const queueLength = workStatus?.queueLength ?? 0;
-  const [skillsOpen, setSkillsOpen] = useState(false);
-
-  const { data: skillsData } = useAgentSkillsManagement(agent.id);
-  const enabledCount = skillsData?.skills.filter((s) => s.enabled).length ?? 0;
 
   return (
     <Card
@@ -110,25 +102,7 @@ export function AgentCard({ agent, workStatus }: AgentCardProps) {
             })}
           </div>
         )}
-        {/* Skills badge */}
-        <button
-          type="button"
-          onClick={() => setSkillsOpen(true)}
-          className="flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground w-fit"
-          data-testid={`agent-skills-badge-${agent.id}`}
-        >
-          <Puzzle className="h-3.5 w-3.5" />
-          {enabledCount} skill{enabledCount !== 1 ? 's' : ''}
-        </button>
       </CardContent>
-
-      <AgentSkillDialog
-        agentId={agent.id}
-        agentName={agent.name}
-        agentRole={agent.role}
-        open={skillsOpen}
-        onOpenChange={setSkillsOpen}
-      />
     </Card>
   );
 }

@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { EmojiPicker } from '@/components/ui/emoji-picker';
 import { api } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { useActivateWorkspace, useCreateWorkspace } from '@/hooks/use-workspaces';
@@ -32,8 +33,16 @@ interface BrowseResult {
   dirs: BrowseEntry[];
 }
 
-export function AddWorkspaceDialog() {
-  const [open, setOpen] = useState(false);
+interface AddWorkspaceDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function AddWorkspaceDialog({ open: externalOpen, onOpenChange: externalOnOpenChange }: AddWorkspaceDialogProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+
+  const isControlled = externalOpen !== undefined;
+  const open = isControlled ? externalOpen : internalOpen;
   const [name, setName] = useState('');
   const [projectDir, setProjectDir] = useState('');
   const [icon, setIcon] = useState('🚀');
@@ -66,6 +75,15 @@ export function AddWorkspaceDialog() {
     setBrowsing(false);
   };
 
+  const setOpen = (v: boolean) => {
+    if (isControlled) {
+      externalOnOpenChange?.(v);
+    } else {
+      setInternalOpen(v);
+    }
+    if (!v) setBrowsing(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !projectDir.trim()) return;
@@ -81,20 +99,21 @@ export function AddWorkspaceDialog() {
       setName('');
       setProjectDir('');
       setIcon('🚀');
-      setBrowsing(false);
     } catch {
       // Error handled by React Query
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) setBrowsing(false); }}>
-      <DialogTrigger asChild>
-        <button className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
-          <Plus className="h-4 w-4" />
-          Add Workspace
-        </button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={setOpen}>
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <button className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
+            <Plus className="h-4 w-4" />
+            Add Workspace
+          </button>
+        </DialogTrigger>
+      )}
       <DialogContent className="max-w-lg w-[95vw]">
         <form onSubmit={handleSubmit}>
           <DialogHeader>
@@ -190,8 +209,8 @@ export function AddWorkspaceDialog() {
                 </div>
               </div>
               <div className="space-y-2">
-                <label htmlFor="ws-icon" className="text-sm font-medium">Icon</label>
-                <Input id="ws-icon" placeholder="🚀" value={icon} onChange={(e) => setIcon(e.target.value)} className="w-20" />
+                <label className="text-sm font-medium">Icon</label>
+                <EmojiPicker value={icon} onChange={setIcon} />
               </div>
             </div>
           )}

@@ -7,7 +7,7 @@ const PORT = Number(process.env.API_PORT ?? 3001);
 const HOST = process.env.API_HOST ?? '0.0.0.0';
 
 async function start() {
-  const app = buildApp();
+  const app = await buildApp();
 
   // Graceful shutdown
   const shutdown = async (signal: string) => {
