@@ -121,29 +121,48 @@ if (!noCopilot) {
     }
   } catch {
     console.log('⚠️  agency CLI not found — Copilot server not started');
-    console.log('   Install: npm i -g @anthropic/agency');
   }
 }
 
+const apiPort = isDev ? '3001' : port;
+const webPort = port;
+
 const env = {
   ...process.env,
-  PORT: port,
-  API_PORT: port,
+  PORT: apiPort,
+  API_PORT: apiPort,
   API_HOST: '0.0.0.0',
-  SERVE_UI: apiOnly ? 'false' : 'true',
+  SERVE_UI: isDev ? 'false' : (apiOnly ? 'false' : 'true'),
   NODE_ENV: isDev ? 'development' : 'production',
   OPENSPACE_DEV: isDev ? 'true' : 'false',
   COPILOT_CLI_URL: noCopilot ? '' : `localhost:${copilotPort}`,
   COPILOT_MODEL: copilotModel,
 };
 
+// Start API
 const proc = tsxBin
   ? spawn(tsxBin, [apiEntry], { cwd: process.cwd(), env, stdio: 'inherit' })
   : spawn('npx', ['tsx', apiEntry], { cwd: ROOT, env, stdio: 'inherit' });
 
+// In dev mode: start Next.js separately on the web port
+let webProc = null;
+if (isDev && !apiOnly) {
+  const nextBin = join(ROOT, 'node_modules', '.bin', 'next');
+  const webDir = join(ROOT, 'apps', 'web');
+  const webEnv = { ...process.env, NEXT_PUBLIC_API_URL: `http://localhost:${apiPort}`, WATCHPACK_POLLING: 'true' };
+  
+  if (existsSync(nextBin)) {
+    webProc = spawn(nextBin, ['dev', '--port', webPort, '--hostname', '0.0.0.0'], { cwd: webDir, env: webEnv, stdio: 'inherit' });
+  } else {
+    webProc = spawn('npx', ['next', 'dev', '--port', webPort, '--hostname', '0.0.0.0'], { cwd: webDir, env: webEnv, stdio: 'inherit' });
+  }
+  console.log(`🌐 Next.js dev server on http://localhost:${webPort}`);
+}
+
 function shutdown(signal) {
   console.log(`\n${signal}, shutting down...`);
   proc.kill('SIGTERM');
+  if (webProc) webProc.kill('SIGTERM');
   if (copilotProc) copilotProc.kill('SIGTERM');
   setTimeout(() => process.exit(0), 2000);
 }
@@ -151,6 +170,7 @@ function shutdown(signal) {
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 proc.on('exit', (code) => {
+  if (webProc) webProc.kill('SIGTERM');
   if (copilotProc) copilotProc.kill('SIGTERM');
   process.exit(code ?? 0);
 });
