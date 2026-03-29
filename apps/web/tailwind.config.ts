@@ -1,11 +1,15 @@
+import { resolve, dirname } from 'node:path';
 import type { Config } from 'tailwindcss';
+
+// Resolve paths relative to this config file (works when cwd != apps/web)
+const configDir = __dirname ?? dirname(new URL(import.meta.url).pathname);
 
 const config: Config = {
   darkMode: 'class',
   content: [
-    './app/**/*.{ts,tsx}',
-    './src/**/*.{ts,tsx}',
-    './node_modules/@assistant-ui/react/dist/**/*.{js,mjs}',
+    resolve(configDir, './app/**/*.{ts,tsx}'),
+    resolve(configDir, './src/**/*.{ts,tsx}'),
+    resolve(configDir, './node_modules/@assistant-ui/react/dist/**/*.{js,mjs}'),
   ],
   theme: {
     extend: {
