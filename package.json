@@ -1,6 +1,6 @@
 {
   "name": "@matanelcohen/openspace-ai",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Visual workspace manager for Squad SDK — create, manage, and collaborate with AI agent teams",
   "keywords": [
     "ai",
