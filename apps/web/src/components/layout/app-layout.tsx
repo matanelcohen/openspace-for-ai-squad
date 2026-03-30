@@ -1,11 +1,12 @@
 'use client';
 
-import { Plus } from 'lucide-react';
+import { AlertTriangle, Plus } from 'lucide-react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { SquadInitWizard } from '@/components/workspace/squad-init-wizard';
+import { useWebSocket } from '@/hooks/use-websocket';
 import { useActivateWorkspace, useActiveWorkspace, useWorkspaces, useWorkspaceStatus } from '@/hooks/use-workspaces';
 
 import { AddWorkspaceDialog } from './add-workspace-dialog';
@@ -16,6 +17,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [wizardOpen, setWizardOpen] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [systemError, setSystemError] = useState<string | null>(null);
   const pathname = usePathname();
 
   const { data: workspaces, isLoading: workspacesLoading } = useWorkspaces();
@@ -36,6 +38,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const toggleSidebar = useCallback(() => setSidebarOpen((v) => !v), []);
   const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+
+  // Listen for system errors from backend
+  const { lastEvent } = useWebSocket();
+  useEffect(() => {
+    if (lastEvent?.type === 'system:error') {
+      setSystemError((lastEvent as { error?: string }).error ?? 'AI provider not connected');
+    }
+  }, [lastEvent]);
 
   // No workspaces at all — show welcome screen with add dialog
   if (hasNoWorkspaces) {
@@ -143,6 +153,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
         <TopBar onToggleSidebar={toggleSidebar} />
+        {systemError && (
+          <div className="flex items-center gap-2 border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="flex-1">{systemError}</span>
+            <button onClick={() => setSystemError(null)} className="text-xs underline">Dismiss</button>
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto p-4 md:p-6" role="main">
           {children}
         </main>

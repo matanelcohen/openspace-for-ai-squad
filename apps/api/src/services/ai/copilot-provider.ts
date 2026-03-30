@@ -1250,18 +1250,10 @@ export async function createAIProvider(
   const providerType = type ?? (process.env.AI_PROVIDER as AIProviderType) ?? 'copilot-sdk';
 
   if (providerType === 'copilot-sdk') {
-    try {
-      const provider = new CopilotProvider(config);
-      await provider.initialize();
-      return provider;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(
-        `[AI] copilot-sdk initialization failed, falling back to mock provider: ${message}`,
-      );
-      return new MockAIProvider();
-    }
+    const provider = new CopilotProvider(config);
+    await provider.initialize();
+    return provider;
   }
 
-  return new MockAIProvider();
+  throw new Error('[AI] No AI provider configured. Start the Copilot CLI server or set AI_PROVIDER.');
 }

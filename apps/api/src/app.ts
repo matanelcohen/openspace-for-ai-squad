@@ -289,10 +289,29 @@ export async function buildApp(opts: AppOptions = {}) {
 
     // Initialize AI provider and connect to chat + voice + worker services
     if (!opts.aiProvider) {
-      const provider = await createAIProvider(undefined, {
-        workingDirectory: resolve(squadDir, '..'),
-        traceService,
-      });
+      let provider;
+      try {
+        provider = await createAIProvider(undefined, {
+          workingDirectory: resolve(squadDir, '..'),
+          traceService,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`\n❌ AI Provider not available: ${msg}`);
+        console.error('   Start the Copilot CLI server: agency copilot --headless --port 3100');
+        console.error('   Or use: openspace (which starts it automatically)\n');
+        
+        // Broadcast error to connected clients
+        if (app.wsManager) {
+          app.wsManager.broadcast(JSON.stringify({
+            type: 'system:error',
+            error: 'AI provider not connected. Start the Copilot CLI server to enable agent execution.',
+          }));
+        }
+        // Continue without AI — API still serves UI, workspaces, tasks, etc.
+        // But agent execution and chat AI responses won't work.
+        return app;
+      }
       chatService.setAIProvider(provider);
       voiceServices.aiProvider = provider;
       voiceServices.router = new VoiceRouter({ llmRouter: provider });
