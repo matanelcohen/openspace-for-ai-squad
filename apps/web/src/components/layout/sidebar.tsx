@@ -24,19 +24,30 @@ import { WorkspaceSwitcher } from '@/components/layout/workspace-switcher';
 import { cn } from '@/lib/utils';
 
 const navItems = [
+  // Overview
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
+
+  // Work
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
-  { href: '/traces', label: 'Traces', icon: Scan },
-  { href: '/costs', label: 'Costs', icon: DollarSign },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/decisions', label: 'Decisions', icon: Scale },
+
+  // Team
   { href: '/team-members', label: 'Team', icon: Users },
   { href: '/skills', label: 'Skills', icon: Puzzle },
   { href: '/memories', label: 'Memories', icon: Brain },
+
+  // Intelligence
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
+  { href: '/traces', label: 'Traces', icon: Scan },
+  { href: '/costs', label: 'Costs', icon: DollarSign },
+
+  // Integrations
   { href: '/github', label: 'GitHub', icon: GitBranch },
-  { href: '/cron', label: 'Cron', icon: Clock },
   { href: '/terminal', label: 'Terminal', icon: TerminalSquare },
+  { href: '/cron', label: 'Cron', icon: Clock },
+
+  // System
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
