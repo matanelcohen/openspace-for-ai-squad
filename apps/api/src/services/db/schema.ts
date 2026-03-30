@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   id          TEXT PRIMARY KEY,
   title       TEXT NOT NULL,
   description TEXT NOT NULL DEFAULT '',
-  status      TEXT NOT NULL DEFAULT 'backlog',
+  status      TEXT NOT NULL DEFAULT 'pending',
   priority    TEXT NOT NULL DEFAULT 'P2',
   assignee    TEXT,
   labels      TEXT NOT NULL DEFAULT '[]',

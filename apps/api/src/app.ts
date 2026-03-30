@@ -7,6 +7,7 @@ import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
 import { ErrorCodes, sendError } from './lib/api-errors.js';
+import { migrateTaskStatuses } from './services/migrations/migrate-task-statuses.js';
 import a2aRoute from './routes/a2a.js';
 import activityRoute from './routes/activity.js';
 import agentsRoute from './routes/agents.js';
@@ -389,6 +390,9 @@ export async function buildApp(opts: AppOptions = {}) {
 
     // Start cron scheduler
     cronService.start();
+
+    // Migrate legacy task statuses (backlog/in-review/pending-approval → new statuses)
+    await migrateTaskStatuses(resolve(squadDir, 'tasks'));
   });
 
   // Cost service — derives spend from trace + span data

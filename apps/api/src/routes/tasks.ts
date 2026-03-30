@@ -122,8 +122,8 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
 
     const task = await createTask(tasksDir(), body);
 
-    // Auto-breakdown: if task is backlog, generate sub-tasks in background
-    if (task.status === 'backlog' && app.voiceServices?.aiProvider) {
+    // Auto-breakdown: if task is pending, generate sub-tasks in background
+    if (task.status === 'pending' && app.voiceServices?.aiProvider) {
       breakdownTask(task, app.voiceServices.aiProvider)
         .then(async (result) => {
           for (const sub of result.subtasks) {
@@ -133,7 +133,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
               assignee: sub.assignee,
               priority: sub.priority,
               labels: [...sub.labels, `parent:${task.id}`],
-              status: 'pending-approval',
+              status: 'pending',
             });
             app.wsManager?.broadcast({
               type: 'task:created',
@@ -168,7 +168,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       try {
         const task = await updateTask(tasksDir(), request.params.id, body);
 
-        if (task.status === 'backlog' && task.assignee && app.agentWorker) {
+        if (task.status === 'pending' && task.assignee && app.agentWorker) {
           app.agentWorker.enqueue(task);
         }
 
@@ -191,9 +191,9 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       try {
         const task = await updateTask(tasksDir(), request.params.id, { status });
 
-        // If moved to backlog or in-progress and has an assignee, enqueue for agent work
+        // If moved to pending or in-progress and has an assignee, enqueue for agent work
         if (
-          (status === 'backlog' || status === 'in-progress') &&
+          (status === 'pending' || status === 'in-progress') &&
           task.assignee &&
           app.agentWorker
         ) {
@@ -227,14 +227,14 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
     },
   );
 
-  // PATCH /api/tasks/:id/approve — move pending-approval → backlog, enqueue for agent
+  // PATCH /api/tasks/:id/approve — move pending → in-progress, enqueue for agent
   app.patch<{ Params: { id: string } }>('/tasks/:id/approve', async (request, reply) => {
     try {
       const existing = await getTask(tasksDir(), request.params.id);
-      if (existing.status !== 'pending-approval') {
-        return reply.status(400).send({ error: 'Task is not pending approval' });
+      if (existing.status !== 'pending') {
+        return reply.status(400).send({ error: 'Task is not pending' });
       }
-      const task = await updateTask(tasksDir(), request.params.id, { status: 'backlog' });
+      const task = await updateTask(tasksDir(), request.params.id, { status: 'in-progress' });
 
       // Enqueue for the assigned agent to pick up
       if (app.agentWorker && task.assignee) {
@@ -251,8 +251,8 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
   app.patch<{ Params: { id: string } }>('/tasks/:id/reject', async (request, reply) => {
     try {
       const existing = await getTask(tasksDir(), request.params.id);
-      if (existing.status !== 'pending-approval') {
-        return reply.status(400).send({ error: 'Task is not pending approval' });
+      if (existing.status !== 'pending') {
+        return reply.status(400).send({ error: 'Task is not pending' });
       }
       await deleteTask(tasksDir(), request.params.id);
       return reply.status(204).send();

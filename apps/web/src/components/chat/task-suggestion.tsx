@@ -80,7 +80,7 @@ export function TaskSuggestion() {
       await api.post('/api/tasks', {
         title: suggestion.title,
         assignee: suggestion.assignee,
-        status: 'backlog',
+        status: 'pending',
       });
       dismiss();
     } catch (err) {

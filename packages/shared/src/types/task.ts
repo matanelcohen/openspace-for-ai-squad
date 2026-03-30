@@ -4,10 +4,8 @@
 
 /** Kanban column statuses matching the PRD task board. */
 export type TaskStatus =
-  | 'pending-approval'
-  | 'backlog'
+  | 'pending'
   | 'in-progress'
-  | 'in-review'
   | 'done'
   | 'blocked'
   | 'delegated';

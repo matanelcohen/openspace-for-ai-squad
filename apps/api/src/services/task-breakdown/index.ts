@@ -2,8 +2,8 @@
  * Task Breakdown Service — uses copilot-sdk to analyze a backlog task
  * and generate sub-tasks with appropriate agent assignments.
  *
- * Triggered automatically when a new backlog task is created.
- * Sub-tasks are created with status 'pending-approval'.
+ * Triggered automatically when a new pending task is created.
+ * Sub-tasks are created with status 'pending'.
  */
 
 import type { Task, TaskPriority } from '@openspace/shared';

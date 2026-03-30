@@ -401,10 +401,7 @@ export class VoiceActionService {
       inprogress: 'in-progress',
       'in progress': 'in-progress',
       blocked: 'blocked',
-      backlog: 'backlog',
-      'in-review': 'in-review',
-      inreview: 'in-review',
-      'in review': 'in-review',
+      pending: 'pending',
     };
     return map[raw.toLowerCase()] ?? raw;
   }

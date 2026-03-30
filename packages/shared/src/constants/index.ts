@@ -28,20 +28,16 @@ import type {
 // ---------------------------------------------------------------------------
 
 export const TASK_STATUSES = [
-  'pending-approval',
-  'backlog',
+  'pending',
   'in-progress',
-  'in-review',
   'done',
   'blocked',
   'delegated',
 ] as const satisfies readonly TaskStatus[];
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
-  'pending-approval': 'Pending Approval',
-  backlog: 'Backlog',
+  pending: 'Pending',
   'in-progress': 'In Progress',
-  'in-review': 'In Review',
   done: 'Done',
   blocked: 'Blocked',
   delegated: 'Delegated',

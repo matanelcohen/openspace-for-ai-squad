@@ -1,7 +1,7 @@
 ---
 id: task-pCv6tILK
 title: A2A Communication Protocol
-status: backlog
+status: pending
 priority: P2
 assignee: bender
 labels:
@@ -9,7 +9,7 @@ labels:
   - a2a
   - communication
 created: '2026-03-25T23:18:11.423Z'
-updated: '2026-03-26T08:03:58.311Z'
+updated: '2026-03-30T08:33:24.920Z'
 sortIndex: 10
 ---
 Implement formal agent-to-agent communication: delegation, negotiation, status updates, and handoffs. Agents can request help from other agents, split work, and merge results. Inspired by Google A2A and CrewAI delegation patterns.

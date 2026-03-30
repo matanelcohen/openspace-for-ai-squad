@@ -73,7 +73,7 @@ export function useCreateTask() {
         id: `temp-${Date.now()}`,
         title: input.title,
         description: input.description,
-        status: 'backlog',
+        status: 'pending',
         priority: input.priority,
         assignee: input.assignee,
         assigneeType: 'agent', // Default to agent for now

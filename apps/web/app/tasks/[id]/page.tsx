@@ -129,7 +129,7 @@ export default function TaskDetailPage() {
       },
       {
         onSuccess: () => {
-          updateStatus.mutate({ taskId: task.id, status: 'backlog' });
+          updateStatus.mutate({ taskId: task.id, status: 'pending' });
         },
       },
     );

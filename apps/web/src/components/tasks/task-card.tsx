@@ -19,7 +19,7 @@ interface TaskCardProps {
 export function TaskCard({ task, isDragging }: TaskCardProps) {
   const approveTask = useApproveTask();
   const rejectTask = useRejectTask();
-  const isPending = task.status === 'pending-approval';
+  const isPending = task.status === 'pending';
 
   return (
     <Card

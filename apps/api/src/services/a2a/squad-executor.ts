@@ -187,7 +187,7 @@ export class SquadAgentExecutor implements AgentExecutor {
             `Created from an A2A message to **${this.agentName}**.\n\n` +
             `**Original request:**\n${userText}\n\n` +
             `**Agent response:**\n${responseText}`,
-          status: 'backlog',
+          status: 'pending',
           priority: 'P2',
           assignee: this.agentId,
           labels: ['a2a'],

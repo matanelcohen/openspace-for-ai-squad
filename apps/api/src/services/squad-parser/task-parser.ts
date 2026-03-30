@@ -86,7 +86,7 @@ export function parseTaskFile(content: string, filePath: string): ParseTaskResul
     id: fm.id.trim(),
     title: fm.title.trim(),
     description: body.trim(),
-    status: isTaskStatus(fm.status) ? fm.status : 'backlog',
+    status: isTaskStatus(fm.status) ? fm.status : 'pending',
     priority: isTaskPriority(fm.priority) ? fm.priority : 'P2',
     assignee: typeof fm.assignee === 'string' && fm.assignee !== 'null' ? fm.assignee : null,
     assigneeType: isTaskAssigneeType(fm.assigneeType) ? fm.assigneeType : 'agent',

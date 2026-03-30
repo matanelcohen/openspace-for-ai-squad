@@ -88,7 +88,7 @@ export async function createTask(tasksDir: string, input: CreateTaskInput): Prom
     id: generateTaskId(),
     title: input.title,
     description: input.description ?? '',
-    status: input.status ?? 'backlog',
+    status: input.status ?? 'pending',
     priority: input.priority ?? 'P2',
     assignee: input.assignee ?? null,
     assigneeType:

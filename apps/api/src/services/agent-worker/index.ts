@@ -190,7 +190,7 @@ export class AgentWorkerService {
             }
 
             if (!isAlreadyQueued && !isActive) {
-              await updateTask(this.config.tasksDir, taskId, { status: 'backlog' });
+              await updateTask(this.config.tasksDir, taskId, { status: 'pending' });
               queue?.push(task.id);
               console.log(
                 `[AgentWorker] Recovered orphaned task ${taskId} for ${task.assignee} (attempt ${retryCount + 1})`,
@@ -723,7 +723,7 @@ export class AgentWorkerService {
           description: sub.description,
           priority: task.priority,
           assignee: sub.assignee,
-          status: 'backlog',
+          status: 'pending',
           labels: [`parent:${taskId}`],
           parent: taskId,
         });
