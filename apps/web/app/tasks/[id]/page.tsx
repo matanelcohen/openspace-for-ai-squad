@@ -220,8 +220,12 @@ export default function TaskDetailPage() {
         </div>
       )}
 
-      {/* Stuck in-progress banner — task has no active worker */}
-      {task.status === 'in-progress' && !isWorking && (
+      {/* Stuck in-progress banner — task has no active worker for 30s+ */}
+      {task.status === 'in-progress' && !isWorking && (() => {
+        const updated = new Date(task.updatedAt).getTime();
+        const elapsed = Date.now() - updated;
+        return elapsed > 30_000; // Only show after 30 seconds
+      })() && (
         <div
           className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950"
         >
