@@ -247,3 +247,14 @@
 .animate-terminal-blink {
   animation: terminal-blink 1s step-end infinite;
 }
+
+/* YOLO Mode pulsing indicator */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}

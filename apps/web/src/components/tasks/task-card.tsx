@@ -20,6 +20,7 @@ export function TaskCard({ task, isDragging }: TaskCardProps) {
   const approveTask = useApproveTask();
   const rejectTask = useRejectTask();
   const isPending = task.status === 'pending';
+  const isYolo = task.description?.includes('🤖 Auto-assigned by YOLO');
 
   return (
     <Card
@@ -37,7 +38,14 @@ export function TaskCard({ task, isDragging }: TaskCardProps) {
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0">
         <div className="flex items-center justify-between gap-2">
-          <PriorityBadge priority={task.priority} className="text-[10px] px-1.5 py-0" />
+          <div className="flex items-center gap-1">
+            <PriorityBadge priority={task.priority} className="text-[10px] px-1.5 py-0" />
+            {isYolo && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
+                🤖 YOLO
+              </Badge>
+            )}
+          </div>
           {task.assignee && <AgentAvatar agentId={task.assignee} name={task.assignee} size="sm" />}
         </div>
         {task.labels.length > 0 && (

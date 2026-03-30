@@ -30,6 +30,7 @@ import terminalRoute from './routes/terminal.js';
 import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import workspacesRoute from './routes/workspaces.js';
+import yoloRoute from './routes/yolo.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
 import { ActivityFeed } from './services/activity/index.js';
@@ -59,6 +60,7 @@ import {
 import type { WebSocketManager } from './services/websocket/index.js';
 import { wsPlugin } from './services/websocket/index.js';
 import { WorkspaceService } from './services/workspace/index.js';
+import { YoloService } from './services/yolo/index.js';
 
 /** Voice service bundle exposed on the Fastify instance. */
 export interface VoiceServices {
@@ -351,8 +353,19 @@ export async function buildApp(opts: AppOptions = {}) {
       });
       app.decorate('a2aService', a2aService);
 
-      // Shut down worker on close
+      // YOLO Mode service — autonomous task triage
+      const yoloService = new YoloService({
+        aiProvider: provider,
+        agentWorker: workerService,
+        squadParser: parser,
+        tasksDir: resolve(squadDir, 'tasks'),
+        wsManager: app.wsManager ?? null,
+      });
+      app.decorate('yoloService', yoloService);
+
+      // Shut down worker + YOLO on close
       app.addHook('onClose', async () => {
+        yoloService.stop();
         workerService.stop();
       });
     }
@@ -437,6 +450,7 @@ export async function buildApp(opts: AppOptions = {}) {
   app.register(skillsRoute, { prefix: '/api' });
   app.register(cronRoute, { prefix: '/api' });
   app.register(workspacesRoute, { prefix: '/api' });
+  app.register(yoloRoute, { prefix: '/api' });
   app.register(githubRoute, { prefix: '/api' });
   // Terminal route
   app.register(terminalRoute, { prefix: '/api' });
@@ -460,6 +474,7 @@ declare module 'fastify' {
     knowledgeSearch: KnowledgeSearchService;
     agentWorker?: AgentWorkerService;
     a2aService?: A2AService;
+    yoloService?: YoloService;
     sandboxService: SandboxService;
     hookPipeline?: HookPipeline;
     agentRegistry: AgentRegistry;
