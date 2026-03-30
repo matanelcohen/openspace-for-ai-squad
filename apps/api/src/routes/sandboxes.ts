@@ -199,33 +199,61 @@ const sandboxesRoute: FastifyPluginAsync = async (app) => {
 
       // Handle client messages (e.g., exec requests over WebSocket)
       socket.on('message', async (raw: Buffer | string) => {
+        let msg: { action: string } & ExecRequest;
         try {
-          const msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8')) as {
+          msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8')) as {
             action: string;
           } & ExecRequest;
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : 'unknown error';
+          socket.send(
+            JSON.stringify({
+              type: 'error',
+              code: 'INVALID_JSON',
+              message: `Message parse failed: ${detail}`,
+            }),
+          );
+          return;
+        }
 
-          if (msg.action === 'exec' && msg.command) {
-            try {
-              const result = await app.sandboxService.exec(sandboxId, {
-                command: msg.command,
-                workdir: msg.workdir,
-                env: msg.env,
-                timeoutMs: msg.timeoutMs,
-              });
-              socket.send(JSON.stringify({ type: 'exec:result', ...result }));
-            } catch (err) {
-              const error = err as Error & { code?: string };
-              socket.send(
-                JSON.stringify({
-                  type: 'error',
-                  code: error.code ?? 'EXEC_FAILED',
-                  message: error.message,
-                }),
-              );
-            }
+        if (msg.action === 'exec') {
+          if (!msg.command || typeof msg.command !== 'string') {
+            socket.send(
+              JSON.stringify({
+                type: 'error',
+                code: 'VALIDATION_ERROR',
+                message: 'Field "command" is required and must be a non-empty string',
+              }),
+            );
+            return;
           }
-        } catch {
-          // ignore unparseable messages
+
+          try {
+            const result = await app.sandboxService.exec(sandboxId, {
+              command: msg.command,
+              workdir: msg.workdir,
+              env: msg.env,
+              timeoutMs: msg.timeoutMs,
+            });
+            socket.send(JSON.stringify({ type: 'exec:result', ...result }));
+          } catch (err) {
+            const error = err as Error & { code?: string };
+            socket.send(
+              JSON.stringify({
+                type: 'error',
+                code: error.code ?? 'EXEC_FAILED',
+                message: error.message,
+              }),
+            );
+          }
+        } else {
+          socket.send(
+            JSON.stringify({
+              type: 'error',
+              code: 'UNKNOWN_ACTION',
+              message: `Unknown action: ${msg.action ?? '<missing>'}`,
+            }),
+          );
         }
       });
 

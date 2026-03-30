@@ -30,6 +30,14 @@ export interface WsEnvelope {
   timestamp: string;
 }
 
+/** Server → Client: error response (e.g. parse failures, unknown actions). */
+export interface WsErrorEnvelope {
+  type: 'error';
+  code: string;
+  message: string;
+  timestamp: string;
+}
+
 function buildWsUrl(): string {
   const base =
     process.env.NEXT_PUBLIC_API_URL ??
@@ -51,8 +59,10 @@ export function useWebSocket(url?: string) {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
   const onEventRef = useRef<((envelope: WsEnvelope) => void) | null>(null);
+  const onErrorRef = useRef<((error: WsErrorEnvelope) => void) | null>(null);
 
   const [lastEvent, setLastEvent] = useState<WsEnvelope | null>(null);
+  const [lastError, setLastError] = useState<WsErrorEnvelope | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
   const send = useCallback((msg: Record<string, unknown>) => {
@@ -91,10 +101,19 @@ export function useWebSocket(url?: string) {
       }
 
       try {
-        const parsed = JSON.parse(raw) as WsEnvelope;
-        setLastEvent(parsed);
+        const parsed = JSON.parse(raw) as WsEnvelope | WsErrorEnvelope;
+
+        // Detect server error envelopes (parse failures, unknown actions, etc.)
+        if (parsed.type === 'error' && 'code' in parsed && 'message' in parsed) {
+          const errorEnvelope = parsed as WsErrorEnvelope;
+          setLastError(errorEnvelope);
+          onErrorRef.current?.(errorEnvelope);
+          return;
+        }
+
+        setLastEvent(parsed as WsEnvelope);
         // Dispatch immediately via callback ref so rapid events aren't lost to React batching
-        onEventRef.current?.(parsed);
+        onEventRef.current?.(parsed as WsEnvelope);
       } catch {
         // ignore non-JSON messages (e.g. welcome)
       }
@@ -128,5 +147,5 @@ export function useWebSocket(url?: string) {
     };
   }, [connect]);
 
-  return { lastEvent, isConnected, send, subscribe, onEventRef };
+  return { lastEvent, lastError, isConnected, send, subscribe, onEventRef, onErrorRef };
 }

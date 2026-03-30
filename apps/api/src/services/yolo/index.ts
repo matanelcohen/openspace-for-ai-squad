@@ -133,6 +133,11 @@ export class YoloService {
     this.runScanSafe();
 
     this.interval = setInterval(() => {
+      if (!this.enabled) {
+        console.warn('[YOLO] Interval fired but YOLO is disabled — clearing');
+        if (this.interval) clearInterval(this.interval);
+        return;
+      }
       this.lastIntervalStart = Date.now();
       this.runScanSafe();
     }, this.scanIntervalMs);
@@ -142,6 +147,8 @@ export class YoloService {
 
   stop(): void {
     if (!this.enabled) return;
+
+    console.log('[YOLO] Stopping...', new Error('stop() called from').stack?.split('\n').slice(1, 4).join(' → '));
 
     if (this.interval) {
       clearInterval(this.interval);
@@ -171,23 +178,32 @@ export class YoloService {
   // ── Internal ─────────────────────────────────────────────────
 
   private runScanSafe(): void {
+    console.log('[YOLO] Starting scan...');
     this.runScan().catch((err) => {
-      console.error('[YOLO] Scan failed:', err);
+      console.error('[YOLO] Scan failed:', err.message ?? err);
+      // Don't stop YOLO on scan failure — try again next interval
     });
   }
 
   private async runScan(): Promise<ScanResult> {
     const { aiProvider, agentWorker, squadParser, tasksDir } = this.config;
 
-    if (!aiProvider || !agentWorker) {
+    if (!aiProvider) {
+      console.warn('[YOLO] Scan skipped — AI provider not available');
+      return { decisions: [], assigned: 0, skipped: 0, timestamp: new Date().toISOString() };
+    }
+    if (!agentWorker) {
+      console.warn('[YOLO] Scan skipped — Agent worker not available');
       return { decisions: [], assigned: 0, skipped: 0, timestamp: new Date().toISOString() };
     }
 
     // 1. Get pending tasks
     const allTasks = await squadParser.getTasks();
     const pendingTasks = allTasks.filter((t) => t.status === 'pending');
+    console.log(`[YOLO] Found ${pendingTasks.length} pending tasks (${allTasks.length} total)`);
 
     if (pendingTasks.length === 0) {
+      console.log('[YOLO] No pending tasks — scan complete');
       const result: ScanResult = {
         decisions: [],
         assigned: 0,
@@ -195,6 +211,7 @@ export class YoloService {
         timestamp: new Date().toISOString(),
       };
       this.lastScanAt = result.timestamp;
+      this.persistState();
       return result;
     }
 

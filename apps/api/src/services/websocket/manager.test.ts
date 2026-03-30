@@ -345,15 +345,142 @@ describe('WebSocketManager', () => {
   });
 
   describe('message handling', () => {
-    it('should ignore unparseable messages', () => {
+    it('should send INVALID_JSON error for unparseable messages', () => {
       const ws = new MockWebSocket();
       manager.addClient(ws as unknown as WebSocket);
 
-      // Send invalid JSON
       ws.simulateMessage('not json at all {{{');
 
-      // Should not crash
+      // Client should still be connected
       expect(manager.clientCount).toBe(1);
+
+      // Should have welcome (1) + error envelope (1) = 2 messages
+      expect(ws.sentMessages).toHaveLength(2);
+      const errorMsg = JSON.parse(ws.sentMessages[1]!);
+      expect(errorMsg.type).toBe('error');
+      expect(errorMsg.code).toBe('INVALID_JSON');
+      expect(errorMsg.message).toContain('Message parse failed');
+      expect(errorMsg.timestamp).toBeTypeOf('string');
+    });
+
+    it('should send INVALID_FORMAT error for non-object messages', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      // Array
+      ws.simulateMessage([1, 2, 3]);
+      expect(ws.sentMessages).toHaveLength(2);
+      const arrError = JSON.parse(ws.sentMessages[1]!);
+      expect(arrError.type).toBe('error');
+      expect(arrError.code).toBe('INVALID_FORMAT');
+      expect(arrError.message).toBe('Message must be a JSON object');
+
+      // String primitive
+      ws.simulateMessage('"just a string"');
+      expect(ws.sentMessages).toHaveLength(3);
+      const strError = JSON.parse(ws.sentMessages[2]!);
+      expect(strError.code).toBe('INVALID_FORMAT');
+
+      // Number
+      ws.simulateMessage('42');
+      expect(ws.sentMessages).toHaveLength(4);
+      const numError = JSON.parse(ws.sentMessages[3]!);
+      expect(numError.code).toBe('INVALID_FORMAT');
+
+      // null
+      ws.simulateMessage('null');
+      expect(ws.sentMessages).toHaveLength(5);
+      const nullError = JSON.parse(ws.sentMessages[4]!);
+      expect(nullError.code).toBe('INVALID_FORMAT');
+    });
+
+    it('should send MISSING_ACTION error for objects without action field', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      ws.simulateMessage({ foo: 'bar' });
+      expect(ws.sentMessages).toHaveLength(2);
+      const errorMsg = JSON.parse(ws.sentMessages[1]!);
+      expect(errorMsg.type).toBe('error');
+      expect(errorMsg.code).toBe('MISSING_ACTION');
+      expect(errorMsg.message).toBe('Message must include an "action" string field');
+    });
+
+    it('should send MISSING_ACTION error when action is not a string', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      ws.simulateMessage({ action: 123 });
+      expect(ws.sentMessages).toHaveLength(2);
+      const errorMsg = JSON.parse(ws.sentMessages[1]!);
+      expect(errorMsg.code).toBe('MISSING_ACTION');
+    });
+
+    it('should send UNKNOWN_ACTION error for unrecognized actions', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      ws.simulateMessage({ action: 'nonexistent:action' });
+      expect(ws.sentMessages).toHaveLength(2);
+      const errorMsg = JSON.parse(ws.sentMessages[1]!);
+      expect(errorMsg.type).toBe('error');
+      expect(errorMsg.code).toBe('UNKNOWN_ACTION');
+      expect(errorMsg.message).toContain('nonexistent:action');
+    });
+
+    it('should not send error for valid subscribe messages', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      ws.simulateMessage({ action: 'subscribe', events: ['task:updated'] });
+
+      // Only the welcome message — no error
+      expect(ws.sentMessages).toHaveLength(1);
+    });
+
+    it('should not send error envelope to closed connections', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      // Close the connection before sending bad message
+      ws.readyState = 3; // CLOSED
+
+      ws.simulateMessage('invalid json {{{');
+
+      // Only the welcome message (sent before close)
+      expect(ws.sentMessages).toHaveLength(1);
+    });
+
+    it('should handle send error during error envelope delivery', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      // Make send throw after the welcome message
+      const originalSend = ws.send.bind(ws);
+      let callCount = 0;
+      ws.send = (data: string) => {
+        callCount++;
+        if (callCount > 1) throw new Error('Connection reset');
+        originalSend(data);
+      };
+
+      // Should not throw even though send fails
+      expect(() => {
+        ws.simulateMessage('bad json');
+      }).not.toThrow();
+
+      expect(manager.clientCount).toBe(1);
+    });
+
+    it('should include ISO timestamp in error envelopes', () => {
+      const ws = new MockWebSocket();
+      manager.addClient(ws as unknown as WebSocket);
+
+      ws.simulateMessage('bad json!!!');
+
+      const errorMsg = JSON.parse(ws.sentMessages[1]!);
+      // Verify ISO 8601 format
+      expect(new Date(errorMsg.timestamp).toISOString()).toBe(errorMsg.timestamp);
     });
   });
 });

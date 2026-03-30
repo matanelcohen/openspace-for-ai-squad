@@ -12,6 +12,11 @@ const MAX_RECONNECT_ATTEMPTS = 10;
 
 export type StreamStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'failed';
 
+export interface StreamError {
+  code: string;
+  message: string;
+}
+
 function buildStreamUrl(sandboxId: string): string {
   const base =
     process.env.NEXT_PUBLIC_API_URL ??
@@ -33,6 +38,7 @@ export function useSandboxStream(sandboxId: string | null) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [status, setStatus] = useState<StreamStatus>('idle');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
+  const [lastError, setLastError] = useState<StreamError | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const mountedRef = useRef(true);
@@ -100,6 +106,11 @@ export function useSandboxStream(sandboxId: string | null) {
             setLines((prev) => {
               const next = [...prev, ...batch];
               return next.length > MAX_LINES ? next.slice(-MAX_LINES) : next;
+            });
+          } else if (data.type === 'error') {
+            setLastError({
+              code: data.code as string,
+              message: data.message as string,
             });
           }
         } catch {
@@ -176,5 +187,5 @@ export function useSandboxStream(sandboxId: string | null) {
     };
   }, [sandboxId, connect]);
 
-  return { lines, isStreaming, status, reconnectAttempt, clear, retry };
+  return { lines, isStreaming, status, reconnectAttempt, lastError, clear, retry };
 }

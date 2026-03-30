@@ -91,11 +91,16 @@ const terminalRoute: FastifyPluginAsync = async (app) => {
       let msg: unknown;
       try {
         msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8'));
-      } catch {
-        return; // ignore malformed messages
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : 'unknown error';
+        socket.send(JSON.stringify({ type: 'error', code: 'INVALID_JSON', message: `Message parse failed: ${detail}` }));
+        return;
       }
 
-      if (!isValidMessage(msg)) return;
+      if (!isValidMessage(msg)) {
+        socket.send(JSON.stringify({ type: 'error', code: 'INVALID_MESSAGE', message: 'Message must be { type: "input", data: string } or { type: "resize", cols: number, rows: number }' }));
+        return;
+      }
 
       if (msg.type === 'input') {
         term.write(msg.data);

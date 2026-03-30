@@ -3,6 +3,7 @@
 import { Menu, Moon, Sun } from 'lucide-react';
 import { useTheme } from 'next-themes';
 
+import { ReviewerNotificationBell } from '@/components/escalations/reviewer-notification-bell';
 import { NotificationBell } from '@/components/notifications/notification-bell';
 import { Button } from '@/components/ui/button';
 
@@ -33,6 +34,7 @@ export function TopBar({ onToggleSidebar }: TopBarProps) {
         </h2>
       </div>
       <div className="flex items-center gap-2">
+        <ReviewerNotificationBell />
         <NotificationBell />
         <Button
           variant="ghost"

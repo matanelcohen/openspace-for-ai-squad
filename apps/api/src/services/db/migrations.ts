@@ -7,6 +7,7 @@
 
 import type Database from 'better-sqlite3';
 
+import { migration_v4 } from '../escalation/migration-v4.js';
 import { migration_v3 } from '../ingestion/migration-v3.js';
 
 type Migration = (db: Database.Database) => void;
@@ -54,7 +55,7 @@ const migration_v2: Migration = (db) => {
 };
 
 /** Ordered list of migrations. Index = target version - 2 (since base schema is v1). */
-const MIGRATIONS: Migration[] = [migration_v2, migration_v3];
+const MIGRATIONS: Migration[] = [migration_v2, migration_v3, migration_v4];
 
 /** Current target schema version. */
 export const TARGET_SCHEMA_VERSION = MIGRATIONS.length + 1;

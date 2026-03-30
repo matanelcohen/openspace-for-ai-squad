@@ -265,47 +265,123 @@ export class WebSocketManager {
     const entry = this.clients.get(clientId);
     if (!entry) return;
 
-    let msg: WsClientMessage;
+    let parsed: unknown;
     try {
-      msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8')) as WsClientMessage;
-    } catch {
-      return; // ignore unparseable messages
+      parsed = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8'));
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : 'unknown error';
+      this.sendError(entry.ws, 'INVALID_JSON', `Message parse failed: ${detail}`);
+      return;
     }
+
+    // Validate the parsed value is a non-null object with an action field
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      this.sendError(entry.ws, 'INVALID_FORMAT', 'Message must be a JSON object');
+      return;
+    }
+
+    const msg = parsed as WsClientMessage;
+
+    if (!('action' in msg) || typeof (msg as Record<string, unknown>).action !== 'string') {
+      this.sendError(entry.ws, 'MISSING_ACTION', 'Message must include an "action" string field');
+      return;
+    }
+
+    const raw_msg = msg as Record<string, unknown>;
 
     switch (msg.action) {
       case 'subscribe':
-        for (const evt of msg.events) {
-          if ((WS_EVENT_TYPES as readonly string[]).includes(evt)) {
-            entry.info.subscriptions.add(evt);
+      case 'unsubscribe': {
+        if (!Array.isArray(raw_msg.events)) {
+          this.sendError(
+            entry.ws,
+            'INVALID_PAYLOAD',
+            `"${msg.action}" requires an "events" array`,
+          );
+          return;
+        }
+        const events = raw_msg.events as unknown[];
+        if (!events.every((e) => typeof e === 'string')) {
+          this.sendError(
+            entry.ws,
+            'INVALID_PAYLOAD',
+            `"${msg.action}" events must all be strings`,
+          );
+          return;
+        }
+        if (msg.action === 'subscribe') {
+          for (const evt of events as string[]) {
+            if ((WS_EVENT_TYPES as readonly string[]).includes(evt)) {
+              entry.info.subscriptions.add(evt as import('./types.js').WsEventType);
+            }
+          }
+        } else {
+          for (const evt of events as string[]) {
+            entry.info.subscriptions.delete(evt as import('./types.js').WsEventType);
           }
         }
         break;
-
-      case 'unsubscribe':
-        for (const evt of msg.events) {
-          entry.info.subscriptions.delete(evt);
-        }
-        break;
+      }
 
       case 'pong':
         entry.info.alive = true;
         entry.info.lastPong = Date.now();
         break;
 
-      case 'chat:send':
+      case 'chat:send': {
+        const sender = raw_msg.sender;
+        const recipient = raw_msg.recipient;
+        const content = raw_msg.content;
+
+        if (typeof sender !== 'string' || sender.length === 0) {
+          this.sendError(entry.ws, 'INVALID_PAYLOAD', '"chat:send" requires a non-empty "sender" string');
+          return;
+        }
+        if (typeof recipient !== 'string' || recipient.length === 0) {
+          this.sendError(entry.ws, 'INVALID_PAYLOAD', '"chat:send" requires a non-empty "recipient" string');
+          return;
+        }
+        if (typeof content !== 'string' || content.length === 0) {
+          this.sendError(entry.ws, 'INVALID_PAYLOAD', '"chat:send" requires a non-empty "content" string');
+          return;
+        }
         this.handleChatSend(clientId, entry.ws, msg);
         break;
+      }
 
-      case 'channel:join':
+      case 'channel:join': {
+        if (typeof raw_msg.channelId !== 'string' || (raw_msg.channelId as string).length === 0) {
+          this.sendError(entry.ws, 'INVALID_PAYLOAD', '"channel:join" requires a non-empty "channelId" string');
+          return;
+        }
         this.handleChannelJoin(clientId, msg);
         break;
+      }
 
-      case 'channel:leave':
+      case 'channel:leave': {
+        if (typeof raw_msg.channelId !== 'string' || (raw_msg.channelId as string).length === 0) {
+          this.sendError(entry.ws, 'INVALID_PAYLOAD', '"channel:leave" requires a non-empty "channelId" string');
+          return;
+        }
         this.handleChannelLeave(clientId, msg);
         break;
+      }
 
-      case 'identify':
+      case 'identify': {
+        if (typeof raw_msg.userId !== 'string' || (raw_msg.userId as string).length === 0) {
+          this.sendError(entry.ws, 'INVALID_PAYLOAD', '"identify" requires a non-empty "userId" string');
+          return;
+        }
         this.handleIdentify(clientId, msg);
+        break;
+      }
+
+      default:
+        this.sendError(
+          entry.ws,
+          'UNKNOWN_ACTION',
+          `Unknown action: ${(msg as Record<string, unknown>).action ?? '<missing>'}`,
+        );
         break;
     }
   }

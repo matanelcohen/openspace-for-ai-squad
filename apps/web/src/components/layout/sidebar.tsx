@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  AlertTriangle,
   BookOpen,
   Brain,
   Clock,
@@ -31,6 +32,7 @@ const navItems = [
   { href: '/tasks', label: 'Tasks', icon: ListTodo },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/decisions', label: 'Decisions', icon: Scale },
+  { href: '/escalations', label: 'Escalations', icon: AlertTriangle },
 
   // Team
   { href: '/team-members', label: 'Team', icon: Users },

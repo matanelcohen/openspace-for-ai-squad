@@ -93,11 +93,19 @@ export function Terminal() {
 
     ws.onmessage = (event) => {
       try {
-        const msg = JSON.parse(event.data as string) as { type: string; data: string };
+        const msg = JSON.parse(event.data as string) as {
+          type: string;
+          data?: string;
+          code?: string;
+          message?: string;
+        };
         if (msg.type === 'output') {
-          term.write(msg.data);
+          term.write(msg.data ?? '');
         } else if (msg.type === 'error') {
-          term.write(`\r\n\x1b[31m${msg.data}\x1b[0m`);
+          // Support both legacy `data` field and structured `code`/`message` format
+          const errorText = msg.message ?? msg.data ?? 'Unknown error';
+          const prefix = msg.code ? `[${msg.code}] ` : '';
+          term.write(`\r\n\x1b[31m${prefix}${errorText}\x1b[0m`);
         }
       } catch {
         // Fallback: write raw data if not JSON

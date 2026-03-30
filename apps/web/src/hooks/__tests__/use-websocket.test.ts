@@ -208,4 +208,140 @@ describe('useWebSocket', () => {
       }),
     );
   });
+
+  describe('error envelope handling', () => {
+    it('sets lastError for server error envelopes', async () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:1234/ws'));
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      const errorEnvelope = {
+        type: 'error',
+        code: 'INVALID_JSON',
+        message: 'Message parse failed: Unexpected token',
+        timestamp: '2026-03-30T14:00:00Z',
+      };
+
+      act(() => {
+        MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      expect(result.current.lastError).toEqual(errorEnvelope);
+    });
+
+    it('does not set lastEvent for error envelopes', async () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:1234/ws'));
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      const errorEnvelope = {
+        type: 'error',
+        code: 'UNKNOWN_ACTION',
+        message: 'Unknown action: bad:action',
+        timestamp: '2026-03-30T14:00:00Z',
+      };
+
+      act(() => {
+        MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      expect(result.current.lastEvent).toBeNull();
+      expect(result.current.lastError).not.toBeNull();
+    });
+
+    it('dispatches error envelopes via onErrorRef callback', async () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:1234/ws'));
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      const received: unknown[] = [];
+      result.current.onErrorRef.current = (err) => received.push(err);
+
+      const errorEnvelope = {
+        type: 'error',
+        code: 'MISSING_ACTION',
+        message: 'Message must include an "action" string field',
+        timestamp: '2026-03-30T14:00:00Z',
+      };
+
+      act(() => {
+        MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      expect(received).toHaveLength(1);
+      expect(received[0]).toEqual(errorEnvelope);
+    });
+
+    it('keeps lastEvent unchanged when error arrives after event', async () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:1234/ws'));
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      const normalEvent = {
+        type: 'task:updated',
+        payload: { id: 't1' },
+        timestamp: '2026-03-30T14:00:00Z',
+      };
+
+      act(() => {
+        MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(normalEvent));
+      });
+      expect(result.current.lastEvent).toEqual(normalEvent);
+
+      const errorEnvelope = {
+        type: 'error',
+        code: 'INVALID_JSON',
+        message: 'Message parse failed',
+        timestamp: '2026-03-30T14:00:01Z',
+      };
+
+      act(() => {
+        MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      // lastEvent should be unchanged, lastError should be set
+      expect(result.current.lastEvent).toEqual(normalEvent);
+      expect(result.current.lastError).toEqual(errorEnvelope);
+    });
+
+    it('updates lastError on subsequent errors', async () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:1234/ws'));
+
+      await act(async () => {
+        vi.advanceTimersByTime(1);
+      });
+
+      const error1 = {
+        type: 'error',
+        code: 'INVALID_JSON',
+        message: 'First error',
+        timestamp: '2026-03-30T14:00:00Z',
+      };
+
+      act(() => {
+        MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(error1));
+      });
+      expect(result.current.lastError?.message).toBe('First error');
+
+      const error2 = {
+        type: 'error',
+        code: 'UNKNOWN_ACTION',
+        message: 'Second error',
+        timestamp: '2026-03-30T14:00:01Z',
+      };
+
+      act(() => {
+        MockWebSocket.instances[0]!.simulateMessage(JSON.stringify(error2));
+      });
+      expect(result.current.lastError?.message).toBe('Second error');
+    });
+  });
 });

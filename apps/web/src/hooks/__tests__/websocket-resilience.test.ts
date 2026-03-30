@@ -284,4 +284,143 @@ describe('useWebSocket — Reconnection + Resilience', () => {
     });
     expect(mockInstances.length).toBe(count + 1); // Now
   });
+
+  describe('server error feedback', () => {
+    it('sets lastError when server sends error envelope', () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:3001/ws'));
+
+      act(() => {
+        mockInstances[0]!.simulateOpen();
+      });
+
+      const errorEnvelope = {
+        type: 'error',
+        code: 'INVALID_JSON',
+        message: 'Message parse failed: Unexpected end of JSON input',
+        timestamp: '2026-03-30T14:00:00.000Z',
+      };
+
+      act(() => {
+        mockInstances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      expect(result.current.lastError).toEqual(errorEnvelope);
+      expect(result.current.lastEvent).toBeNull();
+    });
+
+    it('does not confuse error envelopes with regular events', () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:3001/ws'));
+
+      act(() => {
+        mockInstances[0]!.simulateOpen();
+      });
+
+      // Normal event first
+      const normalEvent = {
+        type: 'agent:status',
+        payload: { connected: true },
+        timestamp: '2026-03-30T14:00:00.000Z',
+      };
+      act(() => {
+        mockInstances[0]!.simulateMessage(JSON.stringify(normalEvent));
+      });
+      expect(result.current.lastEvent).toEqual(normalEvent);
+
+      // Error envelope
+      const errorEnvelope = {
+        type: 'error',
+        code: 'INVALID_FORMAT',
+        message: 'Message must be a JSON object',
+        timestamp: '2026-03-30T14:00:01.000Z',
+      };
+      act(() => {
+        mockInstances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      // lastEvent should still be the normal event
+      expect(result.current.lastEvent).toEqual(normalEvent);
+      expect(result.current.lastError).toEqual(errorEnvelope);
+    });
+
+    it('fires onErrorRef callback for error envelopes', () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:3001/ws'));
+
+      act(() => {
+        mockInstances[0]!.simulateOpen();
+      });
+
+      const errors: unknown[] = [];
+      result.current.onErrorRef.current = (err) => errors.push(err);
+
+      const errorEnvelope = {
+        type: 'error',
+        code: 'MISSING_ACTION',
+        message: 'Message must include an "action" string field',
+        timestamp: '2026-03-30T14:00:00.000Z',
+      };
+
+      act(() => {
+        mockInstances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toEqual(errorEnvelope);
+    });
+
+    it('does not fire onEventRef for error envelopes', () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:3001/ws'));
+
+      act(() => {
+        mockInstances[0]!.simulateOpen();
+      });
+
+      const events: unknown[] = [];
+      result.current.onEventRef.current = (evt) => events.push(evt);
+
+      const errorEnvelope = {
+        type: 'error',
+        code: 'UNKNOWN_ACTION',
+        message: 'Unknown action: bad:thing',
+        timestamp: '2026-03-30T14:00:00.000Z',
+      };
+
+      act(() => {
+        mockInstances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+      });
+
+      expect(events).toHaveLength(0);
+    });
+
+    it('handles all server error codes', () => {
+      const { result } = renderHook(() => useWebSocket('ws://test:3001/ws'));
+
+      act(() => {
+        mockInstances[0]!.simulateOpen();
+      });
+
+      const errorCodes = [
+        'INVALID_JSON',
+        'INVALID_FORMAT',
+        'MISSING_ACTION',
+        'UNKNOWN_ACTION',
+        'NO_HANDLER',
+        'SEND_FAILED',
+      ];
+
+      for (const code of errorCodes) {
+        const errorEnvelope = {
+          type: 'error',
+          code,
+          message: `Error: ${code}`,
+          timestamp: new Date().toISOString(),
+        };
+
+        act(() => {
+          mockInstances[0]!.simulateMessage(JSON.stringify(errorEnvelope));
+        });
+
+        expect(result.current.lastError?.code).toBe(code);
+      }
+    });
+  });
 });
