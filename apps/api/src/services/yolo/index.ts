@@ -69,7 +69,7 @@ export class YoloService {
     this.restoreState();
   }
 
-  /** Persist enabled state to .squad/.cache/yolo-state.json */
+  /** Persist enabled state + scan results to .squad/.cache/yolo-state.json */
   private persistState(): void {
     try {
       const { writeFileSync, mkdirSync, existsSync } = require('node:fs');
@@ -77,7 +77,13 @@ export class YoloService {
       const stateFile = join(this.config.tasksDir, '..', '.cache', 'yolo-state.json');
       const dir = dirname(stateFile);
       if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-      writeFileSync(stateFile, JSON.stringify({ enabled: this.enabled, scanIntervalMs: this.scanIntervalMs, maxTasksPerScan: this.maxTasksPerScan }), 'utf-8');
+      writeFileSync(stateFile, JSON.stringify({
+        enabled: this.enabled,
+        scanIntervalMs: this.scanIntervalMs,
+        maxTasksPerScan: this.maxTasksPerScan,
+        lastScanAt: this.lastScanAt,
+        scanResults: this.scanResults,
+      }), 'utf-8');
     } catch { /* best effort */ }
   }
 
@@ -89,9 +95,12 @@ export class YoloService {
       const stateFile = join(this.config.tasksDir, '..', '.cache', 'yolo-state.json');
       if (!existsSync(stateFile)) return;
       const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
+      // Restore scan results from last session
+      if (state.lastScanAt) this.lastScanAt = state.lastScanAt;
+      if (state.scanResults) this.scanResults = state.scanResults;
+      if (state.scanIntervalMs) this.scanIntervalMs = state.scanIntervalMs;
+      if (state.maxTasksPerScan) this.maxTasksPerScan = state.maxTasksPerScan;
       if (state.enabled) {
-        if (state.scanIntervalMs) this.scanIntervalMs = state.scanIntervalMs;
-        if (state.maxTasksPerScan) this.maxTasksPerScan = state.maxTasksPerScan;
         // Auto-start after a short delay (let services initialize)
         setTimeout(() => {
           this.start().catch((err) => console.warn(`[YOLO] Auto-restart failed: ${err.message}`));
@@ -303,10 +312,11 @@ Rules:
       }
     }
 
-    // 9. Update results
+    // 9. Update results and persist
     const timestamp = new Date().toISOString();
     this.lastScanAt = timestamp;
     this.scanResults = { assigned, skipped };
+    this.persistState();
 
     // 10. Broadcast via WebSocket
     if (this.config.wsManager) {
