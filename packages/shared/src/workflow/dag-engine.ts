@@ -20,8 +20,10 @@ import type {
   ExecutionContext,
   InterruptResolutionPayload,
   NodeOutput,
+  ParameterMapping,
   SerializedContext,
   StepNode,
+  SubWorkflowNodeConfig,
   TaskNodeConfig,
   WorkflowEvent,
   WorkflowEventHandler,
@@ -39,7 +41,7 @@ import {
   isInterruptError,
   shouldInterrupt,
 } from './interrupt.js';
-import { resolveToolParams } from './parameter-resolver.js';
+import { resolveToolParams, resolvePath } from './parameter-resolver.js';
 import { evaluatePredicate } from './predicate-evaluator.js';
 
 // ── Validation ──────────────────────────────────────────────────
@@ -270,9 +272,11 @@ function sleep(ms: number): Promise<void> {
 export class DAGWorkflowEngine {
   private config: DAGWorkflowEngineConfig;
   private listeners: WorkflowEventHandler[] = [];
+  private currentDepth: number;
 
-  constructor(config: DAGWorkflowEngineConfig) {
+  constructor(config: DAGWorkflowEngineConfig, depth = 0) {
     this.config = config;
+    this.currentDepth = depth;
     if (config.eventListeners) {
       this.listeners.push(...config.eventListeners);
     }
@@ -635,26 +639,44 @@ export class DAGWorkflowEngine {
         }
 
         case 'sub_workflow': {
-          // Sub-workflow execution delegates to a nested engine run
-          // For v1, treat as a task node invoking a handler
-          const result = await this.executeTaskWithRetry(node, ctx);
-          if (result.status === 'completed') {
+          const subResult = await this.executeSubWorkflow(node, ctx, state);
+          if (subResult.status === 'completed') {
             const nodeOutput: NodeOutput = {
-              data: result.output,
+              data: subResult.output,
               completedAt: new Date().toISOString(),
-              durationMs: result.durationMs,
+              durationMs: subResult.durationMs,
             };
             ctx = { ...ctx, nodeOutputs: { ...ctx.nodeOutputs, [node.id]: nodeOutput } };
             current = updateNodeState(current, node.id, {
               status: 'completed',
               completedAt: new Date().toISOString(),
-              output: result.output,
-              durationMs: result.durationMs,
-              attempts: result.attempts,
+              output: subResult.output,
+              durationMs: subResult.durationMs,
+              attempts: [{
+                attempt: 0,
+                startedAt: subResult.startedAt,
+                completedAt: new Date().toISOString(),
+                status: 'completed',
+                output: subResult.output,
+                durationMs: subResult.durationMs,
+              }],
             });
             this.emit('node:completed', current, node.id);
+          } else if (subResult.status === 'paused') {
+            current = updateNodeState(current, node.id, {
+              status: 'paused',
+              escalationId: subResult.escalationId ?? null,
+            });
+            this.emit('node:paused', current, node.id);
           } else {
-            current = this.handleNodeFailure(current, node, result.error ?? 'Unknown error', result.attempts);
+            current = this.handleNodeFailure(current, node, subResult.error ?? 'Sub-workflow failed', [{
+              attempt: 0,
+              startedAt: subResult.startedAt,
+              completedAt: new Date().toISOString(),
+              status: 'failed',
+              error: subResult.error,
+              durationMs: subResult.durationMs,
+            }]);
           }
           break;
         }
@@ -671,6 +693,141 @@ export class DAGWorkflowEngine {
     }
 
     return { state: current, ctx };
+  }
+
+  // ── Private: Sub-Workflow Execution ────────────────────────────
+
+  private async executeSubWorkflow(
+    node: StepNode,
+    ctx: ExecutionContext,
+    _parentState: EnhancedWorkflowExecutionState,
+  ): Promise<{
+    status: 'completed' | 'failed' | 'paused';
+    output?: unknown;
+    error?: string;
+    durationMs: number;
+    startedAt: string;
+    escalationId?: string;
+  }> {
+    const maxDepth = this.config.maxSubWorkflowDepth ?? 10;
+    if (this.currentDepth >= maxDepth) {
+      return {
+        status: 'failed',
+        error: `Sub-workflow nesting depth exceeded maximum of ${maxDepth}`,
+        durationMs: 0,
+        startedAt: new Date().toISOString(),
+      };
+    }
+
+    const config = node.config as SubWorkflowNodeConfig;
+    if (!config.workflowId) {
+      return {
+        status: 'failed',
+        error: `Sub-workflow node "${node.id}" missing workflowId in config`,
+        durationMs: 0,
+        startedAt: new Date().toISOString(),
+      };
+    }
+
+    if (!this.config.workflowResolver) {
+      return {
+        status: 'failed',
+        error: `Sub-workflow node "${node.id}" requires a workflowResolver in engine config`,
+        durationMs: 0,
+        startedAt: new Date().toISOString(),
+      };
+    }
+
+    const startedAt = new Date().toISOString();
+    const start = Date.now();
+
+    try {
+      const subWorkflow = await this.config.workflowResolver(config.workflowId);
+      if (!subWorkflow) {
+        return {
+          status: 'failed',
+          error: `Sub-workflow "${config.workflowId}" not found`,
+          durationMs: Date.now() - start,
+          startedAt,
+        };
+      }
+
+      // Resolve input mapping to build sub-workflow vars
+      const subVars: Record<string, unknown> = { ...(subWorkflow.defaultVars ?? {}) };
+      if (config.inputMapping) {
+        for (const mapping of config.inputMapping) {
+          subVars[mapping.param] = resolvePath(mapping.from, ctx);
+        }
+      }
+
+      // Create a child engine at depth + 1 sharing config but with its own depth counter
+      const childEngine = new DAGWorkflowEngine(this.config, this.currentDepth + 1);
+
+      // Forward event listeners from parent
+      for (const listener of this.listeners) {
+        childEngine.on('workflow:started', listener);
+      }
+
+      // Generate a scoped execution ID for the sub-workflow
+      const subExecutionId = `${ctx.executionId}::sub::${node.id}::${Date.now()}`;
+
+      const subState = await childEngine.start(subWorkflow, {
+        executionId: subExecutionId,
+        vars: subVars,
+        secrets: ctx.secrets,
+        traceId: ctx.traceId,
+      });
+
+      const durationMs = Date.now() - start;
+
+      if (subState.status === 'completed') {
+        // Collect outputs from end nodes of the sub-workflow
+        const endNodeOutputs: Record<string, unknown> = {};
+        for (const [nid, ns] of Object.entries(subState.nodeStates)) {
+          if (ns.status === 'completed' && ns.output != null) {
+            endNodeOutputs[nid] = ns.output;
+          }
+        }
+        return {
+          status: 'completed',
+          output: {
+            subWorkflowId: config.workflowId,
+            subExecutionId,
+            nodeOutputs: endNodeOutputs,
+            vars: subState.contextSnapshot.vars,
+          },
+          durationMs,
+          startedAt,
+        };
+      }
+
+      if (subState.status === 'paused') {
+        // Find the escalation ID from the paused sub-workflow
+        const pausedNode = Object.values(subState.nodeStates).find((ns) => ns.status === 'paused');
+        return {
+          status: 'paused',
+          durationMs,
+          startedAt,
+          escalationId: pausedNode?.escalationId ?? undefined,
+        };
+      }
+
+      // Failed or other terminal status
+      const failedNode = Object.values(subState.nodeStates).find((ns) => ns.status === 'failed');
+      return {
+        status: 'failed',
+        error: failedNode?.error ?? `Sub-workflow "${config.workflowId}" finished with status: ${subState.status}`,
+        durationMs,
+        startedAt,
+      };
+    } catch (err) {
+      return {
+        status: 'failed',
+        error: err instanceof Error ? err.message : String(err),
+        durationMs: Date.now() - start,
+        startedAt,
+      };
+    }
   }
 
   // ── Private: Task Execution with Retry ────────────────────────

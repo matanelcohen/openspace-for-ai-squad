@@ -69,6 +69,7 @@ export type {
   WorkflowEvent,
   WorkflowEventHandler,
   WorkflowEventPayload,
+  WorkflowResolver,
   WorkflowStartOptions,
 } from './dag-workflow.js';
 export type { Decision, DecisionStatus } from './decision.js';
@@ -150,10 +151,12 @@ export type {
 export type {
   Sandbox,
   SandboxCommand,
+  SandboxFile,
   SandboxOutputLine,
   SandboxResources,
   SandboxRuntime,
   SandboxStatus,
+  SandboxTemplate,
 } from './sandbox.js';
 export type {
   CompositeTrigger,

@@ -43,3 +43,22 @@ export interface SandboxOutputLine {
   /** Stream source */
   stream: 'stdout' | 'stderr';
 }
+
+/** File node in a sandbox file tree. */
+export interface SandboxFile {
+  name: string;
+  path: string;
+  type: 'file' | 'directory';
+  size?: number;
+  children?: SandboxFile[];
+}
+
+/** Pre-configured sandbox template for quick starts. */
+export interface SandboxTemplate {
+  id: string;
+  name: string;
+  description: string;
+  runtime: SandboxRuntime;
+  icon: string;
+  setupCommand?: string;
+}

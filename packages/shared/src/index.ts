@@ -184,6 +184,7 @@ export type {
   WorkflowExecutionState,
   WorkflowExecutionStatus,
   WorkflowNodeType,
+  WorkflowResolver,
   WorkflowStartOptions,
   Workspace,
 } from './types/index.js';

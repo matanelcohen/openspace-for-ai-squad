@@ -510,6 +510,12 @@ export type WorkflowEventHandler = (payload: WorkflowEventPayload) => void;
 /** Handler function for executing a task node via custom logic. */
 export type NodeHandler = (node: StepNode, ctx: ExecutionContext) => Promise<unknown>;
 
+/**
+ * Resolves a workflow definition by ID. Used by the engine to load
+ * sub-workflow definitions during recursive execution.
+ */
+export type WorkflowResolver = (workflowId: string) => Promise<DAGWorkflow | null>;
+
 /** Configuration for the DAGWorkflowEngine. */
 export interface DAGWorkflowEngineConfig {
   /** Persistence layer for checkpoints. */
@@ -527,8 +533,18 @@ export interface DAGWorkflowEngineConfig {
   /** Escalation resolution provider. */
   resolveEscalation: (escalationId: string) => Promise<{ approved: boolean; output?: unknown }>;
 
+  /**
+   * Resolves a workflow ID to a DAGWorkflow definition.
+   * Required for sub_workflow node execution. If not provided,
+   * sub_workflow nodes will fail with a configuration error.
+   */
+  workflowResolver?: WorkflowResolver;
+
   /** Maximum concurrent node executions. Default: 10. */
   maxConcurrency?: number;
+
+  /** Maximum sub-workflow nesting depth. Default: 10. */
+  maxSubWorkflowDepth?: number;
 
   /** Event listeners for observability. */
   eventListeners?: WorkflowEventHandler[];

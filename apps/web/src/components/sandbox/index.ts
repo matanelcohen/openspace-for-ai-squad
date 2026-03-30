@@ -1,8 +1,14 @@
 export { AnsiLine } from './ansi-line';
+export { CodeEditor } from './code-editor';
 export { CommandInput } from './command-input';
+export { FileExplorer } from './file-explorer';
 export { RuntimeSelector } from './runtime-selector';
 export { SandboxCard } from './sandbox-card';
 export { SandboxControls } from './sandbox-controls';
+export { SandboxCreateDialog } from './sandbox-create-dialog';
+export { SandboxIde } from './sandbox-ide';
 export { SandboxList } from './sandbox-list';
 export { SandboxPanel } from './sandbox-panel';
+export { SandboxStatusBar } from './sandbox-status-bar';
+export { SandboxTemplates, SANDBOX_TEMPLATES } from './sandbox-templates';
 export { TerminalOutput } from './terminal-output';

@@ -64,6 +64,41 @@ export class YoloService {
     this.config = config;
     this.scanIntervalMs = config.scanIntervalMs ?? 60_000;
     this.maxTasksPerScan = config.maxTasksPerScan ?? 5;
+
+    // Restore state from disk
+    this.restoreState();
+  }
+
+  /** Persist enabled state to .squad/.cache/yolo-state.json */
+  private persistState(): void {
+    try {
+      const { writeFileSync, mkdirSync, existsSync } = require('node:fs');
+      const { join, dirname } = require('node:path');
+      const stateFile = join(this.config.tasksDir, '..', '.cache', 'yolo-state.json');
+      const dir = dirname(stateFile);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      writeFileSync(stateFile, JSON.stringify({ enabled: this.enabled, scanIntervalMs: this.scanIntervalMs, maxTasksPerScan: this.maxTasksPerScan }), 'utf-8');
+    } catch { /* best effort */ }
+  }
+
+  /** Restore state and auto-start if was enabled before restart */
+  private restoreState(): void {
+    try {
+      const { readFileSync, existsSync } = require('node:fs');
+      const { join } = require('node:path');
+      const stateFile = join(this.config.tasksDir, '..', '.cache', 'yolo-state.json');
+      if (!existsSync(stateFile)) return;
+      const state = JSON.parse(readFileSync(stateFile, 'utf-8'));
+      if (state.enabled) {
+        if (state.scanIntervalMs) this.scanIntervalMs = state.scanIntervalMs;
+        if (state.maxTasksPerScan) this.maxTasksPerScan = state.maxTasksPerScan;
+        // Auto-start after a short delay (let services initialize)
+        setTimeout(() => {
+          this.start().catch((err) => console.warn(`[YOLO] Auto-restart failed: ${err.message}`));
+        }, 5000);
+        console.log('[YOLO] Restoring previous state — will auto-start in 5s');
+      }
+    } catch { /* best effort */ }
   }
 
   // ── Public API ───────────────────────────────────────────────
@@ -83,6 +118,7 @@ export class YoloService {
 
     this.enabled = true;
     this.lastIntervalStart = Date.now();
+    this.persistState();
 
     // Run the first scan immediately
     this.runScanSafe();
@@ -103,6 +139,7 @@ export class YoloService {
       this.interval = null;
     }
     this.enabled = false;
+    this.persistState();
     console.log('[YOLO] Stopped');
   }
 
