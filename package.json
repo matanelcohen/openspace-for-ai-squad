@@ -1,6 +1,6 @@
 {
   "name": "@matanelcohen/openspace-ai",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Visual workspace manager for Squad SDK \u2014 create, manage, and collaborate with AI agent teams",
   "keywords": [
     "ai",
@@ -94,6 +94,13 @@
     "react-dom": "^18.3.1",
     "tsx": "^4.21.0",
     "ws": "^8.20.0",
-    "yaml": "^2.8.3"
+    "yaml": "^2.8.3",
+    "@matanelcohen/openspace-shared": "^0.4.1",
+    "@matanelcohen/openspace-api": "^0.4.1",
+    "@matanelcohen/openspace-web": "^0.4.1",
+    "@matanelcohen/openspace-memory-store": "^0.4.1",
+    "@matanelcohen/openspace-mcp-server": "^0.4.1",
+    "@matanelcohen/openspace-skills-core": "^0.4.1",
+    "@matanelcohen/openspace-tracing": "^0.4.1"
   }
 }
