@@ -1,6 +1,6 @@
 'use client';
 
-import type { Task } from '@openspace/shared';
+import type { Task } from '@matanelcohen/openspace-shared';
 import { Check, X } from 'lucide-react';
 import Link from 'next/link';
 

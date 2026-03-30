@@ -1,6 +1,6 @@
 'use client';
 
-import type { SandboxRuntime } from '@openspace/shared';
+import type { SandboxRuntime } from '@matanelcohen/openspace-shared';
 import { Play, RotateCcw } from 'lucide-react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 

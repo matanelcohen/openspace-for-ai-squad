@@ -5,7 +5,7 @@
  * before allowing them to proceed.
  */
 
-import type { HooksDefinition } from '@openspace/shared';
+import type { HooksDefinition } from '@matanelcohen/openspace-shared';
 
 // ── Types ────────────────────────────────────────────────────────
 

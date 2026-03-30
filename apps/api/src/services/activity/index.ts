@@ -6,7 +6,7 @@
  * Emits new events via WebSocket `activity:new`.
  */
 
-import type { ActivityEvent, ActivityEventType } from '@openspace/shared';
+import type { ActivityEvent, ActivityEventType } from '@matanelcohen/openspace-shared';
 import { nanoid } from 'nanoid';
 
 import type { FileWatcher, FileWatcherEvent, FileWatcherEventType } from '../file-watcher/index.js';

@@ -35,7 +35,7 @@ import type {
   EscalationPriority,
   EscalationReason,
   EscalationStatus,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import type { FastifyPluginAsync } from 'fastify';
 
 const VALID_STATUSES: EscalationStatus[] = [

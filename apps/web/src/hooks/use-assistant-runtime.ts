@@ -7,7 +7,7 @@ import {
   useExternalStoreRuntime,
   WebSpeechDictationAdapter,
 } from '@assistant-ui/react';
-import type { ChatMessage } from '@openspace/shared';
+import type { ChatMessage } from '@matanelcohen/openspace-shared';
 import { useCallback, useMemo, useRef } from 'react';
 
 import { useChatMessages, useSendMessage, useTypingIndicator } from '@/hooks/use-chat';

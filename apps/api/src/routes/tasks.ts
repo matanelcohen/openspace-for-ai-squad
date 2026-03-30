@@ -11,8 +11,8 @@
  * DELETE /api/tasks/:id          — Delete task
  */
 
-import type { TaskPriority, TaskStatus } from '@openspace/shared';
-import { TASK_PRIORITIES, TASK_STATUSES } from '@openspace/shared';
+import type { TaskPriority, TaskStatus } from '@matanelcohen/openspace-shared';
+import { TASK_PRIORITIES, TASK_STATUSES } from '@matanelcohen/openspace-shared';
 import type { FastifyPluginAsync } from 'fastify';
 
 import {

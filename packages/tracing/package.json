@@ -1,7 +1,6 @@
 {
-  "name": "@openspace/tracing",
+  "name": "@matanelcohen/openspace-tracing",
   "version": "0.0.1",
-  "private": true,
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
@@ -20,5 +19,15 @@
   "devDependencies": {
     "typescript": "^5.7.0",
     "vitest": "^3.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "author": "Matan Cohen",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/matanelcohen/openspace-for-ai-squad.git",
+    "directory": "packages/tracing"
   }
 }

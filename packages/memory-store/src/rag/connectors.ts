@@ -5,7 +5,7 @@
  * and produces structured ChunkInput objects ready for the chunker.
  */
 
-import type { ChunkMetadata, SourceType } from '@openspace/shared';
+import type { ChunkMetadata, SourceType } from '@matanelcohen/openspace-shared';
 
 import type { ChunkInput } from './chunker.js';
 

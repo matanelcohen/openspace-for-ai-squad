@@ -1,7 +1,7 @@
 'use client';
 
-import type { WorkflowDefinition } from '@openspace/shared';
-import { validateWorkflow } from '@openspace/shared';
+import type { WorkflowDefinition } from '@matanelcohen/openspace-shared';
+import { validateWorkflow } from '@matanelcohen/openspace-shared';
 import { AlertCircle, CheckCircle2, Download, RotateCcw, Save, Trash2 } from 'lucide-react';
 import { useCallback, useState } from 'react';
 

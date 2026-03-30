@@ -1,6 +1,6 @@
 'use client';
 
-import type { Sandbox } from '@openspace/shared';
+import type { Sandbox } from '@matanelcohen/openspace-shared';
 import { Activity, Clock, Cpu, HardDrive } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';

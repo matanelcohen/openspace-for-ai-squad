@@ -1,6 +1,6 @@
 'use client';
 
-import type { Agent } from '@openspace/shared';
+import type { Agent } from '@matanelcohen/openspace-shared';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { StatusBadge } from '@/components/status-badge';

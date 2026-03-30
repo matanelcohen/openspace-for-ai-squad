@@ -1,5 +1,5 @@
 /**
- * @openspace/shared — Shared types, constants, and utilities.
+ * @matanelcohen/openspace-shared — Shared types, constants, and utilities.
  *
  * This package is the contract between frontend and backend.
  * Types defined here are the source of truth for both apps.

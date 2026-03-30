@@ -1,6 +1,6 @@
 'use client';
 
-import type { RAGSearchRequest, RAGSearchResponse, RAGStats } from '@openspace/shared';
+import type { RAGSearchRequest, RAGSearchResponse, RAGStats } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

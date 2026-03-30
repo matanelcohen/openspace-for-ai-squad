@@ -1,6 +1,6 @@
 'use client';
 
-import type { SandboxStatus } from '@openspace/shared';
+import type { SandboxStatus } from '@matanelcohen/openspace-shared';
 import { Play, Square, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';

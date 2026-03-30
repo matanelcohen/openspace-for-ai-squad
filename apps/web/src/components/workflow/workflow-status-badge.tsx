@@ -1,6 +1,6 @@
 'use client';
 
-import type { NodeExecutionStatus, WorkflowExecutionStatus } from '@openspace/shared';
+import type { NodeExecutionStatus, WorkflowExecutionStatus } from '@matanelcohen/openspace-shared';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';

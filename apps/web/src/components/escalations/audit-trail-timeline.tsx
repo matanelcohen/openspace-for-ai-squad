@@ -1,6 +1,6 @@
 'use client';
 
-import type { AuditEntry } from '@openspace/shared';
+import type { AuditEntry } from '@matanelcohen/openspace-shared';
 import { CheckCircle, Clock, Eye, RotateCcw, XCircle } from 'lucide-react';
 
 import { cn } from '@/lib/utils';

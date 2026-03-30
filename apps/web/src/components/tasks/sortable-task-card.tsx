@@ -2,7 +2,7 @@
 
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { Task } from '@openspace/shared';
+import type { Task } from '@matanelcohen/openspace-shared';
 
 import { TaskCard } from '@/components/tasks/task-card';
 

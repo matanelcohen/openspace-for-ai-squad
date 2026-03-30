@@ -1,6 +1,6 @@
 'use client';
 
-import type { Workspace } from '@openspace/shared';
+import type { Workspace } from '@matanelcohen/openspace-shared';
 import { Check, ChevronsUpDown, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 

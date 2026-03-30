@@ -7,7 +7,7 @@ import type {
   SkillPromptTemplate,
   SkillToolDeclaration,
   SkillTrigger,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import { useCallback, useMemo, useReducer } from 'react';
 
 // ── Form State ───────────────────────────────────────────────────

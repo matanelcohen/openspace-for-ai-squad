@@ -1,6 +1,6 @@
 'use client';
 
-import type { TaskAssigneeType } from '@openspace/shared';
+import type { TaskAssigneeType } from '@matanelcohen/openspace-shared';
 import Link from 'next/link';
 
 import { AgentAvatar } from '@/components/agent-avatar';

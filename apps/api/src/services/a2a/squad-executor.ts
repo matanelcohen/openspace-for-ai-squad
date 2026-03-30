@@ -10,7 +10,7 @@
 
 import type { Message } from '@a2a-js/sdk';
 import type { AgentExecutor, ExecutionEventBus, RequestContext } from '@a2a-js/sdk/server';
-import { CHAT_TEAM_RECIPIENT } from '@openspace/shared';
+import { CHAT_TEAM_RECIPIENT } from '@matanelcohen/openspace-shared';
 import { nanoid } from 'nanoid';
 
 import type { ActivityFeed } from '../activity/index.js';

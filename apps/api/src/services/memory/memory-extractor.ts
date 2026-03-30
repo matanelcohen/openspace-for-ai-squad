@@ -5,7 +5,7 @@
  * reusable memories: decisions made, user preferences, codebase patterns.
  */
 
-import type { ExtractedMemory, MemoryExtractionInput } from '@openspace/shared';
+import type { ExtractedMemory, MemoryExtractionInput } from '@matanelcohen/openspace-shared';
 
 import type { AIProvider } from '../ai/copilot-provider.js';
 

@@ -8,8 +8,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { Task, TaskAssigneeType, TaskPriority, TaskStatus } from '@openspace/shared';
-import { TASK_PRIORITIES, TASK_STATUSES } from '@openspace/shared';
+import type { Task, TaskAssigneeType, TaskPriority, TaskStatus } from '@matanelcohen/openspace-shared';
+import { TASK_PRIORITIES, TASK_STATUSES } from '@matanelcohen/openspace-shared';
 import matter from 'gray-matter';
 
 // ---------------------------------------------------------------------------

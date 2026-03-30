@@ -5,7 +5,7 @@
  * team members are stored exclusively in the SQLite database.
  */
 
-import type { TeamMember, TeamMemberRank, TeamMemberStatus } from '@openspace/shared';
+import type { TeamMember, TeamMemberRank, TeamMemberStatus } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 

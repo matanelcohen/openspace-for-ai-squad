@@ -1,4 +1,4 @@
-import type { GitHubIssue, GitHubPR } from '@openspace/shared';
+import type { GitHubIssue, GitHubPR } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

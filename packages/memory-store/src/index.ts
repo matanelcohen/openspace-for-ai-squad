@@ -1,5 +1,5 @@
 /**
- * @openspace/memory-store — embedding-based memory storage and retrieval.
+ * @matanelcohen/openspace-memory-store — embedding-based memory storage and retrieval.
  *
  * Provides a complete memory store with:
  * - CRUD operations with automatic deduplication

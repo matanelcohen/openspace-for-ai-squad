@@ -1,7 +1,7 @@
 /**
  * EscalationService — SQLite persistence layer for the HITL escalation framework.
  *
- * Wraps the pure escalation logic from @openspace/shared with database persistence,
+ * Wraps the pure escalation logic from @matanelcohen/openspace-shared with database persistence,
  * WebSocket notifications, and workflow state serialization.
  */
 
@@ -14,7 +14,7 @@ import type {
   EscalationPriority,
   EscalationReason,
   EscalationStatus,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import {
   approveEscalationItem,
   autoEscalate,
@@ -25,7 +25,7 @@ import {
   isTimedOut,
   rejectEscalationItem,
   validateContext,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 import type { WebSocketManager, WsEnvelope } from '../websocket/index.js';

@@ -1,6 +1,6 @@
 'use client';
 
-import type { MemoryType } from '@openspace/shared';
+import type { MemoryType } from '@matanelcohen/openspace-shared';
 import { useMemo, useState } from 'react';
 
 import { MemoryList } from '@/components/memories/memory-list';

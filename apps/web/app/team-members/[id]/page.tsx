@@ -1,7 +1,7 @@
 'use client';
 
-import type { Agent, Task } from '@openspace/shared';
-import { TASK_STATUS_LABELS, TEAM_MEMBER_RANK_LABELS } from '@openspace/shared';
+import type { Agent, Task } from '@matanelcohen/openspace-shared';
+import { TASK_STATUS_LABELS, TEAM_MEMBER_RANK_LABELS } from '@matanelcohen/openspace-shared';
 import {
   ArrowLeft,
   Bot,

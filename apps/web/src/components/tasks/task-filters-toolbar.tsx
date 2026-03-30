@@ -1,12 +1,12 @@
 'use client';
 
-import type { TaskPriority, TaskStatus } from '@openspace/shared';
+import type { TaskPriority, TaskStatus } from '@matanelcohen/openspace-shared';
 import {
   TASK_PRIORITIES,
   TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   TASK_STATUSES,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import { Search } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';

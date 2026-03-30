@@ -19,7 +19,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import type { SkillManifest } from '@openspace/shared';
+import type { SkillManifest } from '@matanelcohen/openspace-shared';
 import type { FastifyPluginAsync } from 'fastify';
 import matter from 'gray-matter';
 

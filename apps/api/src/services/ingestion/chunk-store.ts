@@ -5,7 +5,7 @@
  * Uses the rag_chunks + rag_chunk_embeddings tables from migration v3.
  */
 
-import type { Chunk, ChunkFilter, EmbeddedChunk, SourceType } from '@openspace/shared';
+import type { Chunk, ChunkFilter, EmbeddedChunk, SourceType } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 // ── Chunk Store ────────────────────────────────────────────────────

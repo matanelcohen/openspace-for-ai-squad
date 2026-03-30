@@ -1,6 +1,6 @@
 'use client';
 
-import type { Memory } from '@openspace/shared';
+import type { Memory } from '@matanelcohen/openspace-shared';
 import { Calendar, Clock, Hash, User } from 'lucide-react';
 import { useState } from 'react';
 

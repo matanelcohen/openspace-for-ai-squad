@@ -2,8 +2,8 @@
 
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import type { Task, TaskStatus } from '@openspace/shared';
-import { TASK_STATUS_LABELS } from '@openspace/shared';
+import type { Task, TaskStatus } from '@matanelcohen/openspace-shared';
+import { TASK_STATUS_LABELS } from '@matanelcohen/openspace-shared';
 
 import { SortableTaskCard } from '@/components/tasks/sortable-task-card';
 import { cn } from '@/lib/utils';

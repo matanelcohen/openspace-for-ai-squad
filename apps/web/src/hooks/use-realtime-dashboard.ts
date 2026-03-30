@@ -1,6 +1,6 @@
 'use client';
 
-import type { Agent, SquadOverview, Task } from '@openspace/shared';
+import type { Agent, SquadOverview, Task } from '@matanelcohen/openspace-shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

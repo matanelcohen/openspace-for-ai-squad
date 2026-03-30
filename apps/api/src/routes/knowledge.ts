@@ -6,7 +6,7 @@
  * GET  /api/knowledge/stats     — Knowledge base statistics
  */
 
-import type { ChunkFilter, RAGSearchRequest } from '@openspace/shared';
+import type { ChunkFilter, RAGSearchRequest } from '@matanelcohen/openspace-shared';
 import type { FastifyPluginAsync } from 'fastify';
 
 import { ErrorCodes, sendError } from '../lib/api-errors.js';
@@ -146,7 +146,7 @@ const knowledgeRoute: FastifyPluginAsync = async (app) => {
 
         migration_v3(app.db);
 
-        let embedder: import('@openspace/shared').Embedder | undefined;
+        let embedder: import('@matanelcohen/openspace-shared').Embedder | undefined;
         try {
           const { LocalEmbedder } = await import('../services/embeddings/local-embedder.js');
           embedder = new LocalEmbedder();

@@ -1,6 +1,6 @@
 'use client';
 
-import type { DecisionStatus } from '@openspace/shared';
+import type { DecisionStatus } from '@matanelcohen/openspace-shared';
 import { useMemo,useState } from 'react';
 
 import { DecisionList } from '@/components/decisions/decision-list';

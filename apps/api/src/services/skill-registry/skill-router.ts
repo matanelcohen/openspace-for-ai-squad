@@ -28,7 +28,7 @@ import type {
   SkillTaskContext,
   SkillTrigger,
   TaskTypeTrigger,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 
 // ── Default Confidence Constants ─────────────────────────────────
 

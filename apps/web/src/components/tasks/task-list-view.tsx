@@ -1,7 +1,7 @@
 'use client';
 
-import type { Task, TaskPriority, TaskStatus } from '@openspace/shared';
-import { TASK_STATUS_LABELS } from '@openspace/shared';
+import type { Task, TaskPriority, TaskStatus } from '@matanelcohen/openspace-shared';
+import { TASK_STATUS_LABELS } from '@matanelcohen/openspace-shared';
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
 import Link from 'next/link';
 import { useMemo, useState } from 'react';

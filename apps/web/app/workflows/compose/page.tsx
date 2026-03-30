@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkflowDefinition } from '@openspace/shared';
+import type { WorkflowDefinition } from '@matanelcohen/openspace-shared';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';

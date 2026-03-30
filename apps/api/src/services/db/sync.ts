@@ -9,7 +9,7 @@
  * If they conflict, files win.
  */
 
-import type { ChatChannel, Task } from '@openspace/shared';
+import type { ChatChannel, Task } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 import type { FileWatcherEvent, FileWatcherEventType } from '../file-watcher/index.js';

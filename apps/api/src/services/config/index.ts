@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import type { AgentDefinition, SquadSDKConfig, TeamDefinition } from '@openspace/shared';
+import type { AgentDefinition, SquadSDKConfig, TeamDefinition } from '@matanelcohen/openspace-shared';
 
 export interface LoadConfigOptions {
   /** Working directory to search for squad.config.ts (defaults to cwd). */

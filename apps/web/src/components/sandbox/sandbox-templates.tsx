@@ -1,6 +1,6 @@
 'use client';
 
-import type { SandboxRuntime, SandboxTemplate } from '@openspace/shared';
+import type { SandboxRuntime, SandboxTemplate } from '@matanelcohen/openspace-shared';
 import { Code2, FileCode, Server } from 'lucide-react';
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';

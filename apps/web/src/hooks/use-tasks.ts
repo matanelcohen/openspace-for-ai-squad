@@ -1,4 +1,4 @@
-import type { Task, TaskPriority, TaskStatus } from '@openspace/shared';
+import type { Task, TaskPriority, TaskStatus } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

@@ -13,7 +13,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Decision, DecisionStatus } from '@openspace/shared';
+import type { Decision, DecisionStatus } from '@matanelcohen/openspace-shared';
 
 /** Map H2 section names to DecisionStatus. */
 function sectionToStatus(heading: string): DecisionStatus {

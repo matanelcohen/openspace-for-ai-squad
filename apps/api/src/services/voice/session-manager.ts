@@ -13,7 +13,7 @@
 
 import { EventEmitter } from 'node:events';
 
-import type { VoiceSession } from '@openspace/shared';
+import type { VoiceSession } from '@matanelcohen/openspace-shared';
 import { nanoid } from 'nanoid';
 
 // ── Types ─────────────────────────────────────────────────────────

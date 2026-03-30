@@ -1,6 +1,6 @@
 'use client';
 
-import type { RAGSearchResponse, RetrievedChunk, SourceType } from '@openspace/shared';
+import type { RAGSearchResponse, RetrievedChunk, SourceType } from '@matanelcohen/openspace-shared';
 import { AlertCircle, Clock, FileText, Loader2, Search, Sparkles, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 

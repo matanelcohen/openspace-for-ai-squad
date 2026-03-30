@@ -5,7 +5,7 @@ import {
   defineSquad,
   defineTeam,
   defineTelemetry,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 
 export default defineSquad({
   version: '1.0.0',

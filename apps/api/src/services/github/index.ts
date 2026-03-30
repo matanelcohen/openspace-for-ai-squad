@@ -4,7 +4,7 @@
 
 import { execSync } from 'node:child_process';
 
-import type { GitHubIssue, GitHubPR } from '@openspace/shared';
+import type { GitHubIssue, GitHubPR } from '@matanelcohen/openspace-shared';
 
 export class GitHubService {
   constructor(private projectDir: string) {}

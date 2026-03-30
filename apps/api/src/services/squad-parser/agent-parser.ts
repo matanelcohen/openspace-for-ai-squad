@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Agent, AgentBoundaries, AgentDetail, AgentIdentity } from '@openspace/shared';
+import type { Agent, AgentBoundaries, AgentDetail, AgentIdentity } from '@matanelcohen/openspace-shared';
 
 /** Default identity when charter is missing or unparseable. */
 function defaultIdentity(): AgentIdentity {

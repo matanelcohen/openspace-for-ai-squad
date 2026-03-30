@@ -1,6 +1,6 @@
 'use client';
 
-import type { SkillPhase } from '@openspace/shared';
+import type { SkillPhase } from '@matanelcohen/openspace-shared';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';

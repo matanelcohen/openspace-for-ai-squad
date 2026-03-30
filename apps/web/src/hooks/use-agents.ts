@@ -1,4 +1,4 @@
-import type { Agent } from '@openspace/shared';
+import type { Agent } from '@matanelcohen/openspace-shared';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

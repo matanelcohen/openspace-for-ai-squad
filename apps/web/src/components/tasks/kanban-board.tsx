@@ -12,8 +12,8 @@ import {
   useSensors,
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
-import type { TaskStatus } from '@openspace/shared';
-import { TASK_STATUSES } from '@openspace/shared';
+import type { TaskStatus } from '@matanelcohen/openspace-shared';
+import { TASK_STATUSES } from '@matanelcohen/openspace-shared';
 import { useState } from 'react';
 
 import { KanbanColumn } from '@/components/tasks/kanban-column';

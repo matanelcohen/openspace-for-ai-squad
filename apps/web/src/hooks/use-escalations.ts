@@ -1,4 +1,4 @@
-import type { EscalationItem } from '@openspace/shared';
+import type { EscalationItem } from '@matanelcohen/openspace-shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 

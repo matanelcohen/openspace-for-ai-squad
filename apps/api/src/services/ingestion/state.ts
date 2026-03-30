@@ -5,7 +5,7 @@
  * unchanged data on subsequent ingestion runs.
  */
 
-import type { IngestionState, SourceType } from '@openspace/shared';
+import type { IngestionState, SourceType } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 // ── Public API ─────────────────────────────────────────────────────

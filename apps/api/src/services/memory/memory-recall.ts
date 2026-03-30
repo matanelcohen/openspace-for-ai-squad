@@ -5,7 +5,7 @@
  * Provides memory attribution for transparency.
  */
 
-import type { MemoryAttribution, MemoryRecallResult } from '@openspace/shared';
+import type { MemoryAttribution, MemoryRecallResult } from '@matanelcohen/openspace-shared';
 
 import type { MemoryStore } from './memory-store.js';
 

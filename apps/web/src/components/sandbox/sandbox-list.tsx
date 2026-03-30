@@ -1,6 +1,6 @@
 'use client';
 
-import type { Sandbox } from '@openspace/shared';
+import type { Sandbox } from '@matanelcohen/openspace-shared';
 import { Box } from 'lucide-react';
 
 import { ScrollArea } from '@/components/ui/scroll-area';

@@ -1,6 +1,6 @@
 'use client';
 
-import type { MemoryType } from '@openspace/shared';
+import type { MemoryType } from '@matanelcohen/openspace-shared';
 import { Search } from 'lucide-react';
 import { useCallback, useState } from 'react';
 

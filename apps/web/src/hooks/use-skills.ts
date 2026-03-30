@@ -1,6 +1,6 @@
 'use client';
 
-import type { SkillManifest, SkillPhase, SkillRegistryEntry } from '@openspace/shared';
+import type { SkillManifest, SkillPhase, SkillRegistryEntry } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

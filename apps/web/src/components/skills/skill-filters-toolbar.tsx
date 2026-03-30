@@ -1,6 +1,6 @@
 'use client';
 
-import type { SkillPhase } from '@openspace/shared';
+import type { SkillPhase } from '@matanelcohen/openspace-shared';
 import { Search, X } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';

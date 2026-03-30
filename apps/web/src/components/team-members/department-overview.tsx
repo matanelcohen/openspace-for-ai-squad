@@ -1,7 +1,7 @@
 'use client';
 
-import type { TeamMember } from '@openspace/shared';
-import { DEPARTMENTS, TEAM_MEMBER_RANK_LABELS, TEAM_MEMBER_RANKS } from '@openspace/shared';
+import type { TeamMember } from '@matanelcohen/openspace-shared';
+import { DEPARTMENTS, TEAM_MEMBER_RANK_LABELS, TEAM_MEMBER_RANKS } from '@matanelcohen/openspace-shared';
 import { Building2, Users } from 'lucide-react';
 
 import { AnimatedNumber } from '@/components/dashboard/animated-number';

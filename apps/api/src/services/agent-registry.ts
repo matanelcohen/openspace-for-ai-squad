@@ -6,7 +6,7 @@
  * members are added, updated or removed at runtime.
  */
 
-import type { AgentCapability, SquadSDKConfig } from '@openspace/shared';
+import type { AgentCapability, SquadSDKConfig } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 // ── Types ────────────────────────────────────────────────────────

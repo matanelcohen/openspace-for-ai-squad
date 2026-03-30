@@ -23,13 +23,13 @@ export default defineConfig({
 
   webServer: [
     {
-      command: 'pnpm --filter @openspace/api dev',
+      command: 'pnpm --filter @matanelcohen/openspace-api dev',
       port: 3001,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
     },
     {
-      command: 'pnpm --filter @openspace/web dev',
+      command: 'pnpm --filter @matanelcohen/openspace-web dev',
       port: 3000,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,

@@ -4,7 +4,7 @@
  * Uses 'Xenova/all-MiniLM-L6-v2' (384 dimensions, fast, good quality).
  */
 
-import type { Embedder } from '@openspace/shared';
+import type { Embedder } from '@matanelcohen/openspace-shared';
 
 let pipelineInstance: unknown = null;
 let loading: Promise<void> | null = null;

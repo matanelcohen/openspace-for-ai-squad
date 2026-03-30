@@ -1,7 +1,7 @@
 'use client';
 
-import type { ActivityEvent } from '@openspace/shared';
-import { ACTIVITY_EVENT_TYPE_LABELS } from '@openspace/shared';
+import type { ActivityEvent } from '@matanelcohen/openspace-shared';
+import { ACTIVITY_EVENT_TYPE_LABELS } from '@matanelcohen/openspace-shared';
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertCircle,

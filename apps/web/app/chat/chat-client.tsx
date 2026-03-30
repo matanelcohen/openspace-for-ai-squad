@@ -1,8 +1,8 @@
 'use client';
 
 import { AssistantRuntimeProvider } from '@assistant-ui/react';
-import type { ChatChannel } from '@openspace/shared';
-import { CHAT_CHANNEL_PREFIX, CHAT_TEAM_RECIPIENT } from '@openspace/shared';
+import type { ChatChannel } from '@matanelcohen/openspace-shared';
+import { CHAT_CHANNEL_PREFIX, CHAT_TEAM_RECIPIENT } from '@matanelcohen/openspace-shared';
 import { AlertCircle, Mic, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 

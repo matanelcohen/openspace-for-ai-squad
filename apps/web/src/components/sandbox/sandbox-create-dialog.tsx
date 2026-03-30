@@ -1,6 +1,6 @@
 'use client';
 
-import type { SandboxRuntime } from '@openspace/shared';
+import type { SandboxRuntime } from '@matanelcohen/openspace-shared';
 
 import { useCallback, useState } from 'react';
 

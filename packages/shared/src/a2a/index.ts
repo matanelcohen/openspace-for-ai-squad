@@ -1,5 +1,5 @@
 /**
- * @openspace/shared — A2A Message Bus & Delegation Engine.
+ * @matanelcohen/openspace-shared — A2A Message Bus & Delegation Engine.
  *
  * Pure-logic implementation of the A2A protocol: message routing,
  * delegation with work splitting, negotiation flows, status broadcasting,

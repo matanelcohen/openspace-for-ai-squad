@@ -12,7 +12,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { hasMemorySchema, initializeMemorySchema, MemoryStoreService } from '@openspace/memory-store';
+import { hasMemorySchema, initializeMemorySchema, MemoryStoreService } from '@matanelcohen/openspace-memory-store';
 import type { FastifyPluginAsync } from 'fastify';
 
 const memoriesRoute: FastifyPluginAsync = async (app) => {

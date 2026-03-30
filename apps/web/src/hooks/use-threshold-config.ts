@@ -1,4 +1,4 @@
-import type { ConfidenceThreshold, EscalationChain } from '@openspace/shared';
+import type { ConfidenceThreshold, EscalationChain } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

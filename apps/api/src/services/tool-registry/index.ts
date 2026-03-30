@@ -1,5 +1,5 @@
 /**
- * @openspace/api — Tool Registry
+ * @matanelcohen/openspace-api — Tool Registry
  *
  * Central runtime service for tool management: registration, discovery,
  * validation, and sandboxed execution with plugin support.

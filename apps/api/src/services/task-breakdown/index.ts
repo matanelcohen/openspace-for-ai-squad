@@ -6,7 +6,7 @@
  * Sub-tasks are created with status 'pending'.
  */
 
-import type { Task, TaskPriority } from '@openspace/shared';
+import type { Task, TaskPriority } from '@matanelcohen/openspace-shared';
 
 import type { AIProvider } from '../ai/copilot-provider.js';
 

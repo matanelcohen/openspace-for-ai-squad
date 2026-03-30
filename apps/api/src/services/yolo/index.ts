@@ -6,7 +6,7 @@
  * for execution — no human intervention required.
  */
 
-import type { Task } from '@openspace/shared';
+import type { Task } from '@matanelcohen/openspace-shared';
 
 import type { AgentWorkerService } from '../agent-worker/index.js';
 import type { AIProvider } from '../ai/copilot-provider.js';

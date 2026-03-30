@@ -1,6 +1,6 @@
 'use client';
 
-import type { SkillPhase } from '@openspace/shared';
+import type { SkillPhase } from '@matanelcohen/openspace-shared';
 import { Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 

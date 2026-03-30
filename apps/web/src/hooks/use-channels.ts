@@ -1,5 +1,5 @@
-import type { ChatChannel } from '@openspace/shared';
-import { CHAT_CHANNEL_PREFIX } from '@openspace/shared';
+import type { ChatChannel } from '@matanelcohen/openspace-shared';
+import { CHAT_CHANNEL_PREFIX } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useChannelCacheSync } from '@/hooks/use-channel-cache-sync';
@@ -7,8 +7,8 @@ import { useChatMessages, useSendMessage } from '@/hooks/use-chat';
 import { api } from '@/lib/api-client';
 
 // Re-export Channel types for consumers
-export type { ChatChannel } from '@openspace/shared';
-export type { Channel } from '@openspace/shared';
+export type { ChatChannel } from '@matanelcohen/openspace-shared';
+export type { Channel } from '@matanelcohen/openspace-shared';
 
 /** Centralised query-key factory for channel queries. */
 export const channelKeys = {

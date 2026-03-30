@@ -21,7 +21,7 @@ import type {
   SquadOverview,
   Task,
   TaskStatus,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 
 import { parseAgentCharter } from './agent-parser.js';
 import { parseAllChannels } from './channel-parser.js';

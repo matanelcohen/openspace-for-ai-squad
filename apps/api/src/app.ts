@@ -1,8 +1,8 @@
 import { resolve } from 'node:path';
 
 import cors from '@fastify/cors';
-import { mcpPlugin } from '@openspace/mcp-server';
-import type { AgentCapability } from '@openspace/shared';
+import { mcpPlugin } from '@matanelcohen/openspace-mcp-server';
+import type { AgentCapability } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 
@@ -156,9 +156,9 @@ export async function buildApp(opts: AppOptions = {}) {
   app.decorate('cronService', cronService);
 
   // Knowledge search service with local embedder
-  let knowledgeEmbedder: import('@openspace/shared').Embedder | undefined;
+  let knowledgeEmbedder: import('@matanelcohen/openspace-shared').Embedder | undefined;
   try {
-    const mod = await (import('./services/embeddings/local-embedder.js') as Promise<{ LocalEmbedder: new () => import('@openspace/shared').Embedder }>);
+    const mod = await (import('./services/embeddings/local-embedder.js') as Promise<{ LocalEmbedder: new () => import('@matanelcohen/openspace-shared').Embedder }>);
     knowledgeEmbedder = new mod.LocalEmbedder();
     console.log('[Knowledge] Local embedder initialized (lazy load on first query)');
   } catch (e) {

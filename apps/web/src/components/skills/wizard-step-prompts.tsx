@@ -1,6 +1,6 @@
 'use client';
 
-import type { PromptRole } from '@openspace/shared';
+import type { PromptRole } from '@matanelcohen/openspace-shared';
 import { Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 

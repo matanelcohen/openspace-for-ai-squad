@@ -1,7 +1,7 @@
 'use client';
 
-import type { TeamMemberStatus } from '@openspace/shared';
-import { TEAM_MEMBER_STATUS_LABELS, TEAM_MEMBER_STATUSES } from '@openspace/shared';
+import type { TeamMemberStatus } from '@matanelcohen/openspace-shared';
+import { TEAM_MEMBER_STATUS_LABELS, TEAM_MEMBER_STATUSES } from '@matanelcohen/openspace-shared';
 
 import { Badge } from '@/components/ui/badge';
 import {

@@ -1,4 +1,4 @@
-import type { DecisionStatus } from '@openspace/shared';
+import type { DecisionStatus } from '@matanelcohen/openspace-shared';
 import { Search, X } from 'lucide-react';
 import { useState } from 'react';
 

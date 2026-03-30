@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 
-import type { Workspace } from '@openspace/shared';
+import type { Workspace } from '@matanelcohen/openspace-shared';
 
 /** Directory for global openspace config (not per-project). */
 const OPENSPACE_DIR = join(homedir(), '.openspace');

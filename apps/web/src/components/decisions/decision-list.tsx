@@ -1,4 +1,4 @@
-import type { Decision } from '@openspace/shared';
+import type { Decision } from '@matanelcohen/openspace-shared';
 
 import { DecisionCard } from './decision-card';
 

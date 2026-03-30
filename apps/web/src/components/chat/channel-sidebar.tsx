@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatChannel } from '@openspace/shared';
+import type { ChatChannel } from '@matanelcohen/openspace-shared';
 import { ChevronDown, Hash, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';

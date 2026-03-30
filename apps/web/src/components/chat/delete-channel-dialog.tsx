@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatChannel } from '@openspace/shared';
+import type { ChatChannel } from '@matanelcohen/openspace-shared';
 
 import {
   AlertDialog,

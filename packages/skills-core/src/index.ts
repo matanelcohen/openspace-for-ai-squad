@@ -1,5 +1,5 @@
 /**
- * @openspace/skills-core
+ * @matanelcohen/openspace-skills-core
  *
  * Reference skill implementations: git-expert, test-runner, code-reviewer.
  * Each skill is a self-contained directory with manifest.json, tools/, and prompts/.
@@ -9,8 +9,8 @@ import { existsSync,readdirSync, readFileSync } from 'node:fs';
 import { dirname,join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import type { SkillManifest } from '@openspace/shared/src/types/skill.js';
-import type { Tool } from '@openspace/shared/src/types/tool.js';
+import type { SkillManifest } from '@matanelcohen/openspace-shared/src/types/skill.js';
+import type { Tool } from '@matanelcohen/openspace-shared/src/types/tool.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

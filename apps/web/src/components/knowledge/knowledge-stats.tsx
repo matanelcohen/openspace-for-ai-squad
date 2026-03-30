@@ -1,6 +1,6 @@
 'use client';
 
-import type { SourceType } from '@openspace/shared';
+import type { SourceType } from '@matanelcohen/openspace-shared';
 import { Clock, Database, FileText, HardDrive, Layers } from 'lucide-react';
 
 import { AnimatedNumber } from '@/components/dashboard/animated-number';

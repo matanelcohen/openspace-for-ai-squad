@@ -5,8 +5,8 @@
  * for new escalations. Persists to SQLite for history/unread tracking.
  */
 
-import { generateId, isReviewerEligible } from '@openspace/shared';
-import type { EscalationChain, EscalationItem } from '@openspace/shared';
+import { generateId, isReviewerEligible } from '@matanelcohen/openspace-shared';
+import type { EscalationChain, EscalationItem } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 import type { WebSocketManager, WsEnvelope } from '../websocket/index.js';

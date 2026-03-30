@@ -12,7 +12,7 @@ import type {
   VectorSearchQuery,
   VectorSearchResult,
   VectorStore,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 // ── Schema ─────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-import type { Workspace } from '@openspace/shared';
+import type { Workspace } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

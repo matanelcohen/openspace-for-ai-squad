@@ -10,7 +10,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { appendFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { VoiceMessage, VoiceParticipantRole } from '@openspace/shared';
+import type { VoiceMessage, VoiceParticipantRole } from '@matanelcohen/openspace-shared';
 import { nanoid } from 'nanoid';
 
 //  Types ─

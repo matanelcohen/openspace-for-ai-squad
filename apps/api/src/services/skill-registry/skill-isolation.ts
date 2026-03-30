@@ -9,8 +9,8 @@ import type {
   SkillContext,
   SkillLifecycleHooks,
   SkillRetryPolicy,
-} from '@openspace/shared';
-import { DEFAULT_RETRY_POLICY } from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
+import { DEFAULT_RETRY_POLICY } from '@matanelcohen/openspace-shared';
 
 const DEFAULT_HOOK_TIMEOUT_MS = 30_000; // 30 seconds per architecture spec
 

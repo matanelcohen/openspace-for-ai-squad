@@ -1,6 +1,6 @@
 'use client';
 
-import type { ChatMessage } from '@openspace/shared';
+import type { ChatMessage } from '@matanelcohen/openspace-shared';
 import { useEffect, useRef } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';

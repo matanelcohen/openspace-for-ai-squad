@@ -6,7 +6,7 @@
  * ingestion of project history into the RAG vector store.
  */
 
-import type { ChunkingConfig, Embedder, SourceType } from '@openspace/shared';
+import type { ChunkingConfig, Embedder, SourceType } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 import { ChunkStore } from './chunk-store.js';
@@ -223,10 +223,10 @@ export class IngestionPipeline {
    * Processes in batches to respect API rate limits.
    */
   private async embedBatch(
-    chunks: Array<{ id: string; content: string; metadata: import('@openspace/shared').ChunkMetadata; tokenCount: number }>,
-  ): Promise<import('@openspace/shared').EmbeddedChunk[]> {
+    chunks: Array<{ id: string; content: string; metadata: import('@matanelcohen/openspace-shared').ChunkMetadata; tokenCount: number }>,
+  ): Promise<import('@matanelcohen/openspace-shared').EmbeddedChunk[]> {
     const embedder = this.embedder!;
-    const results: import('@openspace/shared').EmbeddedChunk[] = [];
+    const results: import('@matanelcohen/openspace-shared').EmbeddedChunk[] = [];
 
     for (let i = 0; i < chunks.length; i += this.embeddingBatchSize) {
       const batch = chunks.slice(i, i + this.embeddingBatchSize);

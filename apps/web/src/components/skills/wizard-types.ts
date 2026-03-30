@@ -3,7 +3,7 @@ import type {
   SkillPromptTemplate,
   SkillToolDeclaration,
   SkillTrigger,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 
 import type { WizardFormState } from '@/hooks/use-skill-manifest-form';
 

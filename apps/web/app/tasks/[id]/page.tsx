@@ -1,7 +1,7 @@
 'use client';
 
-import type { TaskStatus } from '@openspace/shared';
-import { TASK_STATUS_LABELS, TASK_STATUSES } from '@openspace/shared';
+import type { TaskStatus } from '@matanelcohen/openspace-shared';
+import { TASK_STATUS_LABELS, TASK_STATUSES } from '@matanelcohen/openspace-shared';
 import { ArrowLeft, GitBranch, GitPullRequest, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';

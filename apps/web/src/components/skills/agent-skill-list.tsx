@@ -17,7 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import type { SkillConfigSchema, SkillPhase } from '@openspace/shared';
+import type { SkillConfigSchema, SkillPhase } from '@matanelcohen/openspace-shared';
 import { Eye, EyeOff, GitBranch, GripVertical, Save, Settings, Zap } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';

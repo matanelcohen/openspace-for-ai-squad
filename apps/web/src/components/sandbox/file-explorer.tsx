@@ -1,6 +1,6 @@
 'use client';
 
-import type { SandboxFile } from '@openspace/shared';
+import type { SandboxFile } from '@matanelcohen/openspace-shared';
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen, RefreshCw } from 'lucide-react';
 import { useCallback, useState } from 'react';
 

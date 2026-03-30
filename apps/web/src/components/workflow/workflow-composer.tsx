@@ -2,7 +2,7 @@
 
 import '@xyflow/react/dist/style.css';
 
-import type { WorkflowDefinition, WorkflowNodeType } from '@openspace/shared';
+import type { WorkflowDefinition, WorkflowNodeType } from '@matanelcohen/openspace-shared';
 import {
   addEdge,
   Background,

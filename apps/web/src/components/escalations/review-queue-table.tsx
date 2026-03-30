@@ -1,6 +1,6 @@
 'use client';
 
-import type { EscalationItem, EscalationPriority, EscalationStatus } from '@openspace/shared';
+import type { EscalationItem, EscalationPriority, EscalationStatus } from '@matanelcohen/openspace-shared';
 import {
   ArrowDown,
   ArrowUp,

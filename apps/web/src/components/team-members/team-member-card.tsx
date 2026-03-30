@@ -1,7 +1,7 @@
 'use client';
 
-import type { TeamMember } from '@openspace/shared';
-import { TEAM_MEMBER_RANK_LABELS, TEAM_MEMBER_STATUS_LABELS } from '@openspace/shared';
+import type { TeamMember } from '@matanelcohen/openspace-shared';
+import { TEAM_MEMBER_RANK_LABELS, TEAM_MEMBER_STATUS_LABELS } from '@matanelcohen/openspace-shared';
 import { Mail } from 'lucide-react';
 import Link from 'next/link';
 

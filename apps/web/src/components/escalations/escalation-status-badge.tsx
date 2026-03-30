@@ -1,4 +1,4 @@
-import type { EscalationStatus } from '@openspace/shared';
+import type { EscalationStatus } from '@matanelcohen/openspace-shared';
 import type { Circle} from 'lucide-react';
 import { CheckCircle, Clock, Eye, RotateCcw, XCircle } from 'lucide-react';
 

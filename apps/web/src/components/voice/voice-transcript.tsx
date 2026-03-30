@@ -1,4 +1,4 @@
-import type { VoiceMessage } from '@openspace/shared';
+import type { VoiceMessage } from '@matanelcohen/openspace-shared';
 import { useEffect, useRef } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';

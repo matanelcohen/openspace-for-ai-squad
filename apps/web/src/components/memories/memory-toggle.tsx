@@ -1,6 +1,6 @@
 'use client';
 
-import type { Agent } from '@openspace/shared';
+import type { Agent } from '@matanelcohen/openspace-shared';
 import { Power } from 'lucide-react';
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';

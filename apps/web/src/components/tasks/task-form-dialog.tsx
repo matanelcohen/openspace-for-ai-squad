@@ -1,7 +1,7 @@
 'use client';
 
-import type { Task, TaskPriority } from '@openspace/shared';
-import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from '@openspace/shared';
+import type { Task, TaskPriority } from '@matanelcohen/openspace-shared';
+import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from '@matanelcohen/openspace-shared';
 import { X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import Markdown from 'react-markdown';

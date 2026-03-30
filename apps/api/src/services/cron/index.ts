@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { CeremonyDefinition } from '@openspace/shared';
+import type { CeremonyDefinition } from '@matanelcohen/openspace-shared';
 
 import type { ChatService } from '../chat/index.js';
 

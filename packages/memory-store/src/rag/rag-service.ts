@@ -16,7 +16,7 @@ import type {
   RetrievedChunk,
   SourceAttribution,
   SourceType,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 
 import type { ChunkInput } from './chunker.js';
 import { type ChunkingConfig, chunkText, DEFAULT_CHUNKING_CONFIG } from './chunker.js';

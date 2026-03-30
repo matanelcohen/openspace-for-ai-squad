@@ -8,7 +8,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import type { SourceType } from '@openspace/shared';
+import type { SourceType } from '@matanelcohen/openspace-shared';
 
 import type { ConnectorOptions, SourceConnector, SourceDocument } from './types.js';
 

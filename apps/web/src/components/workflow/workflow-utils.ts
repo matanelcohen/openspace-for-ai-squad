@@ -1,5 +1,5 @@
 /**
- * Utilities for converting between @openspace/shared workflow types
+ * Utilities for converting between @matanelcohen/openspace-shared workflow types
  * and @xyflow/react node/edge types, plus layout computation.
  */
 
@@ -10,7 +10,7 @@ import type {
   WorkflowDefinition,
   WorkflowExecutionState,
   WorkflowNodeType,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import type { Edge, Node } from '@xyflow/react';
 
 // ── React Flow Node Data ─────────────────────────────────────────

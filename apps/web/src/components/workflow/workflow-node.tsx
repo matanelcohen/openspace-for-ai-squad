@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkflowNodeType } from '@openspace/shared';
+import type { WorkflowNodeType } from '@matanelcohen/openspace-shared';
 import { Handle, Position } from '@xyflow/react';
 import {
   CheckCircle2,

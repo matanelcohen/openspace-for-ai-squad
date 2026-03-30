@@ -1,4 +1,4 @@
-import type { Memory } from '@openspace/shared';
+import type { Memory } from '@matanelcohen/openspace-shared';
 import { Brain } from 'lucide-react';
 
 import { EmptyState } from '@/components/ui/empty-state';

@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto';
 
-import type { Chunk, ChunkingConfig,ChunkMetadata } from '@openspace/shared';
+import type { Chunk, ChunkingConfig,ChunkMetadata } from '@matanelcohen/openspace-shared';
 
 // ── Defaults ───────────────────────────────────────────────────────
 

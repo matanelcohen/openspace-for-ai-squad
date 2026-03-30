@@ -8,7 +8,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { SourceType } from '@openspace/shared';
+import type { SourceType } from '@matanelcohen/openspace-shared';
 
 import type { ConnectorOptions, SourceConnector, SourceDocument } from './types.js';
 

@@ -12,8 +12,8 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { appendFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import type { ChatChannel, ChatMessage, RoutingRule } from '@openspace/shared';
-import { CHAT_CHANNEL_PREFIX, CHAT_TEAM_RECIPIENT } from '@openspace/shared';
+import type { ChatChannel, ChatMessage, RoutingRule } from '@matanelcohen/openspace-shared';
+import { CHAT_CHANNEL_PREFIX, CHAT_TEAM_RECIPIENT } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 

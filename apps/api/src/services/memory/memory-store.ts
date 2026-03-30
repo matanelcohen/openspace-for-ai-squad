@@ -7,7 +7,7 @@
 
 import { createHash } from 'node:crypto';
 
-import type { Memory, MemoryConsolidationResult, MemoryType } from '@openspace/shared';
+import type { Memory, MemoryConsolidationResult, MemoryType } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 // ── Types ────────────────────────────────────────────────────────

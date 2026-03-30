@@ -1,7 +1,7 @@
 'use client';
 
-import type { TeamMemberRank } from '@openspace/shared';
-import { TEAM_MEMBER_RANK_LABELS, TEAM_MEMBER_RANKS } from '@openspace/shared';
+import type { TeamMemberRank } from '@matanelcohen/openspace-shared';
+import { TEAM_MEMBER_RANK_LABELS, TEAM_MEMBER_RANKS } from '@matanelcohen/openspace-shared';
 import { ArrowUp, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 

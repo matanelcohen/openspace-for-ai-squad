@@ -1,4 +1,4 @@
-import type { EscalationItem } from '@openspace/shared';
+import type { EscalationItem } from '@matanelcohen/openspace-shared';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

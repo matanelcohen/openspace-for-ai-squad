@@ -5,7 +5,7 @@
  * (git commits, PRs, docs, tasks). The pipeline then chunks, embeds, and upserts.
  */
 
-import type { ChunkMetadata, SourceType } from '@openspace/shared';
+import type { ChunkMetadata, SourceType } from '@matanelcohen/openspace-shared';
 
 /** A single document fetched from a source, ready for chunking. */
 export interface SourceDocument {

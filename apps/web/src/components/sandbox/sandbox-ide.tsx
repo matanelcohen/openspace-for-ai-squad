@@ -1,6 +1,6 @@
 'use client';
 
-import type { Sandbox, SandboxFile } from '@openspace/shared';
+import type { Sandbox, SandboxFile } from '@matanelcohen/openspace-shared';
 import { ArrowLeft, Code2, Files, Terminal as TerminalIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';

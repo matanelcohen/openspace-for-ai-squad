@@ -1,6 +1,6 @@
 'use client';
 
-import type { SandboxOutputLine } from '@openspace/shared';
+import type { SandboxOutputLine } from '@matanelcohen/openspace-shared';
 import { ArrowDown, Eraser } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 

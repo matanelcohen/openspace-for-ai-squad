@@ -9,7 +9,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import type { Task } from '@openspace/shared';
+import type { Task } from '@matanelcohen/openspace-shared';
 
 import type { ActivityFeed } from '../activity/index.js';
 import type { AIProvider, AgenticCompletionOptions } from '../ai/copilot-provider.js';
@@ -388,7 +388,7 @@ export class AgentWorkerService {
       // Retrieve relevant memories via vector similarity
       let memoriesPrompt = '';
       try {
-        const { hasMemorySchema, MemoryStoreService } = await import('@openspace/memory-store');
+        const { hasMemorySchema, MemoryStoreService } = await import('@matanelcohen/openspace-memory-store');
         const db = this.config.db;
         if (db && hasMemorySchema(db)) {
           const memStore = new MemoryStoreService(db, {});
@@ -581,7 +581,7 @@ export class AgentWorkerService {
 
       // Save a memory from this task
       try {
-        const { hasMemorySchema, initializeMemorySchema, MemoryStoreService } = await import('@openspace/memory-store');
+        const { hasMemorySchema, initializeMemorySchema, MemoryStoreService } = await import('@matanelcohen/openspace-memory-store');
         const db = this.config.db;
         if (db) {
           if (!hasMemorySchema(db)) initializeMemorySchema(db);
@@ -650,7 +650,7 @@ export class AgentWorkerService {
     agent: AgentProfile,
     task: Task,
     taskId: string,
-    tier: import('@openspace/shared').ResponseTier = 'standard',
+    tier: import('@matanelcohen/openspace-shared').ResponseTier = 'standard',
   ): Promise<void> {
     const now = () => new Date().toISOString().replace('T', ' ').substring(0, 19);
     const tierDef = getTierDefinition(tier);

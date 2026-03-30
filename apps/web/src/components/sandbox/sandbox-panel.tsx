@@ -1,6 +1,6 @@
 'use client';
 
-import type { Sandbox, SandboxRuntime } from '@openspace/shared';
+import type { Sandbox, SandboxRuntime } from '@matanelcohen/openspace-shared';
 import { Plus } from 'lucide-react';
 import { useCallback, useState } from 'react';
 

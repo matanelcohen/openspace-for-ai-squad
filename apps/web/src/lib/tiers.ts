@@ -3,7 +3,7 @@
  * Mirrors the logic in apps/api/src/services/routing/tiers.ts.
  */
 
-import type { ResponseTier } from '@openspace/shared';
+import type { ResponseTier } from '@matanelcohen/openspace-shared';
 
 export type { ResponseTier };
 

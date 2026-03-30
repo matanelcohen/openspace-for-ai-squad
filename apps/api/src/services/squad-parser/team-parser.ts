@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import type { Agent, AgentStatus } from '@openspace/shared';
+import type { Agent, AgentStatus } from '@matanelcohen/openspace-shared';
 
 /** Map status text from team.md to AgentStatus. */
 function parseStatus(raw: string): AgentStatus {

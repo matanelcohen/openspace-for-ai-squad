@@ -1,4 +1,4 @@
-import type { VoiceSessionStatus } from '@openspace/shared';
+import type { VoiceSessionStatus } from '@matanelcohen/openspace-shared';
 import { Mic, MicOff,Phone, PhoneOff } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';

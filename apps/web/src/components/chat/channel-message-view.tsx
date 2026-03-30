@@ -1,6 +1,6 @@
 'use client';
 
-import type { Agent, ChatChannel } from '@openspace/shared';
+import type { Agent, ChatChannel } from '@matanelcohen/openspace-shared';
 import { Hash, MessageSquare } from 'lucide-react';
 import { useCallback } from 'react';
 

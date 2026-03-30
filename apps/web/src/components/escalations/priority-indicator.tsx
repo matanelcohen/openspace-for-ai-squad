@@ -1,4 +1,4 @@
-import type { EscalationPriority } from '@openspace/shared';
+import type { EscalationPriority } from '@matanelcohen/openspace-shared';
 import { AlertTriangle, ArrowDown, ArrowUp, Flame } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';

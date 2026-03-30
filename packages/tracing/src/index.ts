@@ -1,5 +1,5 @@
 /**
- * @openspace/tracing — Tracing SDK & instrumentation layer.
+ * @matanelcohen/openspace-tracing — Tracing SDK & instrumentation layer.
  *
  * Provides span-based tracing for agent workflows with automatic
  * instrumentation for tool calls and LLM invocations, cost tracking,

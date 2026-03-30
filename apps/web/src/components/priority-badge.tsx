@@ -1,5 +1,5 @@
-import type { TaskPriority } from '@openspace/shared';
-import { TASK_PRIORITY_LABELS } from '@openspace/shared';
+import type { TaskPriority } from '@matanelcohen/openspace-shared';
+import { TASK_PRIORITY_LABELS } from '@matanelcohen/openspace-shared';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';

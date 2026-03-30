@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkflowDefinition, WorkflowExecutionState } from '@openspace/shared';
+import type { WorkflowDefinition, WorkflowExecutionState } from '@matanelcohen/openspace-shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 

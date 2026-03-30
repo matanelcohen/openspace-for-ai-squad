@@ -18,7 +18,7 @@ import type {
   MemoryType,
   MemoryUpdateInput,
   MemoryWithMeta,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 
 import type { Embedding, EmbeddingProvider } from './embedding.js';
 import {

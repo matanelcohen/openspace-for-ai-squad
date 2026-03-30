@@ -10,8 +10,8 @@
  * DELETE /api/team-members/:id          — Delete member
  */
 
-import type { TeamMember, TeamMemberRank, TeamMemberStatus } from '@openspace/shared';
-import { TEAM_MEMBER_RANKS, TEAM_MEMBER_STATUSES } from '@openspace/shared';
+import type { TeamMember, TeamMemberRank, TeamMemberStatus } from '@matanelcohen/openspace-shared';
+import { TEAM_MEMBER_RANKS, TEAM_MEMBER_STATUSES } from '@matanelcohen/openspace-shared';
 import type { FastifyPluginAsync } from 'fastify';
 import { nanoid } from 'nanoid';
 

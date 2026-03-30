@@ -3,7 +3,7 @@
  * are used for a given task based on its complexity.
  */
 
-import type { ResponseTier } from '@openspace/shared';
+import type { ResponseTier } from '@matanelcohen/openspace-shared';
 
 export type { ResponseTier };
 

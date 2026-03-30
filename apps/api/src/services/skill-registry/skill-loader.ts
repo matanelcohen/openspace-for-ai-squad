@@ -15,7 +15,7 @@ import type {
   SkillValidationError,
   SkillValidationResult,
   SkillValidationWarning,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import Ajv from 'ajv';
 import YAML from 'yaml';
 

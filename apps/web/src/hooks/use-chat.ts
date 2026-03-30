@@ -1,5 +1,5 @@
-import type { ChatMessage } from '@openspace/shared';
-import { CHAT_CHANNEL_PREFIX } from '@openspace/shared';
+import type { ChatMessage } from '@matanelcohen/openspace-shared';
+import { CHAT_CHANNEL_PREFIX } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useState } from 'react';
 

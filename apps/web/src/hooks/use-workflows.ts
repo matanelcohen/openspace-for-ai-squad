@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkflowDefinition } from '@openspace/shared';
+import type { WorkflowDefinition } from '@matanelcohen/openspace-shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

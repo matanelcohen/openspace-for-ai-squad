@@ -1,4 +1,4 @@
-import type { VoiceMessage, VoiceSession } from '@openspace/shared';
+import type { VoiceMessage, VoiceSession } from '@matanelcohen/openspace-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import SpeechRecognition, { useSpeechRecognition } from 'react-speech-recognition';
 

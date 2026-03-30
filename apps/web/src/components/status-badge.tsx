@@ -1,5 +1,5 @@
-import type { AgentStatus } from '@openspace/shared';
-import { AGENT_STATUS_LABELS } from '@openspace/shared';
+import type { AgentStatus } from '@matanelcohen/openspace-shared';
+import { AGENT_STATUS_LABELS } from '@matanelcohen/openspace-shared';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';

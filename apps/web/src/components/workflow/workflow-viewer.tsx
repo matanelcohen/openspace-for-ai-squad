@@ -2,7 +2,7 @@
 
 import '@xyflow/react/dist/style.css';
 
-import type { WorkflowDefinition, WorkflowExecutionState } from '@openspace/shared';
+import type { WorkflowDefinition, WorkflowExecutionState } from '@matanelcohen/openspace-shared';
 import {
   Background,
   BackgroundVariant,

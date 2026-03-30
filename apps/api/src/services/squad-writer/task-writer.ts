@@ -8,7 +8,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { Task, TaskPriority, TaskStatus } from '@openspace/shared';
+import type { Task, TaskPriority, TaskStatus } from '@matanelcohen/openspace-shared';
 import matter from 'gray-matter';
 import { nanoid } from 'nanoid';
 

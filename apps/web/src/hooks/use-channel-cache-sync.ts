@@ -1,4 +1,4 @@
-import type { ChatChannel } from '@openspace/shared';
+import type { ChatChannel } from '@matanelcohen/openspace-shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef } from 'react';
 

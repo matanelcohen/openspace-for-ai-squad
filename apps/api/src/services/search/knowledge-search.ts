@@ -21,7 +21,7 @@ import type {
   RetrievedChunk,
   SourceAttribution,
   SourceType,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
 
 // ── Internal types ─────────────────────────────────────────────────

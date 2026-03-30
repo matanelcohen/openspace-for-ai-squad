@@ -38,8 +38,8 @@ import type {
   SkillRetryPolicy,
   SkillTaskContext,
   SkillValidationResult,
-} from '@openspace/shared';
-import { DEFAULT_RETRY_POLICY } from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
+import { DEFAULT_RETRY_POLICY } from '@matanelcohen/openspace-shared';
 
 import {
   executeHookWithRetry,

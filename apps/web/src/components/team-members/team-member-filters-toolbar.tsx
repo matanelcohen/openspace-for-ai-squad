@@ -1,13 +1,13 @@
 'use client';
 
-import type { TeamMemberRank, TeamMemberStatus } from '@openspace/shared';
+import type { TeamMemberRank, TeamMemberStatus } from '@matanelcohen/openspace-shared';
 import {
   DEPARTMENTS,
   TEAM_MEMBER_RANK_LABELS,
   TEAM_MEMBER_RANKS,
   TEAM_MEMBER_STATUS_LABELS,
   TEAM_MEMBER_STATUSES,
-} from '@openspace/shared';
+} from '@matanelcohen/openspace-shared';
 import { Search } from 'lucide-react';
 
 import { Input } from '@/components/ui/input';

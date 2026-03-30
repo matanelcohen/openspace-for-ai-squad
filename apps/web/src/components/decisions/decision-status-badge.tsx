@@ -1,4 +1,4 @@
-import type { DecisionStatus } from '@openspace/shared';
+import type { DecisionStatus } from '@matanelcohen/openspace-shared';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';

@@ -1,6 +1,6 @@
 'use client';
 
-import type { WorkflowDefinition } from '@openspace/shared';
+import type { WorkflowDefinition } from '@matanelcohen/openspace-shared';
 import {
   AlertCircle,
   GitBranch,

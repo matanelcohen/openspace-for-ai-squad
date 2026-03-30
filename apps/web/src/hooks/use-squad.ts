@@ -1,4 +1,4 @@
-import type { SquadOverview } from '@openspace/shared';
+import type { SquadOverview } from '@matanelcohen/openspace-shared';
 import { useQuery } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';

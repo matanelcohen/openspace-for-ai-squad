@@ -1,6 +1,6 @@
 'use client';
 
-import type { EscalationItem } from '@openspace/shared';
+import type { EscalationItem } from '@matanelcohen/openspace-shared';
 import { ArrowLeft, CheckCircle, MessageSquare, Shield, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
