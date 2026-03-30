@@ -13,6 +13,7 @@ import {
   Scale,
   Scan,
   Settings,
+  TerminalSquare,
   Users,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -35,6 +36,7 @@ const navItems = [
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen },
   { href: '/github', label: 'GitHub', icon: GitBranch },
   { href: '/cron', label: 'Cron', icon: Clock },
+  { href: '/terminal', label: 'Terminal', icon: TerminalSquare },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];
 

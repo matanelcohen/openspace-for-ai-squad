@@ -225,6 +225,32 @@ export default function TaskDetailPage() {
         </div>
       )}
 
+      {/* Stuck in-progress banner — task has no active worker */}
+      {task.status === 'in-progress' && !isWorking && (
+        <div
+          className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950"
+        >
+          <div>
+            <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              ⏳ This task appears stuck
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              No agent is actively working on it. It may have been interrupted by a server restart.
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRetryTask}
+            disabled={updateTask.isPending || updateStatus.isPending}
+            className="gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:text-amber-300 dark:hover:bg-amber-900"
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            {updateTask.isPending ? 'Resetting...' : 'Reset to Pending'}
+          </Button>
+        </div>
+      )}
+
       {/* Controls row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>

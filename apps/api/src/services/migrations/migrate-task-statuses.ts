@@ -34,18 +34,35 @@ export async function migrateTaskStatuses(tasksDir: string): Promise<number> {
     const { data, content } = matter(raw);
 
     const oldStatus = typeof data.status === 'string' ? data.status : undefined;
-    if (!oldStatus || !STATUS_MAP[oldStatus]) continue;
+    let changed = false;
 
-    data.status = STATUS_MAP[oldStatus];
+    // Migrate legacy statuses
+    if (oldStatus && STATUS_MAP[oldStatus]) {
+      data.status = STATUS_MAP[oldStatus];
+      changed = true;
+    }
+
+    // Recover orphaned in-progress tasks — on startup, no worker is active yet
+    // so any in-progress task is stuck from a previous crash
+    if (data.status === 'in-progress') {
+      data.status = 'pending';
+      const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
+      const note = `\n\n---\n**[${now}]** ⚠️ Task was stuck in-progress after server restart. Reset to pending.\n`;
+      const { data: newData, content: newContent } = matter(matter.stringify(content + note, data));
+      data.description = newContent;
+      changed = true;
+    }
+
+    if (!changed) continue;
+
     data.updated = new Date().toISOString();
-
     const updated = matter.stringify(content, data);
     await fs.writeFile(filePath, updated, 'utf-8');
     migrated++;
   }
 
   if (migrated > 0) {
-    console.log(`[Migration] Migrated ${migrated} task(s) from legacy statuses`);
+    console.log(`[Migration] Recovered/migrated ${migrated} task(s)`);
   }
 
   return migrated;
