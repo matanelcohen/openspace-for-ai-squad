@@ -61,17 +61,24 @@ const terminalRoute: FastifyPluginAsync = async (app) => {
       return;
     }
 
+    let ptyAlive = true;
+
     app.log.info({ pid: term.pid }, 'PTY spawned');
 
     // PTY stdout → WebSocket
     term.onData((data: string) => {
       if (socket.readyState === WebSocket.OPEN) {
-        socket.send(JSON.stringify({ type: 'output', data }));
+        try {
+          socket.send(JSON.stringify({ type: 'output', data }));
+        } catch (err) {
+          app.log.debug({ pid: term.pid }, 'PTY data send failed (socket closing)');
+        }
       }
     });
 
     term.onExit(({ exitCode, signal }) => {
-      app.log.info({ exitCode, signal }, 'PTY exited');
+      ptyAlive = false;
+      app.log.info({ pid: term.pid, exitCode, signal }, 'PTY exited');
       if (socket.readyState === WebSocket.OPEN) {
         socket.close(1000, 'PTY process exited');
       }
@@ -79,6 +86,8 @@ const terminalRoute: FastifyPluginAsync = async (app) => {
 
     // WebSocket → PTY
     socket.on('message', (raw: Buffer | string) => {
+      if (!ptyAlive) return;
+
       let msg: unknown;
       try {
         msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString('utf-8'));
@@ -95,14 +104,33 @@ const terminalRoute: FastifyPluginAsync = async (app) => {
       }
     });
 
+    socket.on('error', (err) => {
+      app.log.warn({ pid: term.pid, err: err.message }, 'WebSocket error');
+    });
+
     // Cleanup on WebSocket close
     socket.on('close', () => {
       app.log.info({ pid: term.pid }, 'WebSocket closed, killing PTY');
+      if (!ptyAlive) return;
+      ptyAlive = false;
       try {
         term.kill();
-      } catch {
-        // already dead
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        app.log.warn({ pid: term.pid, err: msg }, 'PTY kill failed');
       }
+      // Force-kill after 2s if process hasn't exited (prevents zombies)
+      const pid = term.pid;
+      const forceKillTimer = setTimeout(() => {
+        try {
+          process.kill(pid, 0); // check if still alive
+          app.log.warn({ pid }, 'PTY still alive after 2s, sending SIGKILL');
+          process.kill(pid, 'SIGKILL');
+        } catch {
+          // process already gone — expected
+        }
+      }, 2000);
+      forceKillTimer.unref(); // don't block Node shutdown
     });
   });
 };

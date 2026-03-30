@@ -20,14 +20,14 @@ export interface WebSocketPluginOptions {
 const wsPluginImpl: FastifyPluginAsync<WebSocketPluginOptions> = async (app, opts) => {
   const manager = opts.manager ?? new WebSocketManager();
 
-  // Register @fastify/websocket — only handle our /ws path
+  // Register @fastify/websocket — only handle our known WS paths
   await app.register(websocketPlugin, {
     options: {
-      // Don't handle Next.js HMR WebSocket upgrades
+      // Accept our known WebSocket routes; reject everything else (e.g. Next.js HMR)
       verifyClient: (info: { req: { url?: string } }, cb: (result: boolean) => void) => {
         const url = info.req.url ?? '';
-        // Only accept connections to /ws (our app WS), reject everything else
-        cb(url === '/ws' || url.startsWith('/ws?'));
+        const path = url.split('?')[0];
+        cb(path === '/ws' || path === '/api/terminal/ws');
       },
     },
   });

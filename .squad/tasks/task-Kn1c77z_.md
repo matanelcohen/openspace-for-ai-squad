@@ -9,7 +9,10 @@ labels:
   - rag
   - knowledge
 created: '2026-03-25T23:18:10.056Z'
-updated: '2026-03-30T08:33:24.888Z'
+updated: '2026-03-30T12:49:01.025Z'
 sortIndex: 6
 ---
 Build a vector-indexed knowledge base from project history (commits, PRs, docs, past tasks). Agents query it for context-aware responses. Use embeddings + similarity search. Depends on Persistent Agent Memory.
+
+---
+⏭️ YOLO skipped: Blocked — explicitly depends on 'Persistent Agent' which is not yet completed. Cannot start until dependency is resolved.

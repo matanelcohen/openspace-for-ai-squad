@@ -39,7 +39,7 @@ export function SandboxPanel({ className }: SandboxPanelProps) {
   const [isCreating, setIsCreating] = useState(false);
 
   const selected = sandboxes.find((s) => s.id === selectedId) ?? null;
-  const { lines, isStreaming, clear } = useSandboxStream(selectedId);
+  const { lines, isStreaming, status: streamStatus, reconnectAttempt, clear, retry } = useSandboxStream(selectedId);
 
   const handleSelect = useCallback((sandbox: Sandbox) => {
     setSelectedId(sandbox.id);
@@ -156,6 +156,26 @@ export function SandboxPanel({ className }: SandboxPanelProps) {
                 isDestroying={destroySandbox.isPending}
               />
             </div>
+
+            {/* Stream connection status */}
+            {streamStatus === 'reconnecting' && (
+              <div className="flex items-center gap-2 border-b border-yellow-500/30 bg-yellow-950/30 px-4 py-1.5 text-xs text-yellow-400">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-yellow-500" />
+                Reconnecting to sandbox stream… (attempt {reconnectAttempt}/10)
+              </div>
+            )}
+            {streamStatus === 'failed' && (
+              <div className="flex items-center gap-2 border-b border-red-500/30 bg-red-950/40 px-4 py-1.5 text-xs text-red-400">
+                <span className="h-2 w-2 rounded-full bg-red-500" />
+                <span>Unable to reach the sandbox — is the API server running?</span>
+                <button
+                  onClick={retry}
+                  className="ml-auto rounded border border-red-500/40 bg-red-950/60 px-2 py-0.5 text-xs text-red-300 transition-colors hover:bg-red-900/60"
+                >
+                  Retry
+                </button>
+              </div>
+            )}
 
             {/* Terminal viewer */}
             <TerminalOutput

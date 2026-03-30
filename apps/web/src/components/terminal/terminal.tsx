@@ -35,6 +35,7 @@ export function Terminal() {
   const reconnectDelayRef = useRef(RECONNECT_DELAY_MS);
   const reconnectAttemptRef = useRef(0);
   const mountedRef = useRef(true);
+  const connectRef = useRef<() => void>(null);
 
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
@@ -116,7 +117,13 @@ export function Terminal() {
         setStatus('failed');
       } else {
         setStatus('reconnecting');
-        scheduleReconnect();
+        const delay = reconnectDelayRef.current;
+        reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          connectRef.current?.();
+        }, delay);
       }
     };
 
@@ -126,19 +133,8 @@ export function Terminal() {
     };
   }, [sendResize]);
 
-  const scheduleReconnect = useCallback(() => {
-    if (!mountedRef.current) return;
-    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-
-    const delay = reconnectDelayRef.current;
-    reconnectTimerRef.current = setTimeout(() => {
-      reconnectTimerRef.current = null;
-      connect();
-    }, delay);
-
-    // Exponential backoff
-    reconnectDelayRef.current = Math.min(delay * 2, MAX_RECONNECT_DELAY_MS);
-  }, [connect]);
+  // Keep ref in sync so reconnect timers always call latest connect
+  connectRef.current = connect;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -272,7 +268,7 @@ export function Terminal() {
           {status === 'connecting' && 'Connecting…'}
           {status === 'reconnecting' &&
             `Reconnecting… (attempt ${reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS})`}
-          {status === 'failed' && 'Connection failed'}
+          {status === 'failed' && 'Unable to reach the backend — is the API server running?'}
         </span>
         {status === 'failed' && (
           <button
@@ -283,6 +279,28 @@ export function Terminal() {
           </button>
         )}
       </div>
+
+      {/* Full error banner when backend is unreachable */}
+      {status === 'failed' && (
+        <div className="flex items-center gap-2 border-b border-red-500/30 bg-red-950/40 px-4 py-2 text-xs text-red-400">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 20 20"
+            fill="currentColor"
+            className="h-4 w-4 shrink-0"
+          >
+            <path
+              fillRule="evenodd"
+              d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-8-5a.75.75 0 01.75.75v4.5a.75.75 0 01-1.5 0v-4.5A.75.75 0 0110 5zm0 10a1 1 0 100-2 1 1 0 000 2z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span>
+            Failed to connect after {MAX_RECONNECT_ATTEMPTS} attempts. Check that the API server is
+            running and accessible.
+          </span>
+        </div>
+      )}
 
       {/* Terminal container */}
       <div

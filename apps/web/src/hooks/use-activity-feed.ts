@@ -185,5 +185,21 @@ export function useActivityFeed(maxEvents = 50): ActivityEvent[] {
     };
   }, []);
 
+  useWsEvent('yolo:decision', useCallback((env: WsEnvelope) => {
+    const decisions = (env.payload?.decisions as Array<{ taskId: string; action: string; agentId?: string; reason?: string; taskTitle?: string }>) ?? [];
+    for (const d of decisions) {
+      addEvent({
+        id: `yolo-${d.taskId}-${Date.now()}`,
+        timestamp: env.timestamp,
+        agentId: d.agentId ?? 'lead',
+        agentName: 'YOLO',
+        type: d.action === 'assign' ? 'task_start' : 'thinking',
+        message: d.action === 'assign'
+          ? `🤖 Auto-assigned "${d.taskTitle ?? d.taskId}" → ${d.agentId}`
+          : `⏭️ Skipped "${d.taskTitle ?? d.taskId}": ${d.reason ?? ''}`,
+      });
+    }
+  }, [addEvent]));
+
   return events;
 }

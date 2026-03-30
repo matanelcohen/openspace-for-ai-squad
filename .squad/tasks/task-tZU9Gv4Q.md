@@ -9,7 +9,11 @@ labels:
   - memory
   - ai
 created: '2026-03-25T23:18:08.312Z'
-updated: '2026-03-30T08:33:24.924Z'
+updated: '2026-03-30T12:50:06.641Z'
 sortIndex: 1
+description: "\n\n---\n\U0001F916 Auto-assigned by YOLO to bender: Backend-heavy task: memory store, embedding-based retrieval, data persistence — core backend dev work.\n\n\n---\n**[2026-03-30 12:50:06]** ⚠️ Task was stuck in-progress after server restart. Reset to pending.\n"
 ---
-Add long-term memory to agents so they remember context across sessions — user preferences, codebase patterns, past decisions. Use a memory store (inspired by mem0) with embedding-based retrieval. Agents should auto-extract and recall relevant memories during task execution.
+
+
+---
+🤖 Auto-assigned by YOLO to bender: Backend-heavy task: memory store, embedding-based retrieval, data persistence — core backend dev work.

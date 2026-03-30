@@ -9,7 +9,11 @@ labels:
   - testing
   - e2e
 created: '2026-03-25T15:03:00.368Z'
-updated: '2026-03-30T08:33:24.921Z'
+updated: '2026-03-30T12:50:06.631Z'
 sortIndex: 2
+description: "\n\n---\n\U0001F916 Auto-assigned by YOLO to zoidberg: Testing task: unit, component, and E2E tests — direct match for the tester role.\n\n\n---\n**[2026-03-30 12:50:06]** ⚠️ Task was stuck in-progress after server restart. Reset to pending.\n"
 ---
-Write unit tests for channel service and API routes. Write component tests for channel UI. Write E2E tests for full channel workflow: create channel, send message, verify delivery. Cover edge cases like empty channels and permission boundaries.
+
+
+---
+🤖 Auto-assigned by YOLO to zoidberg: Testing task: unit, component, and E2E tests — direct match for the tester role.
