@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAgentStatus } from '@/hooks/use-agent-status';
 import { useAgents } from '@/hooks/use-agents';
 import { useCreateBranch, useCreatePR } from '@/hooks/use-github';
 import { useTaskEvents } from '@/hooks/use-task-events';
@@ -43,6 +44,7 @@ export default function TaskDetailPage() {
   const [selectedAgent, setSelectedAgent] = useState<string>('');
   const { data: agents } = useAgents();
   const { events, isWorking, clearEvents } = useTaskEvents(id);
+  const { data: agentStatusData } = useAgentStatus();
   const createBranch = useCreateBranch();
   const createPR = useCreatePR();
   const { data: subtasks } = useSubtasks(id);
@@ -222,9 +224,16 @@ export default function TaskDetailPage() {
 
       {/* Stuck in-progress banner — task has no active worker for 30s+ */}
       {task.status === 'in-progress' && !isWorking && (() => {
+        // Check if any agent is actively working on this task via API
+        const agents = agentStatusData?.agents ?? {};
+        const agentWorking = Object.values(agents).some(
+          (info) => info.activeTask?.id === task.id,
+        );
+        if (agentWorking) return false; // Agent IS working, just no WS events yet
+
         const updated = new Date(task.updatedAt).getTime();
         const elapsed = Date.now() - updated;
-        return elapsed > 30_000; // Only show after 30 seconds
+        return elapsed > 30_000;
       })() && (
         <div
           className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950"
