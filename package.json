@@ -1,7 +1,7 @@
 {
   "name": "@matanelcohen/openspace-ai",
   "version": "0.3.2",
-  "description": "Visual workspace manager for Squad SDK — create, manage, and collaborate with AI agent teams",
+  "description": "Visual workspace manager for Squad SDK \u2014 create, manage, and collaborate with AI agent teams",
   "keywords": [
     "ai",
     "agents",
@@ -42,7 +42,10 @@
     "clean": "turbo run clean",
     "e2e": "playwright test",
     "prepare": "husky",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && changeset publish"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx,mjs}": [
@@ -54,6 +57,8 @@
     ]
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/cli": "^2.30.0",
     "@eslint/js": "^9.39.4",
     "@playwright/test": "^1.58.2",
     "@types/eslint__js": "^9.14.0",
@@ -73,22 +78,22 @@
     "vitest": "^4.1.1"
   },
   "dependencies": {
-    "dotenv": "^16.4.0",
-    "fastify": "^5.2.0",
-    "next": "^14.2.35",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "better-sqlite3": "^12.8.0",
-    "gray-matter": "^4.0.3",
-    "tsx": "^4.21.0",
+    "@bradygaster/squad-sdk": "^0.9.1",
     "@fastify/cors": "^10.0.0",
     "@fastify/nextjs": "^11.0.0",
     "@fastify/websocket": "^11.2.0",
     "@github/copilot-sdk": "^0.2.0",
-    "@bradygaster/squad-sdk": "^0.9.1",
-    "ws": "^8.20.0",
+    "better-sqlite3": "^12.8.0",
+    "dotenv": "^16.4.0",
+    "fastify": "^5.2.0",
+    "fastify-plugin": "^5.1.0",
+    "gray-matter": "^4.0.3",
     "nanoid": "^5.1.7",
-    "yaml": "^2.8.3",
-    "fastify-plugin": "^5.1.0"
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tsx": "^4.21.0",
+    "ws": "^8.20.0",
+    "yaml": "^2.8.3"
   }
 }
