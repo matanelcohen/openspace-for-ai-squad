@@ -104,32 +104,27 @@ export default function TaskDetailPage() {
 
   function handleRetryTask() {
     if (!task) return;
-    // Clear the failed attempts from description and reset to backlog
+    // Strip all agent execution history — keep only the original description
     const cleanDesc = task.description
-      .replace(/\n---\n\*\*\[.*?\]\*\* 🚀.*?started working.*$/gm, '')
-      .replace(/\n---\n\*\*\[.*?\]\*\* 🛑.*?Permanently blocked.*$/gm, '')
-      .replace(/\n---\n\*\*\[.*?\]\*\* ❌.*$/gm, '')
-      .replace(/\n\n---\n\*\*Diagnosis:.*$/gm, '')
-      .replace(/\n\n---\n\*\*Last known error:.*$/gm, '')
-      .replace(/\n\n---\n\*\*Execution log:[\s\S]*?(?=\n\n---|$)/g, '')
-      .replace(/\n\n\*\*Error:\*\*[\s\S]*?(?=\n\n---|$)/g, '')
-      .replace(/\n\n\*\*Stack:\*\*[\s\S]*?(?=\n\n---|$)/g, '')
+      .replace(/\n\n---\n\*\*\[[\s\S]*$/g, '') // Remove everything after first --- history marker
+      .replace(/\n\n\*\*History:\*\*[\s\S]*$/g, '') // Remove history section
+      .replace(/\n\n\*\*Progress:\*\*[\s\S]*$/g, '') // Remove progress section  
+      .replace(/\n\n\*\*Result:\*\*[\s\S]*$/g, '') // Remove result section
       .trimEnd();
 
     updateTask.mutate(
       {
         taskId: task.id,
         title: task.title,
-        description:
-          cleanDesc +
-          `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🔄 Task reset and re-queued by user.`,
-        assignee: task.assignee,
+        description: cleanDesc || task.title,
+        assignee: null,
         priority: task.priority,
         labels: task.labels,
       },
       {
         onSuccess: () => {
           updateStatus.mutate({ taskId: task.id, status: 'pending' });
+          clearEvents();
         },
       },
     );
