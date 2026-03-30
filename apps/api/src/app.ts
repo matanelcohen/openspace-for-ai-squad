@@ -31,6 +31,7 @@ import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import workspacesRoute from './routes/workspaces.js';
 import yoloRoute from './routes/yolo.js';
+import escalationsRoute from './routes/escalations.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
 import { ActivityFeed } from './services/activity/index.js';

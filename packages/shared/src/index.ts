@@ -71,6 +71,7 @@ export type {
   EnhancedNodeExecutionStatus,
   EnhancedWorkflowExecutionState,
   EnhancedWorkflowExecutionStatus,
+  AuditEntry,
   EscalationChain,
   EscalationItem,
   EscalationPriority,
