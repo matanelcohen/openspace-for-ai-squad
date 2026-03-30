@@ -24,10 +24,10 @@
 .DS_Store
 Thumbs.db
 
-# Build artifacts & deps
+# Build artifacts & deps (keep .next for prod)
 node_modules/
 dist/
-.next/
+.next/cache/
 .turbo/
 coverage/
 test-results/

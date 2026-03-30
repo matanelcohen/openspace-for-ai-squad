@@ -1,4 +1,4 @@
-import 'dotenv/config';
+try { await import('dotenv/config'); } catch { /* dotenv optional */ }
 import './telemetry.js';
 
 import { resolve } from 'node:path';
