@@ -22,7 +22,12 @@ export type WsEventType =
   | 'voice:speaking'
   | 'escalation:created'
   | 'escalation:updated'
-  | 'task:suggestion';
+  | 'task:suggestion'
+  | 'yolo:decision'
+  | 'knowledge:progress'
+  | 'knowledge:complete'
+  | 'knowledge:error'
+  | 'system:error';
 
 export interface WsEnvelope {
   type: string;
