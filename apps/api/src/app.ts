@@ -335,7 +335,8 @@ export async function buildApp(opts: AppOptions = {}) {
         db,
         a2aBaseUrl,
       });
-      await workerService.start();
+      // Start worker in background — don't block onReady hook
+      workerService.start().catch((err) => console.error('[AgentWorker] Start failed:', err));
       app.decorate('agentWorker', workerService);
 
       // Initialize A2A service with bridge to chat + activity + tasks
@@ -405,7 +406,8 @@ export async function buildApp(opts: AppOptions = {}) {
     cronService.start();
 
     // Migrate legacy task statuses (backlog/in-review/pending-approval → new statuses)
-    await migrateTaskStatuses(resolve(squadDir, 'tasks'));
+    // Migrate legacy task statuses in background
+    migrateTaskStatuses(resolve(squadDir, 'tasks')).catch(() => {});
   });
 
   // Cost service — derives spend from trace + span data
