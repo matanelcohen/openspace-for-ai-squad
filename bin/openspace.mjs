@@ -24,7 +24,7 @@ const port = getArg('--port') ?? '3000';
 const copilotPort = getArg('--copilot-port') ?? '3100';
 const copilotModel = getArg('--model') ?? process.env.COPILOT_MODEL ?? 'claude-opus-4.6';
 const apiOnly = args.includes('--api-only');
-const isDev = args.includes('--dev');
+let isDev = args.includes('--dev');
 const noCopilot = args.includes('--no-copilot');
 const help = args.includes('--help') || args.includes('-h');
 
@@ -82,12 +82,11 @@ if (!isDev && !apiOnly) {
       execSync('npx next build', {
         cwd: join(ROOT, 'apps', 'web'),
         stdio: 'inherit',
-        env: { ...env, NODE_ENV: 'production' },
+        env: { ...process.env, NODE_ENV: 'production' },
       });
     } catch {
       console.warn('   ⚠️  Build failed — falling back to dev mode');
-      env.NODE_ENV = 'development';
-      env.OPENSPACE_DEV = 'true';
+      isDev = true;
     }
   }
 }
