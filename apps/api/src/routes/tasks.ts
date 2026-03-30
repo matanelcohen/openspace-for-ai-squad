@@ -189,9 +189,22 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       }
 
       try {
-        const task = await updateTask(tasksDir(), request.params.id, { status });
+        let task = await updateTask(tasksDir(), request.params.id, { status });
 
-        // If moved to pending or in-progress and has an assignee, enqueue for agent work
+        // If moved to in-progress without an assignee, auto-assign to first idle agent
+        if (status === 'in-progress' && !task.assignee && app.agentWorker) {
+          const agentStatus = app.agentWorker.getStatus();
+          const idleAgent = Object.entries(agentStatus).find(
+            ([, info]) => !info.activeTask,
+          );
+          if (idleAgent) {
+            task = await updateTask(tasksDir(), request.params.id, {
+              assignee: idleAgent[0],
+            });
+          }
+        }
+
+        // If has an assignee and moving to actionable status, enqueue
         if (
           (status === 'pending' || status === 'in-progress') &&
           task.assignee &&
