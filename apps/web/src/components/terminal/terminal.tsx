@@ -35,7 +35,7 @@ export function Terminal() {
   const reconnectDelayRef = useRef(RECONNECT_DELAY_MS);
   const reconnectAttemptRef = useRef(0);
   const mountedRef = useRef(true);
-  const connectRef = useRef<() => void>(null);
+  const connectRef = useRef<(() => void) | null>(null);
 
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
