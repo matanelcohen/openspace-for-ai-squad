@@ -1,16 +1,25 @@
 import type { EscalationItem } from '@matanelcohen/openspace-shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
 
 import { useWsEvent } from '@/components/providers/websocket-provider';
 import { api } from '@/lib/api-client';
+
+interface EscalationResponse {
+  items: EscalationItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
 
 export function useEscalations() {
   const queryClient = useQueryClient();
 
   const query = useQuery<EscalationItem[]>({
     queryKey: ['escalations'],
-    queryFn: () => api.get<EscalationItem[]>('/api/escalations'),
+    queryFn: async () => {
+      const res = await api.get<EscalationResponse>('/api/escalations');
+      return Array.isArray(res) ? res : res.items ?? [];
+    },
   });
 
   useWsEvent('escalation:created', () => {
