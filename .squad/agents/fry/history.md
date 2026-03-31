@@ -127,6 +127,22 @@ The file looks clean. ✅ **Done!** Added `Terminal` nav item to the sidebar:
 - The web app build has a pre-existing ChatPage type inference error that is not caused by new changes. Tests can still be run independently with vitest even when build fails.
 - TaskCard component requires useApproveTask and useRejectTask hook mocks in test files. Tests that render task cards will fail without these mocks.
 - When adding new UI features like filters, extract shared utilities to apps/web/src/lib/ and reuse across views (e.g., task-filters.ts shared between kanban and list views).
+- The tasks feature uses `TASK_STATUSES` constant with values `pending`, `in-progress`, `done`, `blocked`, `delegated` — not `backlog` or `in-review`. Pre-existing test data had incorrect status values.
+- Kanban board tests require mocking `useApproveTask` and `useRejectTask` hooks for TaskCard rendering to work correctly.
+- The project uses lint-staged with eslint + prettier on commit, and vitest for testing with `--reporter=verbose` for detailed output.
+- The openspace-for-ai-squad project uses git worktrees (`.git-worktrees/task-*`) for feature branches, with pnpm workspace filtering (`pnpm --filter @matanelcohen/openspace-web`) to run per-package commands.
+- Completed "Add tasks kanban filters": Commit successful — lint-staged (eslint + prettier) passed. ✅
+
+Here's what I delivered:
+
+**7 files changed across the tasks feature:**
+
+| File | What changed |
+|---|---|
+| `src/lib/task-filters.ts` | **New** — Shared `applyFilters`, `isFiltersActive`, `DEFAULT_TASK_FILTERS` |
+| `kanban-board.tsx` | Added `TaskFiltersToolbar`, filter state, `useMemo` filtering, filtered count display |
+| `kanban-column.tsx` | New `totalCount`/`isFiltered` props, "X/Y" counter, "No matching tasks" placeholder |
+| 
 
 ## Summary
 

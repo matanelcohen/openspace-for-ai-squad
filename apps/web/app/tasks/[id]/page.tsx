@@ -2,7 +2,7 @@
 
 import type { TaskStatus } from '@matanelcohen/openspace-shared';
 import { TASK_STATUS_LABELS, TASK_STATUSES } from '@matanelcohen/openspace-shared';
-import { ArrowLeft, Box, ChevronDown, ChevronRight, Code2, GitBranch, GitPullRequest, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Box, ChevronDown, ChevronRight, ClipboardCopy, Code2, GitBranch, GitPullRequest, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -340,6 +340,23 @@ export default function TaskDetailPage() {
         </CardHeader>
         {showPrompt && promptData && (
           <CardContent>
+            {!promptData.error && (
+              <div className="flex justify-end mb-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs gap-1"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const text = JSON.stringify(promptData, null, 2);
+                    navigator.clipboard.writeText(text);
+                  }}
+                >
+                  <ClipboardCopy className="h-3 w-3" />
+                  Copy Prompt
+                </Button>
+              </div>
+            )}
             <ScrollArea className="max-h-[600px]">
               <div className="space-y-4 text-xs">
                 {promptData.error ? (
