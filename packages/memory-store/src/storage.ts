@@ -86,6 +86,12 @@ CREATE TABLE IF NOT EXISTS memory_tags (
 
 CREATE INDEX IF NOT EXISTS idx_memory_tags_tag ON memory_tags(tag);
 
+-- Memory settings (global + per-agent)
+CREATE TABLE IF NOT EXISTS memory_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 -- Schema version tracking
 CREATE TABLE IF NOT EXISTS _memory_store_meta (
   key   TEXT PRIMARY KEY,

@@ -55,6 +55,7 @@ import { SkillRegistryImpl } from './services/skill-registry/index.js';
 import { SkillGalleryService } from './services/skill-gallery/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import { TraceService } from './services/traces/index.js';
+import { MemoryLifecycleService } from './services/memory/memory-lifecycle.js';
 import {
   ConversationContextManager,
   VoiceRouter,
@@ -422,6 +423,15 @@ export async function buildApp(opts: AppOptions = {}) {
     // Start cron scheduler
     cronService.start();
 
+    // Start memory lifecycle (daily decay + consolidation)
+    const memoryLifecycle = new MemoryLifecycleService(db, {
+      intervalMs: 24 * 60 * 60 * 1000, // 24h
+      archiveThreshold: 0.1,
+      runOnStart: true,
+    });
+    memoryLifecycle.start();
+    app.decorate('memoryLifecycle', memoryLifecycle);
+
     // Migrate legacy task statuses (backlog/in-review/pending-approval → new statuses)
     // Migrate legacy task statuses in background
     migrateTaskStatuses(resolve(squadDir, 'tasks')).catch(() => {});
@@ -441,9 +451,12 @@ export async function buildApp(opts: AppOptions = {}) {
   // Decorate Fastify instance with the SQLite database
   app.decorate('db', db);
 
-  // Shut down sandbox containers and cron on app close
+  // Shut down sandbox containers, cron, and memory lifecycle on app close
   app.addHook('onClose', async () => {
     cronService.stop();
+    if ((app as unknown as Record<string, unknown>).memoryLifecycle) {
+      (app as unknown as { memoryLifecycle: MemoryLifecycleService }).memoryLifecycle.stop();
+    }
     await sandboxService.shutdown();
   });
 
