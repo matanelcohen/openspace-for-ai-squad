@@ -14,14 +14,19 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import type { TaskStatus } from '@matanelcohen/openspace-shared';
 import { TASK_STATUSES } from '@matanelcohen/openspace-shared';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { KanbanColumn } from '@/components/tasks/kanban-column';
 import { TaskCard } from '@/components/tasks/task-card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { applyFilters, DEFAULT_FILTERS, type TaskFilters } from '@/lib/task-filters';
 
-export function KanbanBoard() {
+interface KanbanBoardProps {
+  filters?: TaskFilters;
+}
+
+export function KanbanBoard({ filters = DEFAULT_FILTERS }: KanbanBoardProps) {
   const { data: tasks, isLoading, error } = useTasks();
   const updateStatus = useUpdateTaskStatus();
   const updatePriority = useUpdateTaskPriority();
@@ -30,6 +35,20 @@ export function KanbanBoard() {
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  );
+
+  // Apply assignee/priority/search filters (status handled via column visibility)
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    const filtersWithoutStatus: TaskFilters = { ...filters, status: 'all' };
+    return applyFilters(tasks, filtersWithoutStatus);
+  }, [tasks, filters]);
+
+  // Show only matching columns when a status filter is active
+  const visibleStatuses = useMemo(
+    () =>
+      filters.status === 'all' ? TASK_STATUSES : TASK_STATUSES.filter((s) => s === filters.status),
+    [filters.status],
   );
 
   if (isLoading) {
@@ -48,17 +67,18 @@ export function KanbanBoard() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4" data-testid="kanban-error">
-        <p className="text-sm text-destructive">
-          Failed to load tasks: {error.message}
-        </p>
+      <div
+        className="rounded-lg border border-destructive/50 bg-destructive/10 p-4"
+        data-testid="kanban-error"
+      >
+        <p className="text-sm text-destructive">Failed to load tasks: {error.message}</p>
       </div>
     );
   }
 
   const tasksByStatus = TASK_STATUSES.reduce(
     (acc, status) => {
-      acc[status] = (tasks ?? [])
+      acc[status] = filteredTasks
         .filter((t) => t.status === status)
         .sort((a, b) => a.sortIndex - b.sortIndex);
       return acc;
@@ -66,9 +86,15 @@ export function KanbanBoard() {
     {} as Record<TaskStatus, typeof tasks>,
   );
 
-  const activeTask = activeTaskId
-    ? tasks?.find((t) => t.id === activeTaskId)
-    : null;
+  const totalFiltered = filteredTasks.length;
+  const totalTasks = tasks?.length ?? 0;
+  const hasActiveFilters =
+    filters.status !== 'all' ||
+    filters.assignee !== 'all' ||
+    filters.priority !== 'all' ||
+    filters.search.trim() !== '';
+
+  const activeTask = activeTaskId ? tasks?.find((t) => t.id === activeTaskId) : null;
 
   function handleDragStart(event: DragStartEvent) {
     setActiveTaskId(event.active.id as string);
@@ -123,18 +149,19 @@ export function KanbanBoard() {
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex gap-4 overflow-x-auto pb-4" data-testid="kanban-board">
-        {TASK_STATUSES.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            tasks={tasksByStatus[status] ?? []}
-          />
-        ))}
+      <div data-testid="kanban-board">
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {visibleStatuses.map((status) => (
+            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} />
+          ))}
+        </div>
+        {hasActiveFilters && (
+          <p className="text-xs text-muted-foreground mt-2" data-testid="kanban-filter-count">
+            Showing {totalFiltered} of {totalTasks} tasks
+          </p>
+        )}
       </div>
-      <DragOverlay>
-        {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
-      </DragOverlay>
+      <DragOverlay>{activeTask ? <TaskCard task={activeTask} isDragging /> : null}</DragOverlay>
     </DndContext>
   );
 }
