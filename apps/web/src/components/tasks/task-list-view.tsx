@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useTasks } from '@/hooks/use-tasks';
+import { applyFilters } from '@/lib/task-filters';
 
 type SortField = 'title' | 'status' | 'assignee' | 'priority' | 'updatedAt';
 type SortDir = 'asc' | 'desc';
@@ -32,25 +33,6 @@ const statusOrder: Record<TaskStatus, number> = {
   blocked: 3,
   delegated: 4,
 };
-
-function applyFilters(tasks: Task[], filters: TaskFilters): Task[] {
-  return tasks.filter((t) => {
-    if (filters.status !== 'all' && t.status !== filters.status) return false;
-    if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
-    if (filters.assignee !== 'all') {
-      if (filters.assignee === 'unassigned' && t.assignee !== null) return false;
-      if (filters.assignee !== 'unassigned' && t.assignee !== filters.assignee) return false;
-    }
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      const matchTitle = t.title.toLowerCase().includes(q);
-      const matchDesc = t.description.toLowerCase().includes(q);
-      const matchLabels = t.labels.some((l) => l.toLowerCase().includes(q));
-      if (!matchTitle && !matchDesc && !matchLabels) return false;
-    }
-    return true;
-  });
-}
 
 function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
   const sorted = [...tasks].sort((a, b) => {
