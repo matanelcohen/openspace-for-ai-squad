@@ -220,7 +220,7 @@ describe('KanbanBoard — Loading + Error states', () => {
 
     render(<KanbanBoard />, { wrapper });
     expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
-    expect(screen.getByTestId('kanban-column-backlog')).toBeInTheDocument();
+    expect(screen.getByTestId('kanban-column-pending')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-in-progress')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-done')).toBeInTheDocument();
   });
