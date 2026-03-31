@@ -280,7 +280,7 @@ export function Terminal() {
           {status === 'connecting' && 'Connecting…'}
           {status === 'reconnecting' &&
             `Reconnecting… (attempt ${reconnectAttempt}/${MAX_RECONNECT_ATTEMPTS})`}
-          {status === 'failed' && 'Unable to reach the backend — is the API server running?'}
+          {status === 'failed' && 'Connection failed'}
         </span>
         {status === 'failed' && (
           <button
