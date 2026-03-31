@@ -28,7 +28,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
 import { useAgents } from '@/hooks/use-agents';
-import { type CreateTaskInput, useCreateTask, useUpdateTask } from '@/hooks/use-tasks';
+import { type CreateTaskInput, useCreateTask, useTasks, useUpdateTask } from '@/hooks/use-tasks';
 
 interface TaskFormDialogProps {
   open: boolean;
@@ -43,6 +43,7 @@ interface FormErrors {
 export function TaskFormDialog({ open, onOpenChange, task }: TaskFormDialogProps) {
   const isEdit = !!task;
   const { data: agents } = useAgents();
+  const { data: allTasks } = useTasks();
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
 
@@ -52,6 +53,7 @@ export function TaskFormDialog({ open, onOpenChange, task }: TaskFormDialogProps
   const [priority, setPriority] = useState<TaskPriority>('P2');
   const [labels, setLabels] = useState<string[]>([]);
   const [labelInput, setLabelInput] = useState('');
+  const [dependencies, setDependencies] = useState<string[]>([]);
   const [errors, setErrors] = useState<FormErrors>({});
   const [descTab, setDescTab] = useState<string>('write');
 
@@ -64,12 +66,14 @@ export function TaskFormDialog({ open, onOpenChange, task }: TaskFormDialogProps
         setAssignee(task.assignee ?? 'unassigned');
         setPriority(task.priority);
         setLabels([...task.labels]);
+        setDependencies([...(task.dependencies ?? [])]);
       } else {
         setTitle('');
         setDescription('');
         setAssignee('unassigned');
         setPriority('P2');
         setLabels([]);
+        setDependencies([]);
       }
       setLabelInput('');
       setErrors({});
@@ -116,6 +120,7 @@ export function TaskFormDialog({ open, onOpenChange, task }: TaskFormDialogProps
       assignee: assignee === 'unassigned' ? null : assignee,
       priority,
       labels,
+      dependencies: dependencies.length > 0 ? dependencies : undefined,
     };
 
     if (isEdit && task) {
@@ -253,6 +258,59 @@ export function TaskFormDialog({ open, onOpenChange, task }: TaskFormDialogProps
                 />
               </div>
             </div>
+
+            {/* Dependencies */}
+            {(() => {
+              const availableTasks = (allTasks ?? []).filter((t) => t.id !== task?.id);
+              if (availableTasks.length === 0) return null;
+              return (
+                <div className="space-y-1">
+                  <label className="text-sm font-medium">Dependencies</label>
+                  <p className="text-xs text-muted-foreground">
+                    Select tasks that must be completed before this task can start.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-1 rounded-md border p-2 max-h-32 overflow-y-auto">
+                    {dependencies.map((depId) => {
+                      const depTask = availableTasks.find((t) => t.id === depId);
+                      return (
+                        <Badge key={depId} variant="secondary" className="gap-1 pr-1">
+                          {depTask?.title ?? depId}
+                          <button
+                            type="button"
+                            onClick={() => setDependencies(dependencies.filter((d) => d !== depId))}
+                            className="ml-0.5 rounded-full hover:bg-muted-foreground/20"
+                            aria-label={`Remove dependency ${depTask?.title ?? depId}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                  <Select
+                    value=""
+                    onValueChange={(v) => {
+                      if (v && !dependencies.includes(v)) {
+                        setDependencies([...dependencies, v]);
+                      }
+                    }}
+                  >
+                    <SelectTrigger data-testid="task-dependencies-select">
+                      <SelectValue placeholder="Add a dependency…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableTasks
+                        .filter((t) => !dependencies.includes(t.id))
+                        .map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.title} ({t.status})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              );
+            })()}
           </div>
 
           <DialogFooter className="mt-6">

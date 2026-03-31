@@ -8,11 +8,12 @@ vi.mock('@/hooks/use-tasks');
 vi.mock('@/hooks/use-agents');
 
 import { useAgents } from '@/hooks/use-agents';
-import { useCreateTask, useUpdateTask } from '@/hooks/use-tasks';
+import { useCreateTask, useTasks, useUpdateTask } from '@/hooks/use-tasks';
 
 const mockedUseAgents = vi.mocked(useAgents);
 const mockedUseCreateTask = vi.mocked(useCreateTask);
 const mockedUseUpdateTask = vi.mocked(useUpdateTask);
+const mockedUseTasks = vi.mocked(useTasks);
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -41,6 +42,12 @@ beforeEach(() => {
     mutate: mockUpdateMutate,
     isPending: false,
   } as unknown as ReturnType<typeof useUpdateTask>);
+
+  mockedUseTasks.mockReturnValue({
+    data: [],
+    isLoading: false,
+    error: null,
+  } as unknown as ReturnType<typeof useTasks>);
 });
 
 afterEach(() => {

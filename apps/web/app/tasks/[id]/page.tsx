@@ -2,7 +2,7 @@
 
 import type { TaskStatus } from '@matanelcohen/openspace-shared';
 import { TASK_STATUS_LABELS, TASK_STATUSES } from '@matanelcohen/openspace-shared';
-import { ArrowLeft, Box, ChevronDown, ChevronRight, ClipboardCopy, Code2, GitBranch, GitPullRequest, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Box, ChevronDown, ChevronRight, ClipboardCopy, Code2, GitBranch, GitPullRequest, Loader2, Network, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -11,6 +11,7 @@ import remarkGfm from 'remark-gfm';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { PriorityBadge } from '@/components/priority-badge';
+import { TaskDependencyGraph } from '@/components/tasks/task-dependency-graph';
 import { TaskFormDialog } from '@/components/tasks/task-form-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -28,7 +29,7 @@ import { useAgentStatus } from '@/hooks/use-agent-status';
 import { useAgents } from '@/hooks/use-agents';
 import { useCreateBranch, useCreatePR } from '@/hooks/use-github';
 import { useTaskEvents } from '@/hooks/use-task-events';
-import { useDeleteTask, useEnqueueTask, useSubtasks, useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useDeleteTask, useEnqueueTask, useSubtasks, useTask, useTaskDependencyGraph, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
 import { useWorktree } from '@/hooks/use-worktrees';
 import { selectTier } from '@/lib/tiers';
 import { api } from '@/lib/api-client';
@@ -51,6 +52,7 @@ export default function TaskDetailPage() {
   const createPR = useCreatePR();
   const { data: subtasks } = useSubtasks(id);
   const { data: worktree } = useWorktree(id);
+  const { data: depGraphTasks } = useTaskDependencyGraph(id);
   const [showPrompt, setShowPrompt] = useState(false);
   const [promptData, setPromptData] = useState<Record<string, unknown> | null>(null);
   const [promptLoading, setPromptLoading] = useState(false);
@@ -633,6 +635,24 @@ export default function TaskDetailPage() {
                 </Link>
               ))}
             </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dependency Graph */}
+      {depGraphTasks && depGraphTasks.length > 1 && (
+        <Card data-testid="dependency-graph-section">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Network className="h-4 w-4" />
+              Dependency Graph
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TaskDependencyGraph
+              tasks={depGraphTasks}
+              currentTaskId={id}
+            />
           </CardContent>
         </Card>
       )}

@@ -42,4 +42,6 @@ export interface Task {
   sortIndex: number;
   /** Parent task ID when this is a delegated subtask. */
   parent?: string | null;
+  /** IDs of tasks that must be completed before this task can start. */
+  dependencies?: string[];
 }

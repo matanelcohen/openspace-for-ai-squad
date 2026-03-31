@@ -59,6 +59,7 @@ export interface CreateTaskInput {
   assignee: string | null;
   priority: TaskPriority;
   labels: string[];
+  dependencies?: string[];
 }
 
 export function useCreateTask() {
@@ -103,6 +104,7 @@ export interface UpdateTaskInput {
   assignee: string | null;
   priority: TaskPriority;
   labels: string[];
+  dependencies?: string[];
 }
 
 export function useUpdateTask() {
@@ -239,5 +241,13 @@ export function useEnqueueTask() {
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
+  });
+}
+
+export function useTaskDependencyGraph(taskId: string) {
+  return useQuery<Task[]>({
+    queryKey: ['tasks', taskId, 'dependency-graph'],
+    queryFn: () => api.get<Task[]>(`/api/tasks/${taskId}/dependency-graph`),
+    enabled: !!taskId,
   });
 }

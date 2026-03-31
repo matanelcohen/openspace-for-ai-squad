@@ -100,6 +100,46 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
     return reply.send(subtasks);
   });
 
+  // GET /api/tasks/:id/dependency-graph — full dependency graph for a task
+  app.get<{ Params: { id: string } }>('/tasks/:id/dependency-graph', async (request, reply) => {
+    const taskId = request.params.id;
+    const allTasks = await app.squadParser.getTasks();
+    const taskMap = new Map(allTasks.map((t) => [t.id, t]));
+
+    const rootTask = taskMap.get(taskId);
+    if (!rootTask) {
+      return reply.status(404).send({ error: `Task not found: ${taskId}` });
+    }
+
+    // Collect all related tasks by traversing dependencies in both directions
+    const visited = new Set<string>();
+    const queue = [taskId];
+
+    while (queue.length > 0) {
+      const current = queue.shift()!;
+      if (visited.has(current)) continue;
+      visited.add(current);
+
+      const task = taskMap.get(current);
+      if (!task) continue;
+
+      // Follow dependencies (upstream: tasks this one depends on)
+      for (const depId of task.dependencies ?? []) {
+        if (!visited.has(depId)) queue.push(depId);
+      }
+
+      // Follow dependents (downstream: tasks that depend on this one)
+      for (const t of allTasks) {
+        if ((t.dependencies ?? []).includes(current) && !visited.has(t.id)) {
+          queue.push(t.id);
+        }
+      }
+    }
+
+    const graphTasks = allTasks.filter((t) => visited.has(t.id));
+    return reply.send(graphTasks);
+  });
+
   // POST /api/tasks — create
   app.post<{ Body: CreateTaskInput }>('/tasks', async (request, reply) => {
     const body = request.body;
