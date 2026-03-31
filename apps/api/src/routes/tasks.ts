@@ -301,6 +301,31 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
     }
   });
+
+  // GET /api/tasks/:id/prompt — full prompt context sent to the agent
+  app.get<{ Params: { id: string } }>('/tasks/:id/prompt', async (request, reply) => {
+    const { resolve, join } = await import('node:path');
+    const { readFileSync, existsSync } = await import('node:fs');
+
+    const squadDir = app.squadParser?.getTasksDir()
+      ? resolve(app.squadParser.getTasksDir(), '..')
+      : null;
+    if (!squadDir) {
+      return reply.status(503).send({ error: 'Squad not initialized' });
+    }
+
+    const promptPath = join(squadDir, '.cache', 'prompts', `${request.params.id}.json`);
+    if (!existsSync(promptPath)) {
+      return reply.status(404).send({ error: 'No prompt data found for this task. The task may not have been executed yet.' });
+    }
+
+    try {
+      const data = JSON.parse(readFileSync(promptPath, 'utf-8'));
+      return reply.send(data);
+    } catch {
+      return reply.status(500).send({ error: 'Failed to read prompt data' });
+    }
+  });
 };
 
 export default tasksRoute;

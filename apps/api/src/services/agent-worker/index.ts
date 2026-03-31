@@ -557,6 +557,36 @@ export class AgentWorkerService {
         },
       ];
 
+      // Save full prompt context for debugging/inspection
+      try {
+        const promptDir = join(this.config.squadDir, '.cache', 'prompts');
+        mkdirSync(promptDir, { recursive: true });
+        const promptData = {
+          taskId,
+          agentId: agent.id,
+          agentName: agent.name,
+          agentRole: agent.role,
+          personality: agent.personality,
+          timestamp: new Date().toISOString(),
+          systemPrompt,
+          userMessage: messages[0].content,
+          skills: finalSkills.map((s) => ({ id: s.id, name: s.name ?? s.id, description: s.description })),
+          memories: memoryAttributions,
+          memoriesPrompt: memoriesPrompt || null,
+          skillsPrompt: skillsPrompt || null,
+          tier,
+          workingDirectory: worktree?.path ?? join(this.config.squadDir, '..'),
+          branch: worktree?.branch ?? null,
+        };
+        writeFileSync(
+          join(promptDir, `${taskId}.json`),
+          JSON.stringify(promptData, null, 2),
+          'utf-8',
+        );
+      } catch {
+        /* non-critical */
+      }
+
       const sharedOpts = {
         taskTitle: task.title,
         agentId: agent.id,
