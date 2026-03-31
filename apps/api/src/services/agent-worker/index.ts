@@ -410,11 +410,17 @@ export class AgentWorkerService {
       // Collect progress events during execution
       const progressLog: string[] = [];
 
-      // Build task-matched skills prompt (SDK-style: matches by task content + role + domain)
-      const taskText = `${task.title} ${task.description ?? ''}`;
-      const autoMatched = matchSkillsForTask(this.allSkills, taskText, agent.role);
-      const matched =
-        autoMatched.length > 0 ? autoMatched : getSkillsForRole(this.allSkills, agent.role);
+      // Select relevant skills using LLM (falls back to keyword matching)
+      let finalSkills: ParsedSkill[] = [];
+      try {
+        finalSkills = await this.selectSkillsWithLLM(agent, task, this.allSkills);
+      } catch {
+        // Fallback to keyword matching
+        const taskText = `${task.title} ${task.description ?? ''}`;
+        const autoMatched = matchSkillsForTask(this.allSkills, taskText, agent.role);
+        finalSkills =
+          autoMatched.length > 0 ? autoMatched : getSkillsForRole(this.allSkills, agent.role);
+      }
 
       // Apply per-agent overrides (always/never) from .cache/agent-skill-overrides.json
       let finalSkills = matched;
@@ -1168,6 +1174,54 @@ export class AgentWorkerService {
 
     // Safety: stop monitoring after 30 minutes
     setTimeout(() => clearInterval(checkInterval), 30 * 60 * 1000);
+  }
+
+  // ── LLM Skill Selection ───────────────────────────────────────
+
+  /**
+   * Use LLM to pick the most relevant skills for a task + agent combination.
+   */
+  private async selectSkillsWithLLM(
+    agent: AgentProfile,
+    task: Task,
+    allSkills: ParsedSkill[],
+  ): Promise<ParsedSkill[]> {
+    if (allSkills.length === 0) return [];
+
+    const skillList = allSkills
+      .map((s) => `- ${s.id}: ${s.frontmatter.description ?? s.frontmatter.name ?? s.id}`)
+      .join('\n');
+
+    const result = await this.config.aiProvider.chatCompletion({
+      systemPrompt:
+        'You select the most relevant skills for an agent working on a task. ' +
+        'Return ONLY a JSON array of skill IDs. Pick 3-5 skills maximum. ' +
+        'Only pick skills that are directly useful for this specific task. ' +
+        'If no skills are relevant, return an empty array [].',
+      messages: [
+        {
+          role: 'user',
+          content:
+            `Agent: ${agent.name} (${agent.role})\n` +
+            `Task: ${task.title}\n` +
+            `Description: ${(task.description ?? '').substring(0, 300)}\n\n` +
+            `Available skills:\n${skillList}\n\n` +
+            `Which skills should ${agent.name} use for this task? Return JSON array of IDs only.`,
+        },
+      ],
+    });
+
+    // Parse the JSON array from the response
+    const match = result.content.match(/\[[\s\S]*?\]/);
+    if (!match) return [];
+
+    const selectedIds: string[] = JSON.parse(match[0]);
+    const selected = allSkills.filter((s) => selectedIds.includes(s.id));
+
+    console.log(
+      `[AgentWorker] LLM selected ${selected.length} skills for ${agent.name}: ${selected.map((s) => s.id).join(', ')}`,
+    );
+    return selected;
   }
 
   // ── Broadcasting ───────────────────────────────────────────────
