@@ -6,7 +6,7 @@
  *
  * Follows patterns from websocket-resilience.test.ts.
  */
-import { act, render, screen, fireEvent } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // ── Mock XTerm ────────────────────────────────────────────────────
@@ -184,9 +184,7 @@ describe('Terminal — reconnection & resilience', () => {
     });
 
     act(() => {
-      mockWsInstances[0]!.simulateMessage(
-        JSON.stringify({ type: 'output', data: 'hello world' }),
-      );
+      mockWsInstances[0]!.simulateMessage(JSON.stringify({ type: 'output', data: 'hello world' }));
     });
 
     expect(mockTermWrite).toHaveBeenCalledWith('hello world');
@@ -205,13 +203,9 @@ describe('Terminal — reconnection & resilience', () => {
       );
     });
 
-    expect(mockTermWrite).toHaveBeenCalledWith(
-      expect.stringContaining('something broke'),
-    );
+    expect(mockTermWrite).toHaveBeenCalledWith(expect.stringContaining('something broke'));
     // Should contain red ANSI escape code
-    expect(mockTermWrite).toHaveBeenCalledWith(
-      expect.stringContaining('\x1b[31m'),
-    );
+    expect(mockTermWrite).toHaveBeenCalledWith(expect.stringContaining('\x1b[31m'));
   });
 
   it('handles non-JSON messages gracefully', () => {
@@ -416,7 +410,9 @@ describe('Terminal — reconnection & resilience', () => {
       lastWs.simulateClose();
     });
 
-    expect(screen.getByText('Connection failed')).toBeInTheDocument();
+    expect(
+      screen.getByText('Unable to reach the backend — is the API server running?'),
+    ).toBeInTheDocument();
   });
 
   it('shows retry button in failed state', () => {
@@ -471,7 +467,9 @@ describe('Terminal — reconnection & resilience', () => {
       mockWsInstances[mockWsInstances.length - 1]!.simulateClose();
     });
 
-    expect(screen.getByText('Connection failed')).toBeInTheDocument();
+    expect(
+      screen.getByText('Unable to reach the backend — is the API server running?'),
+    ).toBeInTheDocument();
     const countBefore = mockWsInstances.length;
 
     // Click retry

@@ -10,8 +10,7 @@ import { cn } from '@/lib/utils';
 
 const API_HOST =
   typeof window !== 'undefined'
-    ? (process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') ??
-      `${window.location.host}`)
+    ? (process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') ?? `${window.location.host}`)
     : 'localhost:3000';
 
 const WS_BASE =
@@ -141,8 +140,13 @@ export function Terminal() {
     };
   }, [sendResize]);
 
-  // Keep ref in sync so reconnect timers always call latest connect
-  connectRef.current = connect;
+  // Keep ref in sync so reconnect timers always call the latest
+  // version of connect (which closes over current sendResize).
+  // Placed in useEffect to avoid mutating a ref during render,
+  // which is unsafe under React's concurrent / StrictMode semantics.
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
 
   useEffect(() => {
     mountedRef.current = true;
