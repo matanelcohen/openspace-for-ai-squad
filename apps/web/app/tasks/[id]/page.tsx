@@ -313,45 +313,92 @@ export default function TaskDetailPage() {
         </Card>
       </div>
 
-      {/* Assign to Agent */}
-      <Card data-testid="assign-agent-section">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Assign to Agent</CardTitle>
+      {/* Full Agent Prompt */}
+      <Card data-testid="prompt-section">
+        <CardHeader
+          className="cursor-pointer pb-2"
+          onClick={async () => {
+            if (!showPrompt && !promptData) {
+              setPromptLoading(true);
+              try {
+                const data = await api.get<Record<string, unknown>>(`/api/tasks/${id}/prompt`);
+                setPromptData(data);
+              } catch {
+                setPromptData({ error: 'No prompt data available. Task may not have been executed yet.' });
+              }
+              setPromptLoading(false);
+            }
+            setShowPrompt(!showPrompt);
+          }}
+        >
+          <CardTitle className="flex items-center gap-2 text-sm">
+            {showPrompt ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            <Code2 className="h-4 w-4" />
+            Full Agent Prompt
+            {promptLoading && <Loader2 className="h-3 w-3 animate-spin" />}
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="flex items-center gap-3">
-            <Select value={selectedAgent} onValueChange={setSelectedAgent}>
-              <SelectTrigger className="w-64" data-testid="agent-select">
-                <SelectValue placeholder="Select an agent…" />
-              </SelectTrigger>
-              <SelectContent>
-                {agents?.map((agent) => (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    <span className="flex items-center gap-2">
-                      <span className="font-medium">{agent.name}</span>
-                      <span className="text-muted-foreground">· {agent.role}</span>
-                      <Badge
-                        variant={agent.status === 'idle' ? 'secondary' : 'default'}
-                        className="ml-1 text-[10px] px-1.5 py-0"
-                      >
-                        {agent.status}
-                      </Badge>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              disabled={!selectedAgent || enqueueTask.isPending}
-              onClick={handleAssignAndRun}
-              data-testid="assign-run-btn"
-            >
-              <Play className="mr-1 h-3 w-3" />
-              {enqueueTask.isPending ? 'Assigning…' : 'Assign & Run'}
-            </Button>
-          </div>
-        </CardContent>
+        {showPrompt && promptData && (
+          <CardContent>
+            <ScrollArea className="max-h-[600px]">
+              <div className="space-y-4 text-xs">
+                {promptData.error ? (
+                  <p className="text-muted-foreground italic">{String(promptData.error)}</p>
+                ) : (
+                  <>
+                    <div>
+                      <h4 className="font-semibold text-sm mb-1">Agent</h4>
+                      <p className="font-mono">{String(promptData.agentName)} ({String(promptData.agentRole)})</p>
+                      <p className="text-muted-foreground mt-0.5">{String(promptData.personality)}</p>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold text-sm mb-1">System Prompt</h4>
+                      <pre className="whitespace-pre-wrap rounded bg-muted p-3 font-mono text-xs overflow-auto">
+                        {String(promptData.systemPrompt)}
+                      </pre>
+                    </div>
+
+                    <div>
+                      <h4 className="font-semibold text-sm mb-1">User Message</h4>
+                      <pre className="whitespace-pre-wrap rounded bg-muted p-3 font-mono text-xs overflow-auto">
+                        {String(promptData.userMessage)}
+                      </pre>
+                    </div>
+
+                    {Array.isArray(promptData.skills) && (promptData.skills as Array<Record<string, string>>).length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-1">Skills ({(promptData.skills as unknown[]).length})</h4>
+                        <div className="space-y-1">
+                          {(promptData.skills as Array<Record<string, string>>).map((s, i) => (
+                            <div key={i} className="flex gap-2">
+                              <Badge variant="outline" className="text-xs font-mono">{s.id}</Badge>
+                              <span className="text-muted-foreground">{s.description?.substring(0, 100)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {Array.isArray(promptData.memories) && (promptData.memories as unknown[]).length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-1">Memories ({(promptData.memories as unknown[]).length})</h4>
+                        <pre className="whitespace-pre-wrap rounded bg-muted p-3 font-mono text-xs overflow-auto">
+                          {String(promptData.memoriesPrompt)}
+                        </pre>
+                      </div>
+                    )}
+
+                    <div className="flex gap-4 text-muted-foreground">
+                      <span>Tier: <span className="font-mono">{String(promptData.tier)}</span></span>
+                      {typeof promptData.branch === 'string' && <span>Branch: <span className="font-mono">{promptData.branch}</span></span>}
+                    </div>
+                  </>
+                )}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        )}
       </Card>
 
       {/* Live Progress Panel */}
@@ -628,94 +675,6 @@ export default function TaskDetailPage() {
         <span>Created: {new Date(task.createdAt).toLocaleString()}</span>
         <span>Updated: {new Date(task.updatedAt).toLocaleString()}</span>
       </div>
-
-      {/* Full Prompt Viewer */}
-      <Card>
-        <CardHeader
-          className="cursor-pointer pb-2"
-          onClick={async () => {
-            if (!showPrompt && !promptData) {
-              setPromptLoading(true);
-              try {
-                const data = await api.get<Record<string, unknown>>(`/api/tasks/${id}/prompt`);
-                setPromptData(data);
-              } catch {
-                setPromptData({ error: 'No prompt data available. Task may not have been executed yet.' });
-              }
-              setPromptLoading(false);
-            }
-            setShowPrompt(!showPrompt);
-          }}
-        >
-          <CardTitle className="flex items-center gap-2 text-sm">
-            {showPrompt ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            <Code2 className="h-4 w-4" />
-            Full Agent Prompt
-            {promptLoading && <Loader2 className="h-3 w-3 animate-spin" />}
-          </CardTitle>
-        </CardHeader>
-        {showPrompt && promptData && (
-          <CardContent>
-            <ScrollArea className="max-h-[600px]">
-              <div className="space-y-4 text-xs">
-                {promptData.error ? (
-                  <p className="text-muted-foreground italic">{String(promptData.error)}</p>
-                ) : (
-                  <>
-                    <div>
-                      <h4 className="font-semibold text-sm mb-1">Agent</h4>
-                      <p className="font-mono">{String(promptData.agentName)} ({String(promptData.agentRole)})</p>
-                      <p className="text-muted-foreground mt-0.5">{String(promptData.personality)}</p>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-sm mb-1">System Prompt</h4>
-                      <pre className="whitespace-pre-wrap rounded bg-muted p-3 font-mono text-xs overflow-auto">
-                        {String(promptData.systemPrompt)}
-                      </pre>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-sm mb-1">User Message</h4>
-                      <pre className="whitespace-pre-wrap rounded bg-muted p-3 font-mono text-xs overflow-auto">
-                        {String(promptData.userMessage)}
-                      </pre>
-                    </div>
-
-                    {Array.isArray(promptData.skills) && (promptData.skills as Array<Record<string, string>>).length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-1">Skills ({(promptData.skills as unknown[]).length})</h4>
-                        <div className="space-y-1">
-                          {(promptData.skills as Array<Record<string, string>>).map((s, i) => (
-                            <div key={i} className="flex gap-2">
-                              <Badge variant="outline" className="text-xs font-mono">{s.id}</Badge>
-                              <span className="text-muted-foreground">{s.description?.substring(0, 100)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {Array.isArray(promptData.memories) && (promptData.memories as unknown[]).length > 0 && (
-                      <div>
-                        <h4 className="font-semibold text-sm mb-1">Memories ({(promptData.memories as unknown[]).length})</h4>
-                        <pre className="whitespace-pre-wrap rounded bg-muted p-3 font-mono text-xs overflow-auto">
-                          {String(promptData.memoriesPrompt)}
-                        </pre>
-                      </div>
-                    )}
-
-                    <div className="flex gap-4 text-muted-foreground">
-                      <span>Tier: <span className="font-mono">{String(promptData.tier)}</span></span>
-                      {promptData.branch && <span>Branch: <span className="font-mono">{String(promptData.branch)}</span></span>}
-                    </div>
-                  </>
-                )}
-              </div>
-            </ScrollArea>
-          </CardContent>
-        )}
-      </Card>
 
       <TaskFormDialog open={editOpen} onOpenChange={setEditOpen} task={task} />
     </div>

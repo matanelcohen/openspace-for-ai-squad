@@ -122,6 +122,11 @@ The file looks clean. ✅ **Done!** Added `Terminal` nav item to the sidebar:
 - `apps/web/src/components/tasks/kanban-board.tsx` — Added `TaskFiltersToolbar` with filter state, `applyCardFilters()` for assignee/priority/search, and `visibleStatuses` memo for status-based column visibility
 - `apps/web/src/components/tasks/__tests__/kanban-board.test.tsx` — 5 new filter tests + fixed stale status names (`backlog` → `pending`)
 - `apps/
+- The web app package name is @matanelcohen/openspace-web (not @openspace/web). Use `pnpm --filter @matanelcohen/openspace-web` to target it.
+- The project uses git worktrees for task branches, located at .git-worktrees/task-<id>/ relative to the repo root.
+- The web app build has a pre-existing ChatPage type inference error that is not caused by new changes. Tests can still be run independently with vitest even when build fails.
+- TaskCard component requires useApproveTask and useRejectTask hook mocks in test files. Tests that render task cards will fail without these mocks.
+- When adding new UI features like filters, extract shared utilities to apps/web/src/lib/ and reuse across views (e.g., task-filters.ts shared between kanban and list views).
 
 ## Summary
 
