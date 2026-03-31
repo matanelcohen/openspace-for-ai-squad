@@ -20,9 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useTasks } from '@/hooks/use-tasks';
-
-type SortField = 'title' | 'status' | 'assignee' | 'priority' | 'updatedAt';
-type SortDir = 'asc' | 'desc';
+import { applyTaskFilters, DEFAULT_FILTERS } from '@/lib/task-filters';
 
 const priorityOrder: Record<TaskPriority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 const statusOrder: Record<TaskStatus, number> = {
@@ -33,24 +31,8 @@ const statusOrder: Record<TaskStatus, number> = {
   delegated: 4,
 };
 
-function applyFilters(tasks: Task[], filters: TaskFilters): Task[] {
-  return tasks.filter((t) => {
-    if (filters.status !== 'all' && t.status !== filters.status) return false;
-    if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
-    if (filters.assignee !== 'all') {
-      if (filters.assignee === 'unassigned' && t.assignee !== null) return false;
-      if (filters.assignee !== 'unassigned' && t.assignee !== filters.assignee) return false;
-    }
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      const matchTitle = t.title.toLowerCase().includes(q);
-      const matchDesc = t.description.toLowerCase().includes(q);
-      const matchLabels = t.labels.some((l) => l.toLowerCase().includes(q));
-      if (!matchTitle && !matchDesc && !matchLabels) return false;
-    }
-    return true;
-  });
-}
+type SortField = 'title' | 'status' | 'assignee' | 'priority' | 'updatedAt';
+type SortDir = 'asc' | 'desc';
 
 function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
   const sorted = [...tasks].sort((a, b) => {
@@ -97,18 +79,13 @@ function SortIcon({
 
 export function TaskListView() {
   const { data: tasks, isLoading, error } = useTasks();
-  const [filters, setFilters] = useState<TaskFilters>({
-    status: 'all',
-    assignee: 'all',
-    priority: 'all',
-    search: '',
-  });
+  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
   const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   const filteredAndSorted = useMemo(() => {
     if (!tasks) return [];
-    const filtered = applyFilters(tasks, filters);
+    const filtered = applyTaskFilters(tasks, filters);
     return sortTasks(filtered, sortField, sortDir);
   }, [tasks, filters, sortField, sortDir]);
 
