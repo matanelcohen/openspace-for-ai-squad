@@ -533,10 +533,11 @@ export class AgentWorkerService {
         `Personality: ${agent.personality}\n\n` +
         `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
         `Do the actual work, don't just describe what you would do.\n\n` +
-        `IMPORTANT RULES:\n` +
-        `- Do NOT create subtasks or task files in .squad/tasks/. You are not a project manager.\n` +
-        `- Do NOT modify files in .squad/ (it contains system config). Only work on project source code.\n` +
-        `- Focus on completing the assigned task in one go.\n\n` +
+        `## CRITICAL CONSTRAINTS — VIOLATION WILL CAUSE ERRORS\n` +
+        `1. NEVER create, modify, or write ANY file inside the .squad/ directory. This directory is READ-ONLY system config.\n` +
+        `2. NEVER create subtasks, sub-tasks, or additional task files. Complete the ENTIRE task yourself in a single pass.\n` +
+        `3. NEVER delegate work. You are the sole executor of this task.\n` +
+        `4. Only modify files under apps/, packages/, src/, or other project source directories.\n\n` +
         (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
         (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
         `When done, provide a brief summary of what you did.`;
