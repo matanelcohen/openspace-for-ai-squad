@@ -30,8 +30,8 @@ import type {
 // ---------------------------------------------------------------------------
 
 describe('TASK_STATUSES', () => {
-  it('contains exactly seven statuses in kanban order', () => {
-    expect(TASK_STATUSES).toEqual(['pending-approval', 'backlog', 'in-progress', 'in-review', 'done', 'blocked', 'delegated']);
+  it('contains exactly five statuses in kanban order', () => {
+    expect(TASK_STATUSES).toEqual(['pending', 'in-progress', 'done', 'blocked', 'delegated']);
   });
 
   it('has a label for every status', () => {
@@ -246,10 +246,8 @@ describe('Type structures (compile-time + runtime shape checks)', () => {
       recentTasks: [],
       taskCounts: {
         byStatus: {
-          'pending-approval': 0,
-          backlog: 0,
+          pending: 0,
           'in-progress': 0,
-          'in-review': 0,
           done: 0,
           blocked: 0,
           delegated: 0,
@@ -259,6 +257,6 @@ describe('Type structures (compile-time + runtime shape checks)', () => {
       recentDecisions: [],
     };
     expect(overview.taskCounts.total).toBe(0);
-    expect(Object.keys(overview.taskCounts.byStatus)).toHaveLength(6);
+    expect(Object.keys(overview.taskCounts.byStatus)).toHaveLength(5);
   });
 });

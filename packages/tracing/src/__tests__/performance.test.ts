@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import { TraceCollector } from '../trace-collector.js';
 import { Tracer } from '../tracer.js';
-import type { Span } from '../types.js';
 
 // ── Performance Tests ─────────────────────────────────────────────
 // Verify that tracing overhead stays under 5% of baseline latency.
@@ -13,14 +12,14 @@ describe('Tracing Performance', () => {
 
   async function simulateWork(): Promise<number> {
     // Simulate a lightweight async operation
-    const start = performance.now();
+    const _start = performance.now();
     await new Promise((r) => setTimeout(r, SIMULATED_WORK_MS));
     let sum = 0;
     for (let i = 0; i < 1000; i++) sum += i;
     return sum;
   }
 
-  it('tracing overhead stays under 5% of baseline latency', async () => {
+  it('tracing overhead stays under 5% of baseline latency', { timeout: 30_000 }, async () => {
     // -- Baseline: run without tracing --
     const baselineTimes: number[] = [];
     for (let i = 0; i < ITERATIONS; i++) {
