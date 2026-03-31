@@ -158,6 +158,10 @@ Here's what I did:
 
 1. **`task-filter-utils.ts`** (new) — Extracted `applyFilters()` into a shared utility for DRY reuse between kanban and list views
 2. **`kanban-board.tsx`** — Added the `TaskFiltersToolbar` with search, status, assignee, and priority filters. Tasks are filtered via `useMemo` before grouping into columns. Shows a "Showing X of Y tasks" count when filters are activ
+- This monorepo uses pnpm workspaces with apps under apps/ and packages under packages/. The web app package name is @matanelcohen/openspace-web, built with Next.js.
+- Tests in apps/web require mocking next/navigation (useSearchParams, useRouter, usePathname) when components use URL-based state. Tests use vitest.
+- The project uses git worktrees for task branches, located at .git-worktrees/task-{id}/ directories.
+- User prefers URL search params for persisting UI filter state (using router.replace to avoid history pollution), keeping URLs clean by only writing non-default values.
 
 ## Summary
 

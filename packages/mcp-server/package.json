@@ -1,6 +1,6 @@
 {
   "name": "@matanelcohen/openspace-mcp-server",
-  "version": "0.4.4",
+  "version": "0.5.0",
   "type": "module",
   "description": "MCP server for the openspace.ai squad — exposes squad tools and resources via Model Context Protocol",
   "main": "./dist/index.js",
