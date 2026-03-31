@@ -1195,7 +1195,7 @@ export class AgentWorkerService {
     const result = await this.config.aiProvider.chatCompletion({
       systemPrompt:
         'You select the most relevant skills for an agent working on a task. ' +
-        'Return ONLY a JSON array of skill IDs. Pick 3-5 skills maximum. ' +
+        'Return ONLY a JSON array of skill IDs. ' +
         'Only pick skills that are directly useful for this specific task. ' +
         'If no skills are relevant, return an empty array [].',
       messages: [
