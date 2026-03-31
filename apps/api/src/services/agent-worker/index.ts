@@ -474,25 +474,25 @@ export class AgentWorkerService {
             logEntry = `🎯 Intent: ${(event.data?.intent as string) ?? 'analyzing'}`;
             break;
           case 'thinking':
-            logEntry = `🧠 Thinking: ${((event.data?.content as string) ?? '').substring(0, 200)}`;
+            logEntry = `🧠 Thinking: ${(event.data?.content as string) ?? ''}`;
             break;
           case 'tool_start': {
             const toolName = (event.data?.name as string) ?? 'unknown';
             const toolArgs = event.data?.arguments;
             let argSummary = '';
             if (typeof toolArgs === 'string') {
-              argSummary = toolArgs.substring(0, 120);
+              argSummary = toolArgs;
             } else if (toolArgs && typeof toolArgs === 'object') {
               const argObj = toolArgs as Record<string, unknown>;
-              if (argObj.command) argSummary = ` — \`${String(argObj.command).substring(0, 100)}\``;
+              if (argObj.command) argSummary = ` — \`${String(argObj.command)}\``;
               else if (argObj.path) argSummary = ` — ${String(argObj.path)}`;
-              else argSummary = ` — ${JSON.stringify(toolArgs).substring(0, 100)}`;
+              else argSummary = ` — ${JSON.stringify(toolArgs)}`;
             }
             logEntry = `🔧 Using tool: \`${toolName}\`${argSummary}`;
             break;
           }
           case 'tool_result':
-            logEntry = `✅ Tool result: ${((event.data?.output as string) ?? '').substring(0, 150)}`;
+            logEntry = `✅ Tool result: ${(event.data?.output as string) ?? ''}`;
             break;
           case 'info':
             logEntry = `ℹ️ ${(event.data?.message as string) ?? ''}`;
@@ -521,7 +521,7 @@ export class AgentWorkerService {
             }
           }
           if (event.type === 'tool_result' && event.data) {
-            payload.tool_output = ((event.data.output as string) ?? '').substring(0, 500);
+            payload.tool_output = (event.data.output as string) ?? '';
           }
 
           this.config.wsManager?.broadcast({
