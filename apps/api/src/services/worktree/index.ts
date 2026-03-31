@@ -264,13 +264,18 @@ export class WorktreeService {
     const info = this.mustGet(taskId);
     const base = opts.baseBranch ?? info.baseBranch;
 
+    const truncatedBody = opts.body.length > 2000
+      ? opts.body.substring(0, 2000) + '\n\n_(truncated)_'
+      : opts.body;
     const baseFlag = `--base ${this.shellEscape(base)}`;
-    const raw = this.gitInDir(
+    const url = this.gitInDir(
       info.path,
-      `gh pr create --title ${this.shellEscape(opts.title)} --body ${this.shellEscape(opts.body)} --head ${this.shellEscape(info.branch)} ${baseFlag} --json number,url`,
-    );
+      `gh pr create --title ${this.shellEscape(opts.title)} --body ${this.shellEscape(truncatedBody)} --head ${this.shellEscape(info.branch)} ${baseFlag}`,
+    ).trim();
 
-    const pr = JSON.parse(raw) as { number: number; url: string };
+    const match = url.match(/\/pull\/(\d+)/);
+    const number = match ? parseInt(match[1], 10) : 0;
+    const pr = { number, url };
     info.pr = pr;
     console.log(`[WorktreeService] PR #${pr.number} created for ${taskId}: ${pr.url}`);
     return pr;
@@ -343,10 +348,15 @@ export class WorktreeService {
     }
 
     try {
-      const raw = this.exec(
-        `gh pr create --title ${this.shellEscape(opts.title)} --body ${this.shellEscape(opts.body)} --head ${this.shellEscape(branchName)} --base ${this.shellEscape(this.baseBranch)} --json number,url`,
-      );
-      const pr = JSON.parse(raw) as { number: number; url: string };
+      const truncatedBody = opts.body.length > 2000
+        ? opts.body.substring(0, 2000) + '\n\n_(truncated)_'
+        : opts.body;
+      const url = this.exec(
+        `gh pr create --title ${this.shellEscape(opts.title)} --body ${this.shellEscape(truncatedBody)} --head ${this.shellEscape(branchName)} --base ${this.shellEscape(this.baseBranch)}`,
+      ).trim();
+      const match = url.match(/\/pull\/(\d+)/);
+      const number = match ? parseInt(match[1], 10) : 0;
+      const pr = { number, url };
       console.log(`[WorktreeService] Feature PR #${pr.number} for ${parentTaskId}: ${pr.url}`);
       return pr;
     } catch (err) {
