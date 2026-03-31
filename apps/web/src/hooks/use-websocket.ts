@@ -44,11 +44,15 @@ export interface WsErrorEnvelope {
 }
 
 function buildWsUrl(): string {
-  const base =
-    process.env.NEXT_PUBLIC_API_URL ??
-    (typeof window !== 'undefined'
-      ? `${window.location.protocol}//${window.location.host}`
-      : 'http://localhost:3000');
+  let base: string;
+  if (typeof window === 'undefined') {
+    base = 'http://localhost:3001';
+  } else if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    base = process.env.NEXT_PUBLIC_API_URL ?? `http://localhost:3001`;
+  } else {
+    // LAN access: use same hostname but API port
+    base = `http://${window.location.hostname}:3001`;
+  }
   const wsBase = base.replace(/^http/, 'ws');
   return `${wsBase}/ws`;
 }

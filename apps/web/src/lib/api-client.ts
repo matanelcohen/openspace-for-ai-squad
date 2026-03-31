@@ -1,9 +1,14 @@
-// Detect API URL: env var (build-time) → meta tag (runtime) → same-origin
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (typeof window !== 'undefined'
-    ? (document.querySelector('meta[name="api-url"]')?.getAttribute('content') ?? '')
-    : 'http://localhost:3000');
+// Detect API URL: env var (build-time) → auto-detect from browser hostname
+const API_BASE_URL = (() => {
+  if (typeof window === 'undefined') return 'http://localhost:3001';
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  // If accessing from the same machine, use the env URL
+  if (envUrl && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    return envUrl;
+  }
+  // LAN access: use the same hostname but API port
+  return `http://${window.location.hostname}:3001`;
+})();
 
 export class ApiError extends Error {
   constructor(
