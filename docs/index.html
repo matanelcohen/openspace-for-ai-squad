@@ -297,14 +297,14 @@
     <div class="hero-content">
       <div class="hero-badge">
         <span class="dot"></span>
-        v0.2.3 — YOLO Mode, Agentic Execution, GitHub Integration
+        v0.5 — Parallel Sandboxes, LLM Skills, AI-written PRs, HITL Escalation
       </div>
 
       <h1>Your <span class="gradient-text">AI team</span>,<br>one command away</h1>
 
       <p class="hero-sub">
         Describe your project. Pick a theme. Toggle YOLO mode.<br>
-        Your AI squad writes code, runs tests, opens PRs&nbsp;&mdash; autonomously.
+        Agents work in parallel sandboxes — each on its own branch, building, testing, and shipping PRs autonomously.
       </p>
 
       <div class="hero-actions">
@@ -510,8 +510,8 @@
       </div>
       <div class="step-card">
         <div class="step-num"><div class="step-num-inner">&#x1F680;</div></div>
-        <h3>YOLO</h3>
-        <p>Toggle YOLO mode &mdash; the lead agent scans pending tasks, triages, assigns to specialists, and they execute autonomously. You just watch.</p>
+        <h3>Ship</h3>
+        <p>Create tasks or toggle YOLO. Lead triages &amp; delegates. Agents work in parallel sandboxes, each on its own branch. Build, test, PR &mdash; all automated.</p>
       </div>
     </div>
   </section>
@@ -531,6 +531,21 @@
         <h3>YOLO Mode <span style="font-size:.7rem;color:var(--accent-light);font-weight:400">NEW</span></h3>
         <p>Toggle autonomous mode — the lead agent scans the board, triages tasks, assigns to specialists, and ships. You just watch.</p>
       </div>
+      <div class="feature-card" style="border-color:rgba(6,182,212,.3);background:rgba(6,182,212,.05)">
+        <div class="feature-icon">&#x1F333;</div>
+        <h3>Parallel sandboxes <span style="font-size:.7rem;color:var(--cyan);font-weight:400">NEW</span></h3>
+        <p>Each task runs in its own git worktree — isolated branch, parallel execution, auto-commit &amp; PR. Delegated tasks get a feature branch with subtask PRs merging into it.</p>
+      </div>
+      <div class="feature-card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)">
+        <div class="feature-icon">&#x1F9E0;</div>
+        <h3>Smart skill matching <span style="font-size:.7rem;color:var(--green);font-weight:400">NEW</span></h3>
+        <p>LLM picks the right skills for each task + agent combo. No more random skill selection — Fry gets React skills, Bender gets API skills.</p>
+      </div>
+      <div class="feature-card" style="border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.05)">
+        <div class="feature-icon">&#x1F4DD;</div>
+        <h3>AI-written PRs <span style="font-size:.7rem;color:var(--orange);font-weight:400">NEW</span></h3>
+        <p>When an agent finishes, it auto-creates a PR with an LLM-generated description summarizing the changes, files modified, and approach taken.</p>
+      </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F916;</div>
         <h3>Agentic execution</h3>
@@ -544,7 +559,22 @@
       <div class="feature-card">
         <div class="feature-icon">&#x1F3AF;</div>
         <h3>Live task progress</h3>
-        <p>Assign tasks and watch agents work in real-time: thinking, reading files, running commands, all streamed to the UI.</p>
+        <p>Assign tasks and watch agents work in real-time: thinking, reading files, running commands, all streamed to the UI. Full untruncated logs.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F50E;</div>
+        <h3>Prompt inspector</h3>
+        <p>See exactly what was sent to the LLM — system prompt, skills, memories, user message. Full transparency. One-click copy.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F46B;</div>
+        <h3>Lead delegation</h3>
+        <p>Create a task → lead auto-triages → breaks complex work into subtasks → assigns to specialists → feature branch → consolidated PR to main.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F6A8;</div>
+        <h3>HITL escalation</h3>
+        <p>Agents escalate when unsure — budget limits, destructive operations, ambiguous requirements. Claim, review, approve or reject with audit trail.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F4B0;</div>
@@ -554,12 +584,7 @@
       <div class="feature-card">
         <div class="feature-icon">&#x1F419;</div>
         <h3>GitHub integration</h3>
-        <p>Sync issues to tasks, agents create branches and open PRs. One-click from task to shipped code.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon">&#x1F46B;</div>
-        <h3>Agent delegation</h3>
-        <p>Lead agent breaks complex tasks into subtasks and assigns to specialists. Tracks dependencies, summarizes on completion.</p>
+        <p>Sync issues to tasks, agents create branches and open PRs. Auto-push branches before PR creation. One-click from task to shipped code.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F9E0;</div>
@@ -570,6 +595,11 @@
         <div class="feature-icon">&#x1F50D;</div>
         <h3>Knowledge base + RAG</h3>
         <p>7 connectors index docs, tasks, commits, PRs, chat, memories, charters. Local embeddings for semantic search.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">&#x1F30D;</div>
+        <h3>Any stack, any language</h3>
+        <p>Auto-detects your project type — Node, .NET, Python, Go, Rust, Java, Ruby, PHP. Agents install deps, build, and test in your ecosystem.</p>
       </div>
     </div>
   </section>

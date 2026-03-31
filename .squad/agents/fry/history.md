@@ -142,7 +142,22 @@ Here's what I delivered:
 | `src/lib/task-filters.ts` | **New** — Shared `applyFilters`, `isFiltersActive`, `DEFAULT_TASK_FILTERS` |
 | `kanban-board.tsx` | Added `TaskFiltersToolbar`, filter state, `useMemo` filtering, filtered count display |
 | `kanban-column.tsx` | New `totalCount`/`isFiltered` props, "X/Y" counter, "No matching tasks" placeholder |
-| 
+|
+- The openspace-for-ai-squad repo uses git worktrees at `.git-worktrees/task-<id>` for feature branches. Run commands from the worktree directory, not the main repo root.
+- The web app package filter for pnpm is `--filter "@matanelcohen/openspace-web"`. Pre-commit hooks enforce lint and prettier, so no need to run them manually before committing.
+- Task component tests (`kanban-board`, `tasks-page`) need to mock `useApproveTask` and `useRejectTask` from `use-tasks` to avoid 'Cannot read properties of undefined (reading isPending)' errors when rendering TaskCard.
+- Task status constants are defined in packages/shared/src/constants/index.ts (TASK_STATUS). Tests must use these exact values, not arbitrary strings like 'backlog' or 'in-review'.
+- Kanban board tests require mocking useUpdateTask and useAgents hooks from the tasks hooks module, as TaskCard component depends on useUpdateTask.isPending and the filter toolbar uses useAgents.
+- This monorepo uses git worktrees (under .git-worktrees/) for parallel feature development, with pnpm workspaces and vitest for testing.
+- When adding filtering to a new view, extract filter logic into a shared utility (e.g., task-filter-utils.ts) and reuse the existing TaskFiltersToolbar component to maintain consistency across list and kanban views.
+- Completed "Add tasks kanban filters": Lint + prettier passed and commit succeeded! ✅
+
+Here's what I did:
+
+**Added filters to the tasks kanban board** with 4 files changed:
+
+1. **`task-filter-utils.ts`** (new) — Extracted `applyFilters()` into a shared utility for DRY reuse between kanban and list views
+2. **`kanban-board.tsx`** — Added the `TaskFiltersToolbar` with search, status, assignee, and priority filters. Tasks are filtered via `useMemo` before grouping into columns. Shows a "Showing X of Y tasks" count when filters are activ
 
 ## Summary
 
