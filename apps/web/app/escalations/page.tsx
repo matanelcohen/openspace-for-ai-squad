@@ -1,9 +1,12 @@
 'use client';
 
+import { Settings2 } from 'lucide-react';
+import Link from 'next/link';
 import { useState } from 'react';
 
 import { BulkActionToolbar } from '@/components/escalations/bulk-action-toolbar';
 import { ReviewQueueTable } from '@/components/escalations/review-queue-table';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SquadGuard } from '@/components/workspace/squad-guard';
 import { useEscalations } from '@/hooks/use-escalations';
@@ -15,11 +18,19 @@ export default function EscalationsPage() {
   return (
     <SquadGuard>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Escalations</h1>
-          <p className="text-muted-foreground">
-            Review and act on human-in-the-loop escalations from agents.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Escalations</h1>
+            <p className="text-muted-foreground">
+              Review and act on human-in-the-loop escalations from agents.
+            </p>
+          </div>
+          <Link href="/escalations/config">
+            <Button variant="outline" size="sm" data-testid="config-link">
+              <Settings2 className="mr-1.5 h-4 w-4" />
+              Configure
+            </Button>
+          </Link>
         </div>
 
         <BulkActionToolbar
