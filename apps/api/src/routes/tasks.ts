@@ -23,7 +23,6 @@ import {
   updateTask,
   type UpdateTaskInput,
 } from '../services/squad-writer/task-writer.js';
-import { breakdownTask } from '../services/task-breakdown/index.js';
 
 // ---------------------------------------------------------------------------
 // Validation helpers
@@ -122,29 +121,22 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
 
     const task = await createTask(tasksDir(), body);
 
-    // Auto-breakdown: if task is pending, generate sub-tasks in background
-    if (task.status === 'pending' && app.voiceServices?.aiProvider) {
-      breakdownTask(task, app.voiceServices.aiProvider)
-        .then(async (result) => {
-          for (const sub of result.subtasks) {
-            const subTask = await createTask(tasksDir(), {
-              title: sub.title,
-              description: sub.description,
-              assignee: sub.assignee,
-              priority: sub.priority,
-              labels: [...sub.labels, `parent:${task.id}`],
-              status: 'pending',
-            });
-            app.wsManager?.broadcast({
-              type: 'task:created',
-              payload: subTask as unknown as Record<string, unknown>,
-              timestamp: new Date().toISOString(),
-            });
-          }
-        })
-        .catch((err: unknown) => {
-          console.error('[TaskBreakdown] Failed:', err);
+    // Auto-route to lead agent: lead will triage (execute or delegate)
+    if (!task.assignee && task.status === 'pending' && app.agentWorker) {
+      const agents = app.agentWorker.getAgents?.() ?? [];
+      const lead = agents.find(
+        (a) =>
+          a.role.toLowerCase().includes('lead') ||
+          a.role.toLowerCase().includes('architect'),
+      );
+      if (lead) {
+        const updated = await updateTask(tasksDir(), task.id, {
+          assignee: lead.id,
+          status: 'in-progress',
         });
+        app.agentWorker.enqueue(updated);
+        console.log(`[Tasks] Auto-routed "${task.title}" to lead: ${lead.name}`);
+      }
     }
 
     return reply.status(201).send(task);

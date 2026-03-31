@@ -177,6 +177,11 @@ export class AgentWorkerService {
     return status;
   }
 
+  /** Return the configured agent profiles. */
+  getAgents(): AgentProfile[] {
+    return [...this.config.agents];
+  }
+
   /** Return a shallow copy of each agent's queued task IDs. */
   getQueuedTaskIds(): Record<string, string[]> {
     const result: Record<string, string[]> = {};
@@ -533,11 +538,10 @@ export class AgentWorkerService {
         `Personality: ${agent.personality}\n\n` +
         `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
         `Do the actual work, don't just describe what you would do.\n\n` +
-        `## CRITICAL CONSTRAINTS — VIOLATION WILL CAUSE ERRORS\n` +
-        `1. NEVER create, modify, or write ANY file inside the .squad/ directory. This directory is READ-ONLY system config.\n` +
-        `2. NEVER create subtasks, sub-tasks, or additional task files. Complete the ENTIRE task yourself in a single pass.\n` +
-        `3. NEVER delegate work. You are the sole executor of this task.\n` +
-        `4. Only modify files under apps/, packages/, src/, or other project source directories.\n\n` +
+        `RULES:\n` +
+        `- Do NOT create or modify files in .squad/ — it is managed by the system.\n` +
+        `- Only modify files under apps/, packages/, src/, or other project source directories.\n` +
+        `- Complete the task in a single pass. Do not create sub-tasks.\n\n` +
         (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
         (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
         `When done, provide a brief summary of what you did.`;
