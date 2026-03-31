@@ -575,8 +575,8 @@ export class AgentWorkerService {
           memoriesPrompt: memoriesPrompt || null,
           skillsPrompt: skillsPrompt || null,
           tier,
-          workingDirectory: worktree?.path ?? join(this.config.squadDir, '..'),
-          branch: worktree?.branch ?? null,
+          workingDirectory: join(this.config.squadDir, '..'),
+          branch: null as string | null,
         };
         writeFileSync(
           join(promptDir, `${taskId}.json`),
@@ -617,6 +617,16 @@ export class AgentWorkerService {
           });
           workDir = worktree.path;
           console.log(`[AgentWorker] ${agent.name} using sandbox: ${worktree.branch} → ${workDir}`);
+          // Update prompt file with worktree info
+          try {
+            const promptPath = join(this.config.squadDir, '.cache', 'prompts', `${taskId}.json`);
+            if (existsSync(promptPath)) {
+              const data = JSON.parse(readFileSync(promptPath, 'utf-8'));
+              data.workingDirectory = workDir;
+              data.branch = worktree.branch;
+              writeFileSync(promptPath, JSON.stringify(data, null, 2), 'utf-8');
+            }
+          } catch { /* non-critical */ }
         } else {
           workDir = join(this.config.squadDir, '..');
         }
