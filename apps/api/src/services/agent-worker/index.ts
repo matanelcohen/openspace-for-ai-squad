@@ -423,7 +423,6 @@ export class AgentWorkerService {
       }
 
       // Apply per-agent overrides (always/never) from .cache/agent-skill-overrides.json
-      let finalSkills = matched;
       try {
         const { existsSync, readFileSync } = await import('node:fs');
         const { join } = await import('node:path');
