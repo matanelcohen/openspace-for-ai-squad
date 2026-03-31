@@ -23,6 +23,7 @@ import memoriesRoute from './routes/memories.js';
 import otlpCollectorRoute from './routes/otlp-collector.js';
 import sandboxesRoute from './routes/sandboxes.js';
 import skillsRoute from './routes/skills.js';
+import skillGalleryRoute from './routes/skill-gallery.js';
 import squadRoute from './routes/squad.js';
 import tasksRoute from './routes/tasks.js';
 import teamMembersRoute from './routes/team-members.js';
@@ -51,6 +52,7 @@ import { SandboxService } from './services/sandbox/index.js';
 import { KnowledgeSearchService } from './services/search/index.js';
 import { seedBuiltinSkills } from './services/seed-skills.js';
 import { SkillRegistryImpl } from './services/skill-registry/index.js';
+import { SkillGalleryService } from './services/skill-gallery/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import { TraceService } from './services/traces/index.js';
 import {
@@ -149,6 +151,17 @@ export async function buildApp(opts: AppOptions = {}) {
   const skillRegistry = new SkillRegistryImpl();
   seedBuiltinSkills(skillRegistry, squadDir);
   app.decorate('skillRegistry', skillRegistry);
+
+  // Skill gallery (catalog for browse/search/install)
+  const skillGalleryService = new SkillGalleryService(db, () => {
+    const ids = new Set<string>();
+    for (const entry of skillRegistry.list()) {
+      ids.add(entry.manifest.id);
+    }
+    return ids;
+  });
+  skillGalleryService.seed();
+  app.decorate('skillGalleryService', skillGalleryService);
 
   // Cron scheduler
   const cronService = new CronService({ squadDir });
@@ -451,6 +464,7 @@ export async function buildApp(opts: AppOptions = {}) {
   app.register(tracesRoute, { prefix: '/api' });
   app.register(costsRoute, { prefix: '/api' });
   app.register(skillsRoute, { prefix: '/api' });
+  app.register(skillGalleryRoute, { prefix: '/api' });
   app.register(cronRoute, { prefix: '/api' });
   app.register(workspacesRoute, { prefix: '/api' });
   app.register(yoloRoute, { prefix: '/api' });

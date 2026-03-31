@@ -765,3 +765,105 @@ export const DEFAULT_RETRY_POLICY: Readonly<SkillRetryPolicy> = {
   maxDelayMs: 15000,
   ttlMs: 60000,
 };
+
+// ── Skill Gallery Types ──────────────────────────────────────────
+
+/** Categories for organizing skills in the gallery. */
+export type GalleryCategory =
+  | 'code-quality'
+  | 'testing'
+  | 'devops'
+  | 'documentation'
+  | 'security'
+  | 'productivity'
+  | 'data'
+  | 'communication'
+  | 'ai-ml'
+  | 'other';
+
+export const GALLERY_CATEGORIES: readonly GalleryCategory[] = [
+  'code-quality',
+  'testing',
+  'devops',
+  'documentation',
+  'security',
+  'productivity',
+  'data',
+  'communication',
+  'ai-ml',
+  'other',
+] as const;
+
+/** A skill entry in the public gallery catalog. */
+export interface GallerySkill {
+  /** Unique gallery ID (kebab-case). */
+  id: string;
+
+  /** Human-readable display name. */
+  name: string;
+
+  /** Brief description. */
+  description: string;
+
+  /** Author or organization. */
+  author: string;
+
+  /** Category for filtering. */
+  category: GalleryCategory;
+
+  /** Tags for search/filter. */
+  tags: string[];
+
+  /** Emoji icon for UI. */
+  icon: string;
+
+  /** Semantic version. */
+  version: string;
+
+  /** Source repository URL. */
+  sourceUrl: string;
+
+  /** Path within the repository (e.g. "skills/code-review"). */
+  sourcePath: string;
+
+  /** Git ref (branch/tag). */
+  sourceRef: string;
+
+  /** Number of installs (for popularity sort). */
+  installCount: number;
+
+  /** Whether this skill is featured/curated. */
+  featured: boolean;
+
+  /** Whether this skill is already installed locally. */
+  installed?: boolean;
+
+  /** ISO timestamp of when this entry was added to the catalog. */
+  addedAt: string;
+
+  /** ISO timestamp of last catalog refresh. */
+  updatedAt: string;
+}
+
+/** Sort options for gallery listing. */
+export type GallerySortField = 'name' | 'installCount' | 'addedAt' | 'updatedAt';
+
+/** Query parameters for gallery search. */
+export interface GallerySearchParams {
+  query?: string;
+  category?: GalleryCategory;
+  tags?: string[];
+  featured?: boolean;
+  sort?: GallerySortField;
+  order?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
+/** Response shape for paginated gallery listing. */
+export interface GallerySearchResult {
+  skills: GallerySkill[];
+  total: number;
+  limit: number;
+  offset: number;
+}
