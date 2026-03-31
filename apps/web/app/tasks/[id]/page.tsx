@@ -462,7 +462,7 @@ export default function TaskDetailPage() {
                 onClick={() =>
                   createPR.mutate({
                     taskId: task.id,
-                    head: `agent/${task.id}`,
+                    head: worktree?.branch ?? `task/${task.id}`,
                   })
                 }
                 data-testid="create-pr-btn"

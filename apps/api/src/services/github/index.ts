@@ -64,15 +64,20 @@ export class GitHubService {
     head: string;
     base?: string;
   }): Promise<{ number: number; url: string }> {
+    // Ensure branch is pushed to remote before creating PR
+    try {
+      this.exec(`git push -u origin ${this.shellEscape(options.head)}`);
+    } catch {
+      // May already be pushed or branch doesn't exist locally
+    }
+
     const baseFlag = options.base ? `--base ${this.shellEscape(options.base)}` : '';
-    // Truncate body to avoid shell issues (gh pr create doesn't support --json)
     const truncatedBody = options.body.length > 2000
       ? options.body.substring(0, 2000) + '\n\n_(truncated)_'
       : options.body;
     const url = this.exec(
       `gh pr create --title ${this.shellEscape(options.title)} --body ${this.shellEscape(truncatedBody)} --head ${this.shellEscape(options.head)} ${baseFlag}`.trim(),
     ).trim();
-    // gh pr create outputs the PR URL, extract number from it
     const match = url.match(/\/pull\/(\d+)/);
     const number = match ? parseInt(match[1], 10) : 0;
     return { number, url };
