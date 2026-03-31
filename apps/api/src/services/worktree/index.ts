@@ -405,11 +405,32 @@ export class WorktreeService {
     const squadTarget = join(worktreePath, '.squad');
 
     if (!existsSync(squadSource)) return;
-    if (existsSync(squadTarget)) return; // Already linked or present
 
+    // Create .squad/ directory in worktree (NOT a symlink)
+    // Only symlink safe subdirs — exclude tasks/ to prevent agents from creating subtasks
     try {
-      symlinkSync(squadSource, squadTarget, 'dir');
-      console.log(`[WorktreeService] Symlinked .squad/ into ${worktreePath}`);
+      mkdirSync(squadTarget, { recursive: true });
+
+      const safeDirs = ['agents', 'skills', 'templates', 'charters'];
+      for (const dir of safeDirs) {
+        const src = join(squadSource, dir);
+        const dst = join(squadTarget, dir);
+        if (existsSync(src) && !existsSync(dst)) {
+          symlinkSync(src, dst, 'dir');
+        }
+      }
+
+      // Symlink individual config files (team.md, etc.)
+      const safeFiles = ['team.md', 'config.yaml'];
+      for (const file of safeFiles) {
+        const src = join(squadSource, file);
+        const dst = join(squadTarget, file);
+        if (existsSync(src) && !existsSync(dst)) {
+          symlinkSync(src, dst, 'file');
+        }
+      }
+
+      console.log(`[WorktreeService] Symlinked .squad/ subdirs (excluding tasks/) into ${worktreePath}`);
     } catch (err) {
       console.warn(`[WorktreeService] Failed to symlink .squad/:`, err);
     }
@@ -418,8 +439,15 @@ export class WorktreeService {
   private removSquadSymlink(worktreePath: string): void {
     const squadTarget = join(worktreePath, '.squad');
     try {
-      if (existsSync(squadTarget) && lstatSync(squadTarget).isSymbolicLink()) {
-        unlinkSync(squadTarget);
+      if (!existsSync(squadTarget)) return;
+
+      // Remove symlinked subdirs first
+      const entries = readdirSync(squadTarget);
+      for (const entry of entries) {
+        const entryPath = join(squadTarget, entry);
+        if (lstatSync(entryPath).isSymbolicLink()) {
+          unlinkSync(entryPath);
+        }
       }
     } catch {
       // Ignore
