@@ -108,6 +108,20 @@ The file looks clean. ✅ **Done!** Added `Terminal` nav item to the sidebar:
 | **Shared utility** | `lib/task-filters.ts` | Extracted `applyFilters`, `activeFilterCount`, `DEFAULT_FILTERS`, `TaskFilters` type |
 | **UI changes** | `page.tsx`, `kanban-board.tsx`, `task-filters-toolbar.tsx`, `task-list-view.tsx` | Lifted filter state to page level; toolbar with Clear button above both views; kanban applies filters |
 | **Tests
+- The openspace-for-ai-squad repo uses git worktrees (under .git-worktrees/) for feature branch development, with each task getting its own worktree.
+- Task statuses in the kanban board use 'pending' (not 'backlog'). Test IDs follow the pattern 'kanban-column-{status}' where status is the actual status value.
+- Pre-existing test failures exist in task-card.test.tsx (needs approve/reject mock) and tasks-page.test.tsx (SquadGuard loading state issues) — these are not caused by new changes.
+- The project uses lint-staged with eslint + prettier for pre-commit checks, and vitest for unit testing in apps/web.
+- Completed "Add tasks kanban filters": Lint-staged passed (eslint + prettier) ✅ and committed.
+
+**Done!** Here's what I delivered:
+
+### 🎨 Kanban Board Filters
+
+**Modified files:**
+- `apps/web/src/components/tasks/kanban-board.tsx` — Added `TaskFiltersToolbar` with filter state, `applyCardFilters()` for assignee/priority/search, and `visibleStatuses` memo for status-based column visibility
+- `apps/web/src/components/tasks/__tests__/kanban-board.test.tsx` — 5 new filter tests + fixed stale status names (`backlog` → `pending`)
+- `apps/
 
 ## Summary
 

@@ -3,6 +3,9 @@
  */
 
 import { execSync } from 'node:child_process';
+import { writeFileSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 import type { GitHubIssue, GitHubPR } from '@matanelcohen/openspace-shared';
 
@@ -80,16 +83,21 @@ export class GitHubService {
       // May already be pushed or branch doesn't exist locally
     }
 
-    const baseFlag = options.base ? `--base ${this.shellEscape(options.base)}` : '';
-    const truncatedBody = options.body.length > 2000
-      ? options.body.substring(0, 2000) + '\n\n_(truncated)_'
-      : options.body;
-    const url = this.exec(
-      `gh pr create --title ${this.shellEscape(options.title)} --body ${this.shellEscape(truncatedBody)} --head ${this.shellEscape(options.head)} ${baseFlag}`.trim(),
-    ).trim();
-    const match = url.match(/\/pull\/(\d+)/);
-    const number = match ? parseInt(match[1], 10) : 0;
-    return { number, url };
+    // Write body to temp file to avoid shell escaping issues with long/complex content
+    const bodyFile = join(tmpdir(), `pr-body-${Date.now()}.md`);
+    try {
+      writeFileSync(bodyFile, options.body, 'utf-8');
+
+      const baseFlag = options.base ? `--base ${this.shellEscape(options.base)}` : '';
+      const url = this.exec(
+        `gh pr create --title ${this.shellEscape(options.title)} --body-file ${this.shellEscape(bodyFile)} --head ${this.shellEscape(options.head)} ${baseFlag}`.trim(),
+      ).trim();
+      const match = url.match(/\/pull\/(\d+)/);
+      const number = match ? parseInt(match[1], 10) : 0;
+      return { number, url };
+    } finally {
+      try { unlinkSync(bodyFile); } catch { /* ignore */ }
+    }
   }
 
   async listPRs(state?: 'open' | 'closed'): Promise<GitHubPR[]> {
@@ -113,12 +121,12 @@ export class GitHubService {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private exec(command: string): string {
+  private exec(command: string, timeout = 60_000): string {
     return execSync(command, {
       cwd: this.projectDir,
       encoding: 'utf-8',
       env: { ...process.env },
-      timeout: 30_000,
+      timeout,
     });
   }
 
