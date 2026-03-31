@@ -31,6 +31,7 @@ import terminalRoute from './routes/terminal.js';
 import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import workspacesRoute from './routes/workspaces.js';
+import worktreesRoute from './routes/worktrees.js';
 import yoloRoute from './routes/yolo.js';
 import escalationsRoute from './routes/escalations.js';
 import type { A2AService } from './services/a2a/index.js';
@@ -64,6 +65,7 @@ import {
 import type { WebSocketManager } from './services/websocket/index.js';
 import { wsPlugin } from './services/websocket/index.js';
 import { WorkspaceService } from './services/workspace/index.js';
+import { WorktreeService } from './services/worktree/index.js';
 import { YoloService } from './services/yolo/index.js';
 
 /** Voice service bundle exposed on the Fastify instance. */
@@ -342,6 +344,22 @@ export async function buildApp(opts: AppOptions = {}) {
       const host = process.env.HOST || 'localhost';
       const a2aBaseUrl = process.env.A2A_BASE_URL || `http://${host}:${port}`;
 
+      // Initialize WorktreeService for sandboxed parallel agent execution
+      const projectDir = resolve(squadDir, '..');
+      const sandboxCfg = squadConfig?.sandbox;
+      const worktreeService = new WorktreeService({
+        projectDir,
+        baseBranch: sandboxCfg?.baseBranch ?? process.env.WORKTREE_BASE_BRANCH ?? 'main',
+        maxWorktrees: sandboxCfg?.maxWorktrees ?? (Number(process.env.WORKTREE_MAX) || 10),
+        worktreeDir: sandboxCfg?.worktreeDir ?? '.git-worktrees',
+        installDeps: sandboxCfg?.installDeps ?? process.env.WORKTREE_INSTALL_DEPS === 'true',
+        symlinkSquad: true,
+        autoCommit: sandboxCfg?.autoCommit ?? process.env.WORKTREE_AUTO_COMMIT !== 'false',
+        autoPR: sandboxCfg?.autoPR ?? process.env.WORKTREE_AUTO_PR !== 'false',
+      });
+      worktreeService.init();
+      app.decorate('worktreeService', worktreeService);
+
       // Start agent worker service with A2A delegation capability
       const workerService = new AgentWorkerService({
         tasksDir: resolve(squadDir, 'tasks'),
@@ -352,6 +370,7 @@ export async function buildApp(opts: AppOptions = {}) {
         agents: AGENT_PROFILES,
         db,
         a2aBaseUrl,
+        worktreeService,
       });
       // Start worker in background — don't block onReady hook
       workerService.start().catch((err) => console.error('[AgentWorker] Start failed:', err));
@@ -494,6 +513,7 @@ export async function buildApp(opts: AppOptions = {}) {
   app.register(skillGalleryRoute, { prefix: '/api' });
   app.register(cronRoute, { prefix: '/api' });
   app.register(workspacesRoute, { prefix: '/api' });
+  app.register(worktreesRoute);
   app.register(yoloRoute, { prefix: '/api' });
   app.register(githubRoute, { prefix: '/api' });
   app.register(escalationsRoute, { prefix: '/api' });

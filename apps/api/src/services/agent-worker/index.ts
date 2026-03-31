@@ -27,6 +27,7 @@ import {
 } from '../seed-skills.js';
 import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
+import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -54,6 +55,8 @@ interface AgentWorkerConfig {
    * When set, enables inter-agent delegation via A2A protocol.
    */
   a2aBaseUrl?: string | null;
+  /** WorktreeService for sandboxed parallel execution. */
+  worktreeService?: WorktreeService | null;
 }
 
 interface QueueState {
@@ -544,29 +547,75 @@ export class AgentWorkerService {
       };
 
       let result;
+      let worktree: WorktreeInfo | null = null;
       if (this.config.aiProvider.agenticCompletion) {
-        // Agentic mode: agent can read files, write code, run commands
-        const projectRoot = join(this.config.squadDir, '..');
-        console.log(`[AgentWorker] ${agent.name} using agentic mode in ${projectRoot}`);
+        // Determine working directory: use worktree sandbox if available
+        let workDir: string;
+        const wts = this.config.worktreeService;
+        if (wts) {
+          const parentId = task.labels
+            ?.find((l) => l.startsWith('parent:'))
+            ?.replace('parent:', '');
+          worktree = await wts.create(taskId, {
+            baseBranch: parentId ? `feature/${parentId}` : undefined,
+            parentTaskId: parentId ?? undefined,
+          });
+          workDir = worktree.path;
+          console.log(`[AgentWorker] ${agent.name} using sandbox: ${worktree.branch} → ${workDir}`);
+        } else {
+          workDir = join(this.config.squadDir, '..');
+        }
+
+        console.log(`[AgentWorker] ${agent.name} using agentic mode in ${workDir}`);
         result = await this.config.aiProvider.agenticCompletion({
           ...sharedOpts,
-          workingDirectory: projectRoot,
-          metadata: { ...sharedOpts.metadata, agentic: true },
+          workingDirectory: workDir,
+          metadata: {
+            ...sharedOpts.metadata,
+            agentic: true,
+            branch: worktree?.branch,
+            sandbox: !!worktree,
+          },
         } satisfies AgenticCompletionOptions);
       } else {
         // Fallback: single-shot chat completion (mock provider)
         result = await this.config.aiProvider.chatCompletion(sharedOpts);
       }
 
+      // Auto-commit + PR if worktree sandbox was used
+      let prInfo: { number: number; url: string } | undefined;
+      if (worktree && this.config.worktreeService) {
+        const wts = this.config.worktreeService;
+        if (wts.autoCommit) {
+          const sha = await wts.commit(taskId, `feat: ${task.title}\n\nTask: ${taskId}\nAgent: ${agent.name}`);
+          if (sha && wts.autoPR) {
+            try {
+              prInfo = await wts.createPR(taskId, {
+                title: task.title,
+                body: `Automated by **${agent.name}** (${agent.role})\n\n**Task:** ${taskId}\n\n${result.content.substring(0, 500)}`,
+              });
+            } catch (err) {
+              console.warn(`[AgentWorker] PR creation failed for ${taskId}:`, err);
+            }
+          }
+        }
+      }
+
       const progressSection =
         progressLog.length > 0 ? `\n\n**Progress:**\n${progressLog.join('\n')}` : '';
+      const branchSection = worktree
+        ? `\n**Branch:** \`${worktree.branch}\`` +
+          (prInfo ? ` | **PR:** [#${prInfo.number}](${prInfo.url})` : '')
+        : '';
 
       await updateTask(this.config.tasksDir, taskId, {
         status: 'done',
+        labels: prInfo ? [...(task.labels ?? []), `pr:${prInfo.number}`] : task.labels,
         description:
           task.description +
           `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.` +
           progressSection +
+          branchSection +
           `\n\n**[${now()}]** ✅ ${agent.name} completed this task.\n\n**Result:**\n${result.content}`,
       });
       this.broadcastTaskUpdate(taskId, 'done');
@@ -861,6 +910,14 @@ export class AgentWorkerService {
       }
 
       // Create sub-tasks and enqueue them
+      // Create feature branch for sandbox isolation if worktree service available
+      const wts = this.config.worktreeService;
+      let featureBranch: string | undefined;
+      if (wts) {
+        featureBranch = await wts.ensureFeatureBranch(taskId);
+        console.log(`[AgentWorker] Created feature branch: ${featureBranch} for delegation`);
+      }
+
       const createdSubTasks: string[] = [];
       const subtaskIds: string[] = [];
       for (const sub of subTasks) {
@@ -901,11 +958,12 @@ export class AgentWorkerService {
 
       // Mark parent task as "delegated" with delegation summary
       const summary = createdSubTasks.join('\n');
+      const branchInfo = featureBranch ? `\n**Feature Branch:** \`${featureBranch}\`\n` : '';
       await updateTask(this.config.tasksDir, taskId, {
         status: 'delegated',
         description:
           task.description +
-          `\n\n---\n**[${now()}]** 📋 ${agent.name} broke this task into ${createdSubTasks.length} sub-tasks:\n\n${summary}\n\n**[${now()}]** 🔀 Task delegated — waiting for subtask completion.`,
+          `\n\n---\n**[${now()}]** 📋 ${agent.name} broke this task into ${createdSubTasks.length} sub-tasks:\n\n${summary}${branchInfo}\n\n**[${now()}]** 🔀 Task delegated — waiting for subtask completion.`,
       });
 
       // Broadcast delegation event
@@ -984,11 +1042,34 @@ export class AgentWorkerService {
           const parentTask = await getTask(this.config.tasksDir, parentTaskId).catch(() => null);
           if (!parentTask) return;
 
+          // Create consolidated PR from feature branch → main
+          let featurePrInfo: { number: number; url: string } | null = null;
+          const wts = this.config.worktreeService;
+          if (wts) {
+            try {
+              featurePrInfo = await wts.createFeaturePR(parentTaskId, {
+                title: `[Delegated] ${parentTask.title}`,
+                body: `## Delegated Task\n\n**Lead:** ${agent.name}\n\n### Subtasks\n${completionSummary}`,
+              });
+              // Clean up all subtask worktrees
+              await wts.cleanupDelegation(parentTaskId, subtaskIds);
+            } catch (err) {
+              console.warn(`[AgentWorker] Feature PR/cleanup failed:`, err);
+            }
+          }
+
+          const prSection = featurePrInfo
+            ? `\n**PR:** [#${featurePrInfo.number}](${featurePrInfo.url})`
+            : '';
+
           await updateTask(this.config.tasksDir, parentTaskId, {
             status: 'done',
+            labels: featurePrInfo
+              ? [...(parentTask.labels ?? []), `pr:${featurePrInfo.number}`]
+              : parentTask.labels,
             description:
               parentTask.description +
-              `\n\n---\n**[${now}]** ✅ All ${resolved.length} subtasks completed.\n\n${completionSummary}\n\n**[${now}]** ✅ ${agent.name} marked parent task as done.`,
+              `\n\n---\n**[${now}]** ✅ All ${resolved.length} subtasks completed.\n\n${completionSummary}${prSection}\n\n**[${now}]** ✅ ${agent.name} marked parent task as done.`,
           });
           this.broadcastTaskUpdate(parentTaskId, 'done');
           this.emitActivity(agent.id, 'completed', `All subtasks done for: ${parentTask.title}`);

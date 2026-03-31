@@ -85,6 +85,27 @@ export interface ModelConfig {
   fallbackChains?: Record<string, string[]>;
 }
 
+// ── Sandbox (Git Worktree) ────────────────────────────────────────
+
+export interface SandboxDefinition {
+  /** Enable worktree-based sandboxing for agent tasks. Default: true */
+  enabled?: boolean;
+  /** Max concurrent worktrees. Default: 10 */
+  maxWorktrees?: number;
+  /** Auto-remove worktrees after PR merge/task done. Default: true */
+  autoCleanup?: boolean;
+  /** Default base branch. Default: main */
+  baseBranch?: string;
+  /** Directory for worktrees (relative to repo root). Default: .git-worktrees */
+  worktreeDir?: string;
+  /** Run pnpm install in new worktrees. Default: false */
+  installDeps?: boolean;
+  /** Auto-commit changes on task completion. Default: true */
+  autoCommit?: boolean;
+  /** Auto-create PR on task completion. Default: true */
+  autoPR?: boolean;
+}
+
 // ── Top-level Config ─────────────────────────────────────────────
 
 export interface SquadSDKConfig {
@@ -96,6 +117,7 @@ export interface SquadSDKConfig {
   hooks?: HooksDefinition;
   telemetry?: TelemetryDefinition;
   models?: ModelConfig;
+  sandbox?: SandboxDefinition;
 }
 
 // ── Builder Functions ────────────────────────────────────────────
@@ -121,6 +143,10 @@ export function defineHooks(config: HooksDefinition): HooksDefinition {
 }
 
 export function defineCeremony(config: CeremonyDefinition): CeremonyDefinition {
+  return config;
+}
+
+export function defineSandbox(config: SandboxDefinition): SandboxDefinition {
   return config;
 }
 
