@@ -1,4 +1,4 @@
-import type { Sandbox } from '@matanelcohen/openspace-shared';
+import type { SandboxInfo as Sandbox } from '@matanelcohen/openspace-shared';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 

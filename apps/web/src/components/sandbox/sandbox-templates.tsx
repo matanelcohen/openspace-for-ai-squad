@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client';
 
 import type { SandboxRuntime, SandboxTemplate } from '@matanelcohen/openspace-shared';

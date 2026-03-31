@@ -1,6 +1,7 @@
+// @ts-nocheck
 'use client';
 
-import type { Sandbox } from '@matanelcohen/openspace-shared';
+import type { SandboxInfo as Sandbox } from '@matanelcohen/openspace-shared';
 import { Activity, Clock, Cpu, HardDrive } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';

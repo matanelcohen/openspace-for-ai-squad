@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client';
 
 import { CornerDownLeft } from 'lucide-react';

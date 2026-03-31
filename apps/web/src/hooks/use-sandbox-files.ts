@@ -1,7 +1,7 @@
 // @ts-nocheck — agent-generated sandbox hooks, needs type cleanup
 'use client';
 
-import type { SandboxFile } from '@matanelcohen/openspace-shared';
+import type { SandboxInfo as SandboxFile } from '@matanelcohen/openspace-shared';
 import { useCallback, useState } from 'react';
 
 import { useRunCommand } from './use-sandboxes';

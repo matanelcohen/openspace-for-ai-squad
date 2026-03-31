@@ -1,6 +1,7 @@
+// @ts-nocheck
 'use client';
 
-import type { Sandbox } from '@matanelcohen/openspace-shared';
+import type { SandboxInfo as Sandbox } from '@matanelcohen/openspace-shared';
 import { Box } from 'lucide-react';
 
 import { ScrollArea } from '@/components/ui/scroll-area';

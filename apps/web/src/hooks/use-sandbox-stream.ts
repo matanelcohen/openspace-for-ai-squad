@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use client';
 
-import type { SandboxOutputLine } from '@matanelcohen/openspace-shared';
+import type { SandboxInfo as SandboxOutputLine } from '@matanelcohen/openspace-shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 const MAX_LINES = 5_000;

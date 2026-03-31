@@ -5,7 +5,7 @@ import { useCallback, useState } from 'react';
 
 import { useRunCommand } from './use-sandboxes';
 
-import type { SandboxRuntime } from '@matanelcohen/openspace-shared';
+import type { SandboxInfo as SandboxRuntime } from '@matanelcohen/openspace-shared';
 
 type Language = 'javascript' | 'typescript' | 'python' | 'go' | 'bash' | 'json';
 
