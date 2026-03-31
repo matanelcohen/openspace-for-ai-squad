@@ -5,7 +5,7 @@
   designing and implementing this system.
 id: task-OpAaDISd
 title: HITL Escalation Framework
-status: delegated
+status: done
 priority: P2
 assignee: leela
 labels:

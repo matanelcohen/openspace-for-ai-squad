@@ -1,7 +1,7 @@
 ---
 id: task-sSj_1EIj
 title: Design HITL escalation architecture and interrupt model
-status: blocked
+status: done
 priority: P1
 assignee: leela
 labels:

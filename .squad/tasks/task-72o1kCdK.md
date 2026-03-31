@@ -1,7 +1,7 @@
 ---
 id: task-72o1kCdK
 title: Build review queue UI and approval/rejection workflow screens
-status: blocked
+status: done
 priority: P2
 assignee: fry
 labels:

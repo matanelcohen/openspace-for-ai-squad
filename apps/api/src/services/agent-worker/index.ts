@@ -14,6 +14,7 @@ import type Database from 'better-sqlite3';
 
 import type { ActivityFeed } from '../activity/index.js';
 import type { AgenticCompletionOptions, AIProvider } from '../ai/copilot-provider.js';
+import { MemoryExtractor } from '../memory/memory-extractor.js';
 import { MemoryRecallEngine } from '../memory/memory-recall.js';
 import { MemoryStore } from '../memory/memory-store.js';
 import { getTierDefinition, selectTier } from '../routing/tiers.js';
@@ -577,7 +578,7 @@ export class AgentWorkerService {
 
       console.log(`[AgentWorker] ${agent.name} completed: ${task.title}`);
 
-      // Save a memory from this task
+      // Extract and save memories from this task using LLM-based extraction
       try {
         const { hasMemorySchema, initializeMemorySchema, MemoryStoreService } =
           await import('@matanelcohen/openspace-memory-store');
@@ -585,6 +586,36 @@ export class AgentWorkerService {
         if (db) {
           if (!hasMemorySchema(db)) initializeMemorySchema(db);
           const memStore = new MemoryStoreService(db, {});
+
+          // Try LLM-based extraction first
+          let savedCount = 0;
+          try {
+            const extractor = new MemoryExtractor(this.config.aiProvider);
+            const extracted = await extractor.extract({
+              agentId: agent.id,
+              taskId,
+              taskTitle: task.title,
+              taskDescription: task.description,
+              resultContent: result.content,
+              progressLog,
+            });
+
+            for (const mem of extracted) {
+              await memStore.create({
+                agentId: agent.id,
+                type: mem.type,
+                content: mem.content,
+                sourceSession: `task-${taskId}`,
+                sourceTaskId: taskId,
+                tags: ['task-extraction'],
+              });
+              savedCount++;
+            }
+          } catch {
+            // LLM extraction failed — fallback to simple summary save
+          }
+
+          // Always save a task-completion summary as baseline
           const summary = result.content.substring(0, 500);
           await memStore.create({
             agentId: agent.id,
@@ -594,6 +625,17 @@ export class AgentWorkerService {
             sourceTaskId: taskId,
             tags: ['task-completion'],
           });
+
+          if (savedCount > 0) {
+            console.log(`[AgentWorker] Extracted ${savedCount} memories from task ${taskId}`);
+          }
+
+          // Write new memories back to agent's history.md
+          try {
+            await this.syncMemoriesToHistory(agent.id, memStore);
+          } catch {
+            /* best effort */
+          }
         }
       } catch {
         /* best effort */
@@ -637,6 +679,90 @@ export class AgentWorkerService {
       // Wait before picking next task to let resources settle
       setTimeout(() => this.processNext(agentId), 3000);
     }
+  }
+
+  // ── History.md Writeback ────────────────────────────────────────
+
+  /**
+   * Sync memories from the store back to the agent's history.md file.
+   * Appends new memories that aren't already present in the file.
+   */
+  private async syncMemoriesToHistory(
+    agentId: string,
+    memStore: { list: (agentId: string, limit?: number) => Array<{ content: string; type: string; createdAt: string }> },
+  ): Promise<void> {
+    const agentsDir = join(this.config.squadDir, 'agents');
+    const historyPath = join(agentsDir, agentId, 'history.md');
+
+    if (!existsSync(historyPath)) return;
+
+    const content = readFileSync(historyPath, 'utf-8');
+
+    // Get all enabled memories for this agent
+    const memories = memStore.list(agentId, 1000);
+    if (memories.length === 0) return;
+
+    // Find existing learning entries to avoid duplicates
+    const existingEntries = new Set<string>();
+    const learningsMatch = content.match(/^##\s+Learnings\b/im);
+    if (learningsMatch && learningsMatch.index !== undefined) {
+      const afterLearnings = content.slice(learningsMatch.index + learningsMatch[0].length);
+      const nextSection = afterLearnings.match(/^##\s+/m);
+      const learningsContent = nextSection?.index
+        ? afterLearnings.slice(0, nextSection.index)
+        : afterLearnings;
+
+      for (const line of learningsContent.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('- ')) {
+          existingEntries.add(trimmed.slice(2).trim());
+        }
+      }
+    }
+
+    // Find new memories not yet in history.md
+    const newEntries: string[] = [];
+    for (const mem of memories) {
+      if (!existingEntries.has(mem.content) && !existingEntries.has(`**${mem.content}**`)) {
+        // Check if any existing entry contains this content (fuzzy match for already-formatted entries)
+        const alreadyExists = [...existingEntries].some(
+          (e) => e.includes(mem.content) || mem.content.includes(e),
+        );
+        if (!alreadyExists) {
+          newEntries.push(`- ${mem.content}`);
+        }
+      }
+    }
+
+    if (newEntries.length === 0) return;
+
+    // Append new entries to the Learnings section
+    if (learningsMatch && learningsMatch.index !== undefined) {
+      const afterLearnings = content.slice(learningsMatch.index + learningsMatch[0].length);
+      const nextSection = afterLearnings.match(/^##\s+/m);
+
+      if (nextSection?.index !== undefined) {
+        // Insert before next section
+        const insertPoint = learningsMatch.index + learningsMatch[0].length + nextSection.index;
+        const updated =
+          content.slice(0, insertPoint).trimEnd() +
+          '\n' +
+          newEntries.join('\n') +
+          '\n\n' +
+          content.slice(insertPoint);
+        writeFileSync(historyPath, updated, 'utf-8');
+      } else {
+        // Append at end
+        const updated = content.trimEnd() + '\n' + newEntries.join('\n') + '\n';
+        writeFileSync(historyPath, updated, 'utf-8');
+      }
+    } else {
+      // No Learnings section — add one
+      const updated = content.trimEnd() + '\n\n## Learnings\n\n' + newEntries.join('\n') + '\n';
+      writeFileSync(historyPath, updated, 'utf-8');
+    }
+
+    console.log(`[AgentWorker] Wrote ${newEntries.length} memories to ${agentId}/history.md`);
   }
 
   // ── Lead Delegation ──────────────────────────────────────────────

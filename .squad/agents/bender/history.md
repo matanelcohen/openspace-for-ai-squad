@@ -39,3 +39,162 @@
 - **2026-03-23 — Orchestration checkpoint recorded.** Spawn manifest outcome captured for Bender: `P4-1` through `P4-6` voice backend pipeline shipped successfully with **6 services**, **147 new tests**, and **552 total tests** reported at handoff.
 - **2026-03-24 — copilot-sdk integrated as AI provider.** Installed `@github/copilot-sdk` and built a pluggable AI provider layer at `apps/api/src/services/ai/`. `CopilotProvider` implements `LLMRouter` (voice routing), `LLMIntentParser` (voice actions), and `chatCompletion()` (chat backend). Feature flag `AI_PROVIDER=copilot-sdk|mock` (default mock) so dev works without API keys. The SDK uses JSON-RPC to the Copilot CLI — auth via `COPILOT_GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_TOKEN`, model via `COPILOT_MODEL` (default gpt-4o). `ChatService` now routes team messages through the AI provider instead of the echo stub. 30 new tests, 667 total, zero regressions.
 - **2026-03-24 — Chat client error fixed.** Root cause: `useChatMessages` hook expected `ChatMessage[]` but the GET `/api/chat/messages` endpoint returns `{ messages, total, limit, offset }` — a paginated envelope. Frontend called `.map()` on the object, crashing. Fix: extract `.messages` array in the hook's queryFn. Also fixed `createAIProvider` factory to gracefully fall back to `MockAIProvider` instead of throwing when copilot-sdk can't initialize (SDK needs a running Copilot CLI). Upgraded MockAIProvider from dumb echo to context-aware responses with agent personality. Added error banners to chat-client.tsx for fetch/send failures. Key files: `apps/web/src/hooks/use-chat.ts`, `apps/api/src/services/ai/copilot-provider.ts`, `apps/api/src/app.ts`, `apps/web/app/chat/chat-client.tsx`.
+- The API app (apps/api) uses Fastify with onReady/onClose lifecycle hooks for service initialization and cleanup, as seen in apps/api/src/app.ts.
+- There are pre-existing TypeScript errors in apps/api in files like escalations.ts, knowledge.ts, health.ts, and agents.ts — these are not regressions from new changes.
+- The .squad directory contains task definitions (e.g., .squad/tasks/task-*.md) used by the Squad agent system for task management and assignment.
+- The project uses pnpm workspaces with a monorepo structure: apps/ for deployable services (api, web), packages/ for shared libraries (memory-store, shared). Tests use vitest.
+- The memory system lives in two places: packages/memory-store (core store with SQLite/FTS5) and apps/api/src/services/memory (API-level services like recall, extraction, lifecycle). Types are in packages/shared/src/types/memory.ts.
+- Completed "Persistent Agent Memory": Task is already done. Leela committed it in `5e340f0` — verified:
+
+- **355 memory-store tests** ✅ all passing
+- **35 API memory service tests** ✅ all passing (including 8 new lifecycle tests)
+- **6 files changed**, 668 insertions covering: search endpoint, create endpoint, consolidation endpoint, settings persistence, lifecycle scheduler, and test fixes
+
+Nothing left to do here.
+- 03-23 — P4-1 through P4-6 voice backend pipeline built. Six services in `apps/api/src/services/voice/`:
+- 03-23 — P3-5 through P3-8 Real-time frontend features built. Four major frontend features implemented in `apps/web`:
+- Test memory
+- A decision
+- Chose SQLite for storage
+- Completed "Review node-pty version change and PTY cleanup logic": 
+
+Zero type errors in `terminal.ts`. The pre-existing errors are all in `escalations.ts` and `agents.ts` — unrelated.
+
+---
+- Memory search uses hybrid FTS5 full-text search combined with vector search, stored in SQLite. Memory settings are persisted to a memory_settings SQLite table.
+- The openspace-for-ai-squad monorepo uses pnpm workspaces with apps/ (api, web) and packages/ (memory-store, shared) structure, orchestrated by turborepo.
+- API services are initialized in apps/api/src/app.ts using onReady/onClose hooks. The .squad/ directory contains task definitions and management files.
+- Project uses vitest for testing, TypeScript with tsc --noEmit for type checking, and eslint for linting. Tests are co-located in __tests__/ directories next to source files.
+- Memory system architecture: packages/memory-store provides core SQLite+FTS5 storage, apps/api/src/services/memory/ has memory-recall, memory-extractor, memory-store, and memory-lifecycle services, with routes in apps/api/src/routes/memories.ts.
+- Completed "Persistent Agent Memory": All good. **224 memory tests pass**, zero type errors in memory files. Leela's commit `5e340f0` already delivered the full implementation:
+
+- `POST /api/memories/search` — hybrid FTS5 + vector search
+- `POST /api/memories` — API-driven memory creation
+- `POST /api/memories/consolidate` — manual decay + archival
+- `PATCH /api/memories/settings` — persists to SQLite
+- `MemoryLifecycleService` — daily decay scheduler
+- Lifecycle tests with fixed seed collision
+
+Nothing left to do here. Task was alr
+- Completed "Sandboxed Code Execution": Done. Here's what I shipped:
+
+**14 files changed, 510 insertions, 64 deletions. 91 tests passing.**
+
+### What was done:
+- **Stop/restart lifecycle** — `ContainerManager.stop()`, `ContainerManager.restart()` propagated up through pool and service layers
+- **New endpoints** — `POST /api/sandboxes/:id/stop` (409 if not running), `POST /api/sandboxes/:id/restart` (409 if not stopped)
+- **List filtering** — `GET /api/sandboxes?status=ready&runtime=node`
+- **Shared type alignment** — Replaced stale dr
+- Completed "Implement escalation engine, review queue, and audit trail backend": Done. Here's what I did:
+
+**Changes (5 files, 871 lines):**
+
+1. **`apps/api/src/app.ts`** — Instantiated `EscalationService` with DB, decorated Fastify instance, wired WebSocket manager in `onReady` hook, registered escalation routes at `/api` prefix, added type declaration.
+
+2. **`apps/api/src/services/websocket/types.ts`** — Added 7 escalation WS event types: `escalation:created`, `escalation:claimed`, `escalation:approved`, `escalation:rejected`, `escalation:changes_requested`, `escalation:au
+- Completed "Skills - Browse, discover, and manage skills for your AI agents.": Done. Here's what I shipped:
+
+**7 files, 1,452 lines added:**
+
+| File | Purpose |
+|------|---------|
+| `packages/shared/src/types/skill.ts` | `GallerySkill`, `GalleryCategory`, `GallerySearchParams` types |
+| `apps/api/src/services/skill-gallery/migration-v5.ts` | DB migration: `skill_gallery` table + FTS5 index |
+| `apps/api/src/services/skill-gallery/index.ts` | `SkillGalleryService` — catalog CRUD, FTS search, seed data (15 skills across 9 categories) |
+| `apps/api/src/routes/skill-gallery.ts
+- Completed "Add reconnection logic to useSandboxStream hook": All 17 tests pass. The reconnection logic is **already fully implemented** in `useSandboxStream`:
+
+- **Exponential backoff**: 1s → 2s → 4s → … → 30s cap
+- **Max 10 attempts** before transitioning to `'failed'` status
+- **Delay reset** on successful connection
+- **`retry()`** method for manual reconnect after failure
+- **Clean unmount** — cancels timers, closes sockets
+- **17 passing tests** covering all edge cases
+
+This task is already done. Nothing to implement.
+- 03-23 — Orchestration checkpoint recorded. Spawn manifest outcome captured for Bender: `P3-5` through `P3-8` real-time frontend, chat UI, and notifications shipped successfully with **70 new tests** added during the delivery batch.
+- 03-23 — Orchestration checkpoint recorded. Spawn manifest outcome captured for Bender: `P4-1` through `P4-6` voice backend pipeline shipped successfully with **6 services**, **147 new tests**, and **552 total tests** reported at handoff.
+- 03-23 — P0-1 Monorepo initialized. Turborepo + pnpm workspaces. Structure: `apps/web` (Next.js 14+), `apps/api` (Fastify 5, ESM), `packages/shared`. Root tsconfig uses strict mode + bundler resolution. Turbo pipeline: build depends on ^build, dev is persistent/uncached. API uses `@fastify/cors` + `dotenv`. Shared package uses source-level imports (no build step). `pnpm install` NOT run yet — scaffolding only. All workspace refs use `workspace:*` protocol.
+- 03-23 — P0-3 Backend scaffolding complete. Fastify app factory in `src/app.ts` accepts options (logger toggle for tests). Routes use Fastify plugin pattern — `src/routes/health.ts` is registered via `app.register()`. Graceful shutdown via SIGTERM/SIGINT in `src/index.ts`. Health endpoint tested with Vitest using Fastify's `app.inject()` (no supertest needed — Fastify's built-in injection is lighter and sufficient). 3 tests: status/timestamp correctness, content-type, and timestamp freshness.
+- 03-23  Phase 0 foundation is complete. The repo now has the monorepo baseline, Fastify API scaffold, shared `@openspace/shared` contracts, CI workflow, and repo-wide quality tooling. Backend Phase 1 work can now focus on `.squad/` parsing and real domain routes instead of setup.
+- 03-23 — P0-5 CI/CD pipeline created. `.github/workflows/ci.yml` runs lint + typecheck + test on PRs and pushes to main. Caches both pnpm store and Turborepo `.turbo/` directory. Uses `pnpm/action-setup@v4` with corepack. `.nvmrc` was already at `20`. Concurrency group cancels stale runs.
+- 03-23 — PRD published at `docs/prd.md`. Read this before starting any feature work. It defines v1 scope: web-only, single-squad, 6 core features (Dashboard, Task Board, Activity Feed, Voice, Chat, Real-time Monitoring). Backend is Node.js with file system integration to `.squad/`. See open decisions in §8 of PRD.
+- 03-23 — P1-1 `.squad/` file parser service built. Four focused parsers in `apps/api/src/services/squad-parser/`: `team-parser.ts` (team.md → Agent[]), `decision-parser.ts` (decisions.md → Decision[]), `agent-parser.ts` (charter.md → AgentDetail, history.md → learnings[]), `config-parser.ts` (config.json → RawSquadConfig). All parsers follow a consistent pattern: read file → parse markdown/JSON → return typed object using @openspace/shared types. Every parser exports both a file-based function and a pure content-parsing function for testability. `SquadParser` class composes them with five methods: `getAgents()`, `getAgent(id)`, `getDecisions()`, `getConfig()`, `getSquadOverview()`. Squad directory is configurable via `SQUAD_DIR` env var (defaults to CWD/.squad). Added `AgentDetail`, `AgentIdentity`, `AgentBoundaries` types to `@openspace/shared`. 64 tests cover happy paths, missing files, malformed data, edge cases. All 109 tests pass, typecheck clean.
+- 03-23 — P1-8 SQLite index layer built. `apps/api/src/services/db/`: 4 modules. `schema.ts` defines tables (tasks, decisions, chat_messages, activity_events) + FTS5 virtual tables (decisions_fts, tasks_fts) with auto-sync triggers + indexes on status/assignee/priority/timestamp fields. `index.ts` opens SQLite via `better-sqlite3` at `.squad/.cache/openspace.db` (gitignored), applies WAL mode + performance pragmas. `sync.ts` provides `fullSync()` (startup: wipe+reindex from files) and `incrementalSync()` (on file change: selective re-index). `search.ts` provides `searchDecisions()`, `searchTasks()`, `searchAll()` with FTS5 full-text search, BM25 ranking, and highlighted snippets. SQLite is explicitly the CACHE — `.squad/` files are source of truth, files always win on conflict. DB path configurable via `DB_PATH` env var, supports in-memory mode for tests. 32 tests cover schema creation, full sync, incremental updates, and full-text search. Dependencies added: `better-sqlite3`, `@types/better-sqlite3`.
+- 03-23 — P3-1 WebSocket server built. `apps/api/src/services/websocket/`: 4 modules. `types.ts` defines the wire protocol (`WsEnvelope: { type, payload, timestamp }`) with 6 event types: `agent:status`, `task:updated`, `task:created`, `decision:added`, `activity:new`, `chat:message`. Client can send `subscribe`/`unsubscribe`/`pong` messages. `manager.ts` is the `WebSocketManager` class: tracks connected clients with unique IDs, broadcasts to subscribers, handles subscription filtering (empty subs = all events), heartbeat ping/pong cycle (30s ping, drops unresponsive clients), graceful shutdown. `plugin.ts` is the Fastify plugin: registers `@fastify/websocket`, creates the `/ws` route, decorates `app.wsManager`. `index.ts` re-exports the public API. 25 tests cover connection lifecycle, welcome message, subscription filtering, heartbeat, shutdown, and error handling. Dependency added: `@fastify/websocket`.
+- 03-23 — P3-4 Chat backend built. `apps/api/src/services/chat/index.ts`: `ChatService` class handles message CRUD with dual persistence to SQLite (`chat_messages` table) + markdown logs in `.squad/sessions/chat-YYYY-MM-DD.md`. `send()` creates a `ChatMessage`, writes to both stores, emits `chat:message` via WebSocket. Team messages (`recipient: "team"`) go through a coordinator echo stub that responds with a routing acknowledgment. `getMessages()` returns paginated, filterable history (by agent, threadId). `getMessage(id)` for single lookup. REST routes: `POST /api/chat/messages` (validated sender/recipient/content), `GET /api/chat/messages` (limit/offset/agent/threadId params). D7 resolved: both SQLite + markdown. 21 tests cover send, SQLite persistence, markdown dual-write, WebSocket emission, coordinator echo, pagination, filtering, and validation. All 359 tests pass, typecheck clean.
+- 03-24 — Chat client error fixed. Root cause: `useChatMessages` hook expected `ChatMessage[]` but the GET `/api/chat/messages` endpoint returns `{ messages, total, limit, offset }` — a paginated envelope. Frontend called `.map()` on the object, crashing. Fix: extract `.messages` array in the hook's queryFn. Also fixed `createAIProvider` factory to gracefully fall back to `MockAIProvider` instead of throwing when copilot-sdk can't initialize (SDK needs a running Copilot CLI). Upgraded MockAIProvider from dumb echo to context-aware responses with agent personality. Added error banners to chat-client.tsx for fetch/send failures. Key files: `apps/web/src/hooks/use-chat.ts`, `apps/api/src/services/ai/copilot-provider.ts`, `apps/api/src/app.ts`, `apps/web/app/chat/chat-client.tsx`.
+- 03-24 — copilot-sdk integrated as AI provider. Installed `@github/copilot-sdk` and built a pluggable AI provider layer at `apps/api/src/services/ai/`. `CopilotProvider` implements `LLMRouter` (voice routing), `LLMIntentParser` (voice actions), and `chatCompletion()` (chat backend). Feature flag `AI_PROVIDER=copilot-sdk|mock` (default mock) so dev works without API keys. The SDK uses JSON-RPC to the Copilot CLI — auth via `COPILOT_GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_TOKEN`, model via `COPILOT_MODEL` (default gpt-4o). `ChatService` now routes team messages through the AI provider instead of the echo stub. 30 new tests, 667 total, zero regressions.
+- 03-23 — P3-2 FileWatcher → WebSocket bridge built. `apps/api/src/services/websocket/bridge.ts`: `FileWatcherBridge` class connects FileWatcher `change` events to WebSocket broadcasts. Maps file event types to WS event types (e.g., `agent:updated` → `agent:status`, `task:created` → `task:created`). Implements 200ms batch window to throttle rapid changes. Deduplicates same type+path events within a batch (keeps latest). Clean start/stop lifecycle. 7 tests cover event mapping, batching, deduplication, and disconnect.
+- 03-23 — P3-3 Activity feed backend built. `apps/api/src/services/activity/index.ts`: `ActivityFeed` class is an in-memory ring buffer (configurable capacity, default 500 events). Stores `ActivityEvent` objects from `@openspace/shared`. Sources from FileWatcher changes via `connectFileWatcher()` — maps file events to activity event types (e.g., `task:created` → `spawned`, `decision:added` → `decision`). Extracts agent IDs from file paths. `push()` adds events and broadcasts `activity:new` via WebSocket. `getHistory(limit, offset)` returns paginated results newest-first. `GET /api/activity` route with limit/offset query params (max 200). 15 tests cover ring buffer, pagination, WebSocket emission, FileWatcher integration, and route responses.
+- 03-23 — P1-2 File watcher service built. `apps/api/src/services/file-watcher/index.ts`: `FileWatcher` class extends `EventEmitter`, uses `chokidar` to watch `.squad/` directory. Emits typed events: `agent:updated`, `task:created`, `task:updated`, `decision:added`, `config:changed`, `team:updated`, plus a generic `change` event for all. Debouncing (configurable, default 100ms) batches rapid FS changes. Polling fallback via `WATCH_MODE=poll|native` env var. Maintains an in-memory `SquadState` cache re-parsed from `SquadParser` on every change. Ignores `.cache/` and `node_modules/` subdirectories. `awaitWriteFinish` ensures partial writes don't trigger false events. 18 tests (5 unit, 13 integration with real temp dirs and chokidar polling). Dependencies added: `chokidar`.
+- A pattern
+- We use TypeScript strict mode for all projects
+- New memory from API that should be written back
+- Exact same content
+- A test pattern memory
+- Test content
+- Updated content
+- Updated content
+
+## Review Summary
+
+**Fixed 2 bugs, flagged 1 advisory.**
+
+| # | Severity | Issue | Fix |
+|---|----------|-------|-----|
+| 1 | 🔴 HIGH | Force-kill catch block (line 134) silently swallowed `EPERM` — zombie PTYs could persist undetected | Now only ignores `ESRCH`; logs `error` level for anything else |
+| 2 | 🟡 MED | `term.write()`/`term.resize()` had no try/catch — TOCTOU r
+- Completed "Sandboxed Code Execution": Done. Here's what I shipped:
+
+**14 files changed, 510 insertions, 64 deletions. 91 tests passing.**
+
+### What was done:
+- **Stop/restart lifecycle** — `ContainerManager.stop()`, `ContainerManager.restart()` propagated up through pool and service layers
+- **New endpoints** — `POST /api/sandboxes/:id/stop` (409 if not running), `POST /api/sandboxes/:id/restart` (409 if not stopped)
+- **List filtering** — `GET /api/sandboxes?status=ready&runtime=node`
+- **Shared type alignment** — Replaced stale dr
+- Completed "Implement escalation engine, review queue, and audit trail backend": Done. Here's what I did:
+
+**Changes (5 files, 871 lines):**
+
+1. **`apps/api/src/app.ts`** — Instantiated `EscalationService` with DB, decorated Fastify instance, wired WebSocket manager in `onReady` hook, registered escalation routes at `/api` prefix, added type declaration.
+
+2. **`apps/api/src/services/websocket/types.ts`** — Added 7 escalation WS event types: `escalation:created`, `escalation:claimed`, `escalation:approved`, `escalation:rejected`, `escalation:changes_requested`, `escalation:au
+- Completed "Skills - Browse, discover, and manage skills for your AI agents.": Done. Here's what I shipped:
+
+**7 files, 1,452 lines added:**
+
+| File | Purpose |
+|------|---------|
+| `packages/shared/src/types/skill.ts` | `GallerySkill`, `GalleryCategory`, `GallerySearchParams` types |
+| `apps/api/src/services/skill-gallery/migration-v5.ts` | DB migration: `skill_gallery` table + FTS5 index |
+| `apps/api/src/services/skill-gallery/index.ts` | `SkillGalleryService` — catalog CRUD, FTS search, seed data (15 skills across 9 categories) |
+| `apps/api/src/routes/skill-gallery.ts
+- Completed "Add reconnection logic to useSandboxStream hook": All 17 tests pass. The reconnection logic is **already fully implemented** in `useSandboxStream`:
+
+- **Exponential backoff**: 1s → 2s → 4s → … → 30s cap
+- **Max 10 attempts** before transitioning to `'failed'` status
+- **Delay reset** on successful connection
+- **`retry()`** method for manual reconnect after failure
+- **Clean unmount** — cancels timers, closes sockets
+- **17 passing tests** covering all edge cases
+
+This task is already done. Nothing to implement.
+- 03-23 — Orchestration checkpoint recorded. Spawn manifest outcome captured for Bender: `P3-5` through `P3-8` real-time frontend, chat UI, and notifications shipped successfully with **70 new tests** added during the delivery batch.
+- 03-23 — Orchestration checkpoint recorded. Spawn manifest outcome captured for Bender: `P4-1` through `P4-6` voice backend pipeline shipped successfully with **6 services**, **147 new tests**, and **552 total tests** reported at handoff.
+- 03-23 — P0-1 Monorepo initialized. Turborepo + pnpm workspaces. Structure: `apps/web` (Next.js 14+), `apps/api` (Fastify 5, ESM), `packages/shared`. Root tsconfig uses strict mode + bundler resolution. Turbo pipeline: build depends on ^build, dev is persistent/uncached. API uses `@fastify/cors` + `dotenv`. Shared package uses source-level imports (no build step). `pnpm install` NOT run yet — scaffolding only. All workspace refs use `workspace:*` protocol.
+- 03-23 — P0-3 Backend scaffolding complete. Fastify app factory in `src/app.ts` accepts options (logger toggle for tests). Routes use Fastify plugin pattern — `src/routes/health.ts` is registered via `app.register()`. Graceful shutdown via SIGTERM/SIGINT in `src/index.ts`. Health endpoint tested with Vitest using Fastify's `app.inject()` (no supertest needed — Fastify's built-in injection is lighter and sufficient). 3 tests: status/timestamp correctness, content-type, and timestamp freshness.
+- 03-23  Phase 0 foundation is complete. The repo now has the monorepo baseline, Fastify API scaffold, shared `@openspace/shared` contracts, CI workflow, and repo-wide quality tooling. Backend Phase 1 work can now focus on `.squad/` parsing and real domain routes instead of setup.
+- 03-23 — P0-5 CI/CD pipeline created. `.github/workflows/ci.yml` runs lint + typecheck + test on PRs and pushes to main. Caches both pnpm store and Turborepo `.turbo/` directory. Uses `pnpm/action-setup@v4` with corepack. `.nvmrc` was already at `20`. Concurrency group cancels stale runs.
+- 03-23 — PRD published at `docs/prd.md`. Read this before starting any feature work. It defines v1 scope: web-only, single-squad, 6 core features (Dashboard, Task Board, Activity Feed, Voice, Chat, Real-time Monitoring). Backend is Node.js with file system integration to `.squad/`. See open decisions in §8 of PRD.
+- 03-23 — P1-1 `.squad/` file parser service built. Four focused parsers in `apps/api/src/services/squad-parser/`: `team-parser.ts` (team.md → Agent[]), `decision-parser.ts` (decisions.md → Decision[]), `agent-parser.ts` (charter.md → AgentDetail, history.md → learnings[]), `config-parser.ts` (config.json → RawSquadConfig). All parsers follow a consistent pattern: read file → parse markdown/JSON → return typed object using @openspace/shared types. Every parser exports both a file-based function and a pure content-parsing function for testability. `SquadParser` class composes them with five methods: `getAgents()`, `getAgent(id)`, `getDecisions()`, `getConfig()`, `getSquadOverview()`. Squad directory is configurable via `SQUAD_DIR` env var (defaults to CWD/.squad). Added `AgentDetail`, `AgentIdentity`, `AgentBoundaries` types to `@openspace/shared`. 64 tests cover happy paths, missing files, malformed data, edge cases. All 109 tests pass, typecheck clean.
+- 03-23 — P1-8 SQLite index layer built. `apps/api/src/services/db/`: 4 modules. `schema.ts` defines tables (tasks, decisions, chat_messages, activity_events) + FTS5 virtual tables (decisions_fts, tasks_fts) with auto-sync triggers + indexes on status/assignee/priority/timestamp fields. `index.ts` opens SQLite via `better-sqlite3` at `.squad/.cache/openspace.db` (gitignored), applies WAL mode + performance pragmas. `sync.ts` provides `fullSync()` (startup: wipe+reindex from files) and `incrementalSync()` (on file change: selective re-index). `search.ts` provides `searchDecisions()`, `searchTasks()`, `searchAll()` with FTS5 full-text search, BM25 ranking, and highlighted snippets. SQLite is explicitly the CACHE — `.squad/` files are source of truth, files always win on conflict. DB path configurable via `DB_PATH` env var, supports in-memory mode for tests. 32 tests cover schema creation, full sync, incremental updates, and full-text search. Dependencies added: `better-sqlite3`, `@types/better-sqlite3`.
+- 03-23 — P3-1 WebSocket server built. `apps/api/src/services/websocket/`: 4 modules. `types.ts` defines the wire protocol (`WsEnvelope: { type, payload, timestamp }`) with 6 event types: `agent:status`, `task:updated`, `task:created`, `decision:added`, `activity:new`, `chat:message`. Client can send `subscribe`/`unsubscribe`/`pong` messages. `manager.ts` is the `WebSocketManager` class: tracks connected clients with unique IDs, broadcasts to subscribers, handles subscription filtering (empty subs = all events), heartbeat ping/pong cycle (30s ping, drops unresponsive clients), graceful shutdown. `plugin.ts` is the Fastify plugin: registers `@fastify/websocket`, creates the `/ws` route, decorates `app.wsManager`. `index.ts` re-exports the public API. 25 tests cover connection lifecycle, welcome message, subscription filtering, heartbeat, shutdown, and error handling. Dependency added: `@fastify/websocket`.
+- 03-23 — P3-4 Chat backend built. `apps/api/src/services/chat/index.ts`: `ChatService` class handles message CRUD with dual persistence to SQLite (`chat_messages` table) + markdown logs in `.squad/sessions/chat-YYYY-MM-DD.md`. `send()` creates a `ChatMessage`, writes to both stores, emits `chat:message` via WebSocket. Team messages (`recipient: "team"`) go through a coordinator echo stub that responds with a routing acknowledgment. `getMessages()` returns paginated, filterable history (by agent, threadId). `getMessage(id)` for single lookup. REST routes: `POST /api/chat/messages` (validated sender/recipient/content), `GET /api/chat/messages` (limit/offset/agent/threadId params). D7 resolved: both SQLite + markdown. 21 tests cover send, SQLite persistence, markdown dual-write, WebSocket emission, coordinator echo, pagination, filtering, and validation. All 359 tests pass, typecheck clean.
+- 03-24 — Chat client error fixed. Root cause: `useChatMessages` hook expected `ChatMessage[]` but the GET `/api/chat/messages` endpoint returns `{ messages, total, limit, offset }` — a paginated envelope. Frontend called `.map()` on the object, crashing. Fix: extract `.messages` array in the hook's queryFn. Also fixed `createAIProvider` factory to gracefully fall back to `MockAIProvider` instead of throwing when copilot-sdk can't initialize (SDK needs a running Copilot CLI). Upgraded MockAIProvider from dumb echo to context-aware responses with agent personality. Added error banners to chat-client.tsx for fetch/send failures. Key files: `apps/web/src/hooks/use-chat.ts`, `apps/api/src/services/ai/copilot-provider.ts`, `apps/api/src/app.ts`, `apps/web/app/chat/chat-client.tsx`.
+- 03-24 — copilot-sdk integrated as AI provider. Installed `@github/copilot-sdk` and built a pluggable AI provider layer at `apps/api/src/services/ai/`. `CopilotProvider` implements `LLMRouter` (voice routing), `LLMIntentParser` (voice actions), and `chatCompletion()` (chat backend). Feature flag `AI_PROVIDER=copilot-sdk|mock` (default mock) so dev works without API keys. The SDK uses JSON-RPC to the Copilot CLI — auth via `COPILOT_GITHUB_TOKEN`/`GH_TOKEN`/`GITHUB_TOKEN`, model via `COPILOT_MODEL` (default gpt-4o). `ChatService` now routes team messages through the AI provider instead of the echo stub. 30 new tests, 667 total, zero regressions.
+- 03-23 — P3-2 FileWatcher → WebSocket bridge built. `apps/api/src/services/websocket/bridge.ts`: `FileWatcherBridge` class connects FileWatcher `change` events to WebSocket broadcasts. Maps file event types to WS event types (e.g., `agent:updated` → `agent:status`, `task:created` → `task:created`). Implements 200ms batch window to throttle rapid changes. Deduplicates same type+path events within a batch (keeps latest). Clean start/stop lifecycle. 7 tests cover event mapping, batching, deduplication, and disconnect.
+- 03-23 — P3-3 Activity feed backend built. `apps/api/src/services/activity/index.ts`: `ActivityFeed` class is an in-memory ring buffer (configurable capacity, default 500 events). Stores `ActivityEvent` objects from `@openspace/shared`. Sources from FileWatcher changes via `connectFileWatcher()` — maps file events to activity event types (e.g., `task:created` → `spawned`, `decision:added` → `decision`). Extracts agent IDs from file paths. `push()` adds events and broadcasts `activity:new` via WebSocket. `getHistory(limit, offset)` returns paginated results newest-first. `GET /api/activity` route with limit/offset query params (max 200). 15 tests cover ring buffer, pagination, WebSocket emission, FileWatcher integration, and route responses.
+- 03-23 — P1-2 File watcher service built. `apps/api/src/services/file-watcher/index.ts`: `FileWatcher` class extends `EventEmitter`, uses `chokidar` to watch `.squad/` directory. Emits typed events: `agent:updated`, `task:created`, `task:updated`, `decision:added`, `config:changed`, `team:updated`, plus a generic `change` event for all. Debouncing (configurable, default 100ms) batches rapid FS changes. Polling fallback via `WATCH_MODE=poll|native` env var. Maintains an in-memory `SquadState` cache re-parsed from `SquadParser` on every change. Ignores `.cache/` and `node_modules/` subdirectories. `awaitWriteFinish` ensures partial writes don't trigger false events. 18 tests (5 unit, 13 integration with real temp dirs and chokidar polling). Dependencies added: `chokidar`.
+- A pattern

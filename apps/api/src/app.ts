@@ -448,6 +448,17 @@ export async function buildApp(opts: AppOptions = {}) {
   if (activeWs) traceService.setWorkspaceId(activeWs.id);
   app.decorate('traceService', traceService);
 
+  // Escalation service + migration
+  try {
+    const { migration_v4 } = await import('./services/escalation/migration-v4.js');
+    migration_v4(db);
+    const { EscalationService } = await import('./services/escalation/index.js');
+    const escalationService = new EscalationService(db);
+    app.decorate('escalationService', escalationService);
+  } catch (err) {
+    console.warn(`[Escalation] Service init failed: ${(err as Error).message}`);
+  }
+
   // Decorate Fastify instance with the SQLite database
   app.decorate('db', db);
 
@@ -485,6 +496,7 @@ export async function buildApp(opts: AppOptions = {}) {
   app.register(workspacesRoute, { prefix: '/api' });
   app.register(yoloRoute, { prefix: '/api' });
   app.register(githubRoute, { prefix: '/api' });
+  app.register(escalationsRoute, { prefix: '/api' });
   // Terminal route
   app.register(terminalRoute, { prefix: '/api' });
 
@@ -511,5 +523,6 @@ declare module 'fastify' {
     sandboxService: SandboxService;
     hookPipeline?: HookPipeline;
     agentRegistry: AgentRegistry;
+    escalationService?: import('./services/escalation/index.js').EscalationService;
   }
 }

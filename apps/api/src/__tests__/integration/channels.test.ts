@@ -456,7 +456,7 @@ describe('PUT /api/channels/:id', () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe('DELETE /api/channels/:id', () => {
-  it('deletes a channel and returns 200', async () => {
+  it('deletes a channel and returns 204', async () => {
     const { body: created } = await createChannel({
       name: 'Delete Me',
       memberAgentIds: ['bender'],
@@ -467,8 +467,7 @@ describe('DELETE /api/channels/:id', () => {
       url: `/api/channels/${created.id}`,
     });
 
-    expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ success: true });
+    expect(res.statusCode).toBe(204);
   });
 
   it('channel is gone after deletion', async () => {
@@ -526,7 +525,7 @@ describe('DELETE /api/channels/:id', () => {
       method: 'DELETE',
       url: `/api/channels/${created.id}`,
     });
-    expect(first.statusCode).toBe(200);
+    expect(first.statusCode).toBe(204);
 
     const second = await app.inject({
       method: 'DELETE',
@@ -593,7 +592,7 @@ describe('Full CRUD lifecycle', () => {
       method: 'DELETE',
       url: `/api/channels/${created.id}`,
     });
-    expect(deleteRes.statusCode).toBe(200);
+    expect(deleteRes.statusCode).toBe(204);
 
     // 7. Verify deletion
     const goneRes = await app.inject({

@@ -1,7 +1,7 @@
 ---
 id: task-pv2XbQ0l
 title: 'Add SLA Tracking, Analytics Endpoints, and Notification Service'
-status: blocked
+status: done
 priority: P2
 assignee: bender
 labels:

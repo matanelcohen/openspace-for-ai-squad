@@ -1,7 +1,7 @@
 ---
 id: task-d7kQMX5f
 title: 'Implement escalation engine, review queue, and audit trail backend'
-status: blocked
+status: done
 priority: P1
 assignee: bender
 labels:

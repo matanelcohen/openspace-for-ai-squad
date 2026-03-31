@@ -1,7 +1,7 @@
 ---
 id: task-f-0vJotv
 title: E2E and integration tests for HITL escalation flows
-status: blocked
+status: done
 priority: P2
 assignee: zoidberg
 labels:
