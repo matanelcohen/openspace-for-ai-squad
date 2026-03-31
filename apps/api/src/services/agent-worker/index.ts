@@ -9,10 +9,13 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import type { Task } from '@matanelcohen/openspace-shared';
+import type { MemoryAttribution, ResponseTier, Task } from '@matanelcohen/openspace-shared';
+import type Database from 'better-sqlite3';
 
 import type { ActivityFeed } from '../activity/index.js';
-import type { AIProvider, AgenticCompletionOptions } from '../ai/copilot-provider.js';
+import type { AgenticCompletionOptions, AIProvider } from '../ai/copilot-provider.js';
+import { MemoryRecallEngine } from '../memory/memory-recall.js';
+import { MemoryStore } from '../memory/memory-store.js';
 import { getTierDefinition, selectTier } from '../routing/tiers.js';
 import {
   buildSkillsPrompt,
@@ -44,7 +47,7 @@ interface AgentWorkerConfig {
   agents: AgentProfile[];
   pollIntervalMs?: number;
   /** SQLite database instance for memory store. */
-  db?: import('better-sqlite3').Database;
+  db?: Database;
   /**
    * Base URL for the A2A service (e.g. http://localhost:3001).
    * When set, enables inter-agent delegation via A2A protocol.
@@ -66,6 +69,8 @@ export class AgentWorkerService {
   private readonly queueFilePath: string;
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private allSkills: ParsedSkill[] = [];
+  private recallEngine: MemoryRecallEngine | null = null;
+  private recallEngineInitialized = false;
 
   constructor(config: AgentWorkerConfig) {
     this.config = config;
@@ -83,6 +88,32 @@ export class AgentWorkerService {
       console.log(`[AgentWorker] Loaded ${this.allSkills.length} skills`);
     } catch {
       this.allSkills = [];
+    }
+  }
+
+  /** Lazily initialize the MemoryRecallEngine (ensures DB schema exists). */
+  private async ensureRecallEngine(): Promise<MemoryRecallEngine | null> {
+    if (this.recallEngineInitialized) return this.recallEngine;
+    this.recallEngineInitialized = true;
+
+    const db = this.config.db;
+    if (!db) return null;
+
+    try {
+      const { hasMemorySchema, initializeMemorySchema } =
+        await import('@matanelcohen/openspace-memory-store');
+      if (!hasMemorySchema(db)) initializeMemorySchema(db);
+
+      const memoryStore = new MemoryStore(db);
+      this.recallEngine = new MemoryRecallEngine(memoryStore, { maxMemories: 10 });
+      console.log('[AgentWorker] Memory recall engine initialized');
+      return this.recallEngine;
+    } catch (err) {
+      console.warn(
+        '[AgentWorker] Memory recall engine unavailable:',
+        err instanceof Error ? err.message : err,
+      );
+      return null;
     }
   }
 
@@ -334,7 +365,9 @@ export class AgentWorkerService {
         priority: task.priority,
       });
       const tierDef = getTierDefinition(tier);
-      console.log(`[AgentWorker] Response tier: ${tier} (${tierDef.description}) for task ${taskId}`);
+      console.log(
+        `[AgentWorker] Response tier: ${tier} (${tierDef.description}) for task ${taskId}`,
+      );
 
       // Log tier in task description for traceability
       await updateTask(this.config.tasksDir, taskId, {
@@ -344,8 +377,8 @@ export class AgentWorkerService {
       });
 
       // ── Lead delegation: break down task and assign to team ──
-      const isLead = agent.role.toLowerCase().includes('lead') ||
-        agent.role.toLowerCase().includes('architect');
+      const isLead =
+        agent.role.toLowerCase().includes('lead') || agent.role.toLowerCase().includes('architect');
       const isComplex = (task.description?.length ?? 0) > 200 || task.priority === 'P0';
       if (isLead && isComplex) {
         await this.handleLeadDelegation(agent, task, taskId, tier);
@@ -359,7 +392,8 @@ export class AgentWorkerService {
       // Build task-matched skills prompt (SDK-style: matches by task content + role + domain)
       const taskText = `${task.title} ${task.description ?? ''}`;
       const autoMatched = matchSkillsForTask(this.allSkills, taskText, agent.role);
-      const matched = autoMatched.length > 0 ? autoMatched : getSkillsForRole(this.allSkills, agent.role);
+      const matched =
+        autoMatched.length > 0 ? autoMatched : getSkillsForRole(this.allSkills, agent.role);
 
       // Apply per-agent overrides (always/never) from .cache/agent-skill-overrides.json
       let finalSkills = matched;
@@ -368,7 +402,10 @@ export class AgentWorkerService {
         const { join } = await import('node:path');
         const overridesPath = join(this.config.squadDir, '.cache', 'agent-skill-overrides.json');
         if (existsSync(overridesPath)) {
-          const overrides = JSON.parse(readFileSync(overridesPath, 'utf-8')) as Record<string, Record<string, string>>;
+          const overrides = JSON.parse(readFileSync(overridesPath, 'utf-8')) as Record<
+            string,
+            Record<string, string>
+          >;
           const agentOverrides = overrides[agent.id] ?? {};
           // Remove 'never' skills
           finalSkills = finalSkills.filter((s) => agentOverrides[s.id] !== 'never');
@@ -381,70 +418,30 @@ export class AgentWorkerService {
             }
           }
         }
-      } catch { /* ignore override errors */ }
+      } catch {
+        /* ignore override errors */
+      }
 
       const skillsPrompt = buildSkillsPrompt(finalSkills);
 
-      // Retrieve relevant memories via vector similarity
+      // Retrieve relevant memories via MemoryRecallEngine (FTS5 + strength + recency scoring)
       let memoriesPrompt = '';
+      let memoryAttributions: MemoryAttribution[] = [];
       try {
-        const { hasMemorySchema, MemoryStoreService } = await import('@matanelcohen/openspace-memory-store');
-        const db = this.config.db;
-        if (db && hasMemorySchema(db)) {
-          const memStore = new MemoryStoreService(db, {});
-          const allMemories = memStore.list(agent.id, 200);
-
-          if (allMemories.length > 0) {
-            let picked = allMemories.slice(0, 5); // default: most recent
-
-            // Try vector similarity if embedder is available
-            try {
-              const { LocalEmbedder } = await import('../embeddings/local-embedder.js');
-              const embedder = new LocalEmbedder();
-              const taskEmbedding = await embedder.embed(taskText);
-              const memEmbeddings = await embedder.embedBatch(allMemories.map((m) => m.content));
-
-              // Cosine similarity
-              const scored = allMemories.map((m, i) => {
-                const memVec = memEmbeddings[i]!;
-                let dot = 0, normA = 0, normB = 0;
-                for (let j = 0; j < taskEmbedding.length; j++) {
-                  dot += taskEmbedding[j]! * memVec[j]!;
-                  normA += taskEmbedding[j]! * taskEmbedding[j]!;
-                  normB += memVec[j]! * memVec[j]!;
-                }
-                const similarity = dot / (Math.sqrt(normA) * Math.sqrt(normB) + 1e-8);
-                return { memory: m, score: similarity };
-              });
-
-              picked = scored
-                .sort((a, b) => b.score - a.score)
-                .slice(0, 10)
-                .filter((s) => s.score > 0.3)
-                .map((s) => s.memory);
-
-              if (picked.length === 0) picked = allMemories.slice(0, 5);
-            } catch {
-              // Embedder not available — use keyword fallback
-              const taskWords = new Set(
-                taskText.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3),
-              );
-              const scored = allMemories.map((m) => {
-                const overlap = m.content.toLowerCase().split(/[^a-z0-9]+/)
-                  .filter((w) => w.length > 3 && taskWords.has(w)).length;
-                return { memory: m, score: overlap };
-              });
-              const relevant = scored.filter((s) => s.score > 0).sort((a, b) => b.score - a.score).slice(0, 10);
-              if (relevant.length > 0) picked = relevant.map((s) => s.memory);
+        const engine = await this.ensureRecallEngine();
+        if (engine) {
+          const recallResults = engine.recall(agent.id, taskText);
+          if (recallResults.length > 0) {
+            const contextBlock = engine.buildContextBlock(recallResults);
+            if (contextBlock) {
+              memoriesPrompt = `## Your Memories & Learnings\n\n${contextBlock}\n\n`;
             }
-
-            if (picked.length > 0) {
-              const memEntries = picked.map((m) => `- ${m.content}`).join('\n');
-              memoriesPrompt = `## Your Memories & Learnings\n\nRelevant things you've learned from past work:\n\n${memEntries}\n\n`;
-            }
+            memoryAttributions = engine.buildAttributions(recallResults);
           }
         }
-      } catch { /* best effort */ }
+      } catch {
+        /* best effort — memory recall is non-critical */
+      }
 
       // ── Build shared event handler ────────────────────────────────
       const onEvent = (event: { type: string; data?: Record<string, unknown> }) => {
@@ -537,7 +534,8 @@ export class AgentWorkerService {
         metadata: {
           skills: finalSkills.map((s) => s.id),
           skillCount: finalSkills.length,
-          memoryCount: memoriesPrompt ? memoriesPrompt.split('\n- ').length - 1 : 0,
+          memoryCount: memoryAttributions.length,
+          memoryAttributions: memoryAttributions.length > 0 ? memoryAttributions : undefined,
         },
         systemPrompt,
         messages,
@@ -581,7 +579,8 @@ export class AgentWorkerService {
 
       // Save a memory from this task
       try {
-        const { hasMemorySchema, initializeMemorySchema, MemoryStoreService } = await import('@matanelcohen/openspace-memory-store');
+        const { hasMemorySchema, initializeMemorySchema, MemoryStoreService } =
+          await import('@matanelcohen/openspace-memory-store');
         const db = this.config.db;
         if (db) {
           if (!hasMemorySchema(db)) initializeMemorySchema(db);
@@ -596,7 +595,9 @@ export class AgentWorkerService {
             tags: ['task-completion'],
           });
         }
-      } catch { /* best effort */ }
+      } catch {
+        /* best effort */
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? err.stack?.substring(0, 500) : '';
@@ -650,7 +651,7 @@ export class AgentWorkerService {
     agent: AgentProfile,
     task: Task,
     taskId: string,
-    tier: import('@matanelcohen/openspace-shared').ResponseTier = 'standard',
+    tier: ResponseTier = 'standard',
   ): Promise<void> {
     const now = () => new Date().toISOString().replace('T', ' ').substring(0, 19);
     const tierDef = getTierDefinition(tier);
@@ -660,7 +661,28 @@ export class AgentWorkerService {
     const agentList = otherAgents.map((a) => `- ${a.id}: ${a.name} (${a.role})`).join('\n');
 
     // Tier-based delegation constraints
-    const maxSubTasks = tier === 'full' ? otherAgents.length : tier === 'standard' ? Math.min(3, otherAgents.length) : 1;
+    const maxSubTasks =
+      tier === 'full'
+        ? otherAgents.length
+        : tier === 'standard'
+          ? Math.min(3, otherAgents.length)
+          : 1;
+
+    // Recall relevant memories to inform delegation decisions
+    let memoryContext = '';
+    try {
+      const engine = await this.ensureRecallEngine();
+      if (engine) {
+        const taskText = `${task.title} ${task.description ?? ''}`;
+        const recallResults = engine.recall(agent.id, taskText);
+        const block = engine.buildContextBlock(recallResults);
+        if (block) {
+          memoryContext = `\n${block}\n\n`;
+        }
+      }
+    } catch {
+      /* best effort */
+    }
 
     try {
       const result = await this.config.aiProvider.chatCompletion({
@@ -669,6 +691,7 @@ export class AgentWorkerService {
         systemPrompt:
           `You are ${agent.name}, the Lead of the openspace.ai squad.\n` +
           `Your job is to break down tasks and delegate to the right team members.\n\n` +
+          (memoryContext ? memoryContext : '') +
           `Response tier: ${tier} (${tierDef.description}). Max agents: ${tierDef.maxAgents}.\n\n` +
           `Available team members:\n${agentList}\n\n` +
           `Respond ONLY with valid JSON — an array of 2-4 sub-tasks:\n` +
@@ -821,8 +844,8 @@ export class AgentWorkerService {
           subtaskIds.map((id) => getTask(this.config.tasksDir, id).catch(() => null)),
         );
         const resolved = subtasks.filter((t): t is Task => t !== null);
-        const allDone = resolved.length === subtaskIds.length &&
-          resolved.every((t) => t.status === 'done');
+        const allDone =
+          resolved.length === subtaskIds.length && resolved.every((t) => t.status === 'done');
         const anyBlocked = resolved.some((t) => t.status === 'blocked');
 
         if (allDone) {
@@ -842,11 +865,7 @@ export class AgentWorkerService {
               `\n\n---\n**[${now}]** ✅ All ${resolved.length} subtasks completed.\n\n${completionSummary}\n\n**[${now}]** ✅ ${agent.name} marked parent task as done.`,
           });
           this.broadcastTaskUpdate(parentTaskId, 'done');
-          this.emitActivity(
-            agent.id,
-            'completed',
-            `All subtasks done for: ${parentTask.title}`,
-          );
+          this.emitActivity(agent.id, 'completed', `All subtasks done for: ${parentTask.title}`);
 
           // Broadcast subtask completed events
           for (const st of resolved) {
