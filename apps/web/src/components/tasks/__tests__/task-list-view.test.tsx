@@ -7,6 +7,11 @@ import { TaskListView } from '@/components/tasks/task-list-view';
 
 vi.mock('@/hooks/use-tasks');
 vi.mock('@/hooks/use-agents');
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => '/tasks',
+}));
 
 import { useAgents } from '@/hooks/use-agents';
 import { useTasks } from '@/hooks/use-tasks';
@@ -62,8 +67,24 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockedUseAgents.mockReturnValue({
     data: [
-      { id: 'fry', name: 'Fry', role: 'Frontend', status: 'active', currentTask: null, expertise: [], voiceProfile: {} as never },
-      { id: 'bender', name: 'Bender', role: 'Backend', status: 'active', currentTask: null, expertise: [], voiceProfile: {} as never },
+      {
+        id: 'fry',
+        name: 'Fry',
+        role: 'Frontend',
+        status: 'active',
+        currentTask: null,
+        expertise: [],
+        voiceProfile: {} as never,
+      },
+      {
+        id: 'bender',
+        name: 'Bender',
+        role: 'Backend',
+        status: 'active',
+        currentTask: null,
+        expertise: [],
+        voiceProfile: {} as never,
+      },
     ],
     isLoading: false,
     error: null,

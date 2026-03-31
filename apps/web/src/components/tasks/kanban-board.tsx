@@ -18,24 +18,18 @@ import { useMemo, useState } from 'react';
 
 import { KanbanColumn } from '@/components/tasks/kanban-column';
 import { TaskCard } from '@/components/tasks/task-card';
-import { type TaskFilters, TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
+import { TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTaskFilterParams } from '@/hooks/use-task-filter-params';
 import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
 import { applyFilters } from '@/lib/task-filters';
-
-const DEFAULT_FILTERS: TaskFilters = {
-  status: 'all',
-  assignee: 'all',
-  priority: 'all',
-  search: '',
-};
 
 export function KanbanBoard() {
   const { data: tasks, isLoading, error } = useTasks();
   const updateStatus = useUpdateTaskStatus();
   const updatePriority = useUpdateTaskPriority();
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useTaskFilterParams();
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];

@@ -4,9 +4,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/hooks/use-tasks');
 vi.mock('@/hooks/use-agents');
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace: vi.fn() }),
+  usePathname: () => '/tasks',
+}));
 
 import { useAgents } from '@/hooks/use-agents';
-import { useCreateTask, useTasks, useUpdateTask, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import {
+  useCreateTask,
+  useTasks,
+  useUpdateTask,
+  useUpdateTaskPriority,
+  useUpdateTaskStatus,
+} from '@/hooks/use-tasks';
 
 const mockedUseTasks = vi.mocked(useTasks);
 const mockedUseAgents = vi.mocked(useAgents);

@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { PriorityBadge } from '@/components/priority-badge';
-import { type TaskFilters, TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
+import { TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useTaskFilterParams } from '@/hooks/use-task-filter-params';
 import { useTasks } from '@/hooks/use-tasks';
 import { applyFilters } from '@/lib/task-filters';
 
@@ -79,12 +80,7 @@ function SortIcon({
 
 export function TaskListView() {
   const { data: tasks, isLoading, error } = useTasks();
-  const [filters, setFilters] = useState<TaskFilters>({
-    status: 'all',
-    assignee: 'all',
-    priority: 'all',
-    search: '',
-  });
+  const [filters, setFilters] = useTaskFilterParams();
   const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 

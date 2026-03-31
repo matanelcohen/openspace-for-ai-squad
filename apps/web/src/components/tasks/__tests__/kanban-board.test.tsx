@@ -9,6 +9,13 @@ import { KanbanBoard } from '@/components/tasks/kanban-board';
 vi.mock('@/hooks/use-tasks');
 vi.mock('@/hooks/use-agents');
 
+const mockReplace = vi.fn();
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ replace: mockReplace }),
+  usePathname: () => '/tasks',
+}));
+
 import { useAgents } from '@/hooks/use-agents';
 import {
   useApproveTask,
