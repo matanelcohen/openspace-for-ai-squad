@@ -107,11 +107,9 @@ const githubRoute: FastifyPluginAsync = async (app) => {
 
     try {
       const task = await getTask(tasksDir(), taskId);
-      // Use only the original description (before progress logs), truncated
-      const cleanBody = (task.description ?? '').split('\n---\n')[0].trim();
       const pr = await gh().createPR({
-        title: task.title,
-        body: cleanBody || task.title,
+        title: `${task.title} (${taskId})`,
+        body: `**Task:** ${taskId}\n**Agent:** ${task.assignee ?? 'unassigned'}\n**Priority:** ${task.priority}`,
         head,
         base,
       });
