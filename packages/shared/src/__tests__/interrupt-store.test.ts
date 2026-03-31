@@ -23,7 +23,7 @@ function makeInterrupt(overrides?: Partial<InterruptState>): InterruptState {
     resolution: null,
     timeoutPolicy: null,
     ...overrides,
-  };
+  } as InterruptState;
 }
 
 // ── Tests ────────────────────────────────────────────────────────

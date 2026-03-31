@@ -19,15 +19,8 @@
  * ```
  */
 
-import type {
-  ExecutionContext,
-  StepNode,
-} from '../types/dag-workflow.js';
-import type {
-  EscalationPriority,
-  EscalationReason,
-  HITLGateNodeConfig,
-} from '../types/escalation.js';
+import type { ExecutionContext, HITLGateNodeConfig, StepNode } from '../types/dag-workflow.js';
+import type { EscalationPriority, EscalationReason } from '../types/escalation.js';
 import type { HITLManager } from './hitl-manager.js';
 
 // ── Callback types matching DAGWorkflowEngineConfig ─────────────
@@ -37,19 +30,13 @@ export interface HITLCallbacks {
    * Called by the DAG engine when a `hitl_gate` node is reached.
    * Creates an escalation item and returns its ID.
    */
-  onHITLGate: (
-    node: StepNode,
-    executionId: string,
-    ctx: ExecutionContext,
-  ) => Promise<string>;
+  onHITLGate: (node: StepNode, executionId: string, ctx: ExecutionContext) => Promise<string>;
 
   /**
    * Called by the DAG engine when resuming a paused workflow.
    * Looks up the escalation resolution.
    */
-  resolveEscalation: (
-    escalationId: string,
-  ) => Promise<{ approved: boolean; output?: unknown }>;
+  resolveEscalation: (escalationId: string) => Promise<{ approved: boolean; output?: unknown }>;
 }
 
 export interface CreateHITLCallbacksOptions {
@@ -86,8 +73,7 @@ export function createHITLCallbacks(
       ctx: ExecutionContext,
     ): Promise<string> => {
       const config = (node.config ?? {}) as HITLGateNodeConfig;
-      const chainId = config.escalationChainId
-        ?? options?.defaultChainId;
+      const chainId = config.escalationChainId ?? options?.defaultChainId;
 
       // Use resolveChain (public API) which handles default chain fallback
       const chain = manager.resolveChainOrDefault(chainId);

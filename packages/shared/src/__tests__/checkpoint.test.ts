@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  EnhancedWorkflowExecutionState,
-} from '../types/dag-workflow.js';
+import type { EnhancedWorkflowExecutionState } from '../types/dag-workflow.js';
 import {
   deserializeState,
   InMemoryCheckpointStore,
@@ -54,6 +52,7 @@ function createTestState(
     },
     createdAt: '2026-01-01T00:00:00Z',
     updatedAt: '2026-01-01T00:00:01Z',
+    activeInterrupts: [],
     completedAt: null,
     checkpointVersion: 0,
     ...overrides,
@@ -253,19 +252,27 @@ describe('serializeState / deserializeState', () => {
   });
 
   it('throws on missing executionId', () => {
-    expect(() => deserializeState(JSON.stringify({ workflowId: 'x', nodeStates: {}, checkpointVersion: 0 }))).toThrow('missing executionId');
+    expect(() =>
+      deserializeState(JSON.stringify({ workflowId: 'x', nodeStates: {}, checkpointVersion: 0 })),
+    ).toThrow('missing executionId');
   });
 
   it('throws on missing workflowId', () => {
-    expect(() => deserializeState(JSON.stringify({ executionId: 'x', nodeStates: {}, checkpointVersion: 0 }))).toThrow('missing workflowId');
+    expect(() =>
+      deserializeState(JSON.stringify({ executionId: 'x', nodeStates: {}, checkpointVersion: 0 })),
+    ).toThrow('missing workflowId');
   });
 
   it('throws on missing nodeStates', () => {
-    expect(() => deserializeState(JSON.stringify({ executionId: 'x', workflowId: 'y', checkpointVersion: 0 }))).toThrow('missing nodeStates');
+    expect(() =>
+      deserializeState(JSON.stringify({ executionId: 'x', workflowId: 'y', checkpointVersion: 0 })),
+    ).toThrow('missing nodeStates');
   });
 
   it('throws on missing checkpointVersion', () => {
-    expect(() => deserializeState(JSON.stringify({ executionId: 'x', workflowId: 'y', nodeStates: {} }))).toThrow('missing checkpointVersion');
+    expect(() =>
+      deserializeState(JSON.stringify({ executionId: 'x', workflowId: 'y', nodeStates: {} })),
+    ).toThrow('missing checkpointVersion');
   });
 
   it('throws on non-object input', () => {

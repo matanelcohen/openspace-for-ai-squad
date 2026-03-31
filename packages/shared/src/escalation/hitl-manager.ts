@@ -79,10 +79,18 @@ export class HITLManager {
     return chain;
   }
 
-  private resolveChain(chainId?: string): EscalationChain {
+  /**
+   * Resolve a chain by ID, falling back to the configured default chain.
+   * Public API used by DAG integration callbacks.
+   */
+  resolveChainOrDefault(chainId?: string): EscalationChain {
     const id = chainId ?? this.config.defaultChainId;
     if (!id) throw new Error('No chain ID provided and no default chain configured');
     return this.getChain(id);
+  }
+
+  private resolveChain(chainId?: string): EscalationChain {
+    return this.resolveChainOrDefault(chainId);
   }
 
   // ── Trigger Escalation ────────────────────────────────────────
@@ -153,9 +161,10 @@ export class HITLManager {
       confidenceScore: req.confidenceScore,
       sourceNodeId: params.interrupt.nodeId,
       workflowId: params.interrupt.executionId,
-      proposedAction: typeof req.proposedAction === 'string'
-        ? req.proposedAction
-        : JSON.stringify(req.proposedAction),
+      proposedAction:
+        typeof req.proposedAction === 'string'
+          ? req.proposedAction
+          : JSON.stringify(req.proposedAction),
       reasoning: req.reasoning ?? req.message,
       metadata: {
         interruptId: params.interrupt.id,
@@ -190,12 +199,7 @@ export class HITLManager {
   /**
    * Approve an escalation item.
    */
-  approve(
-    itemId: string,
-    reviewerId: string,
-    comment?: string,
-    now?: string,
-  ): EscalationItem {
+  approve(itemId: string, reviewerId: string, comment?: string, now?: string): EscalationItem {
     const item = this.getItem(itemId);
     const updated = approveEscalationItem(item, reviewerId, comment, now);
     this.items.set(itemId, updated);
@@ -206,12 +210,7 @@ export class HITLManager {
   /**
    * Reject an escalation item.
    */
-  reject(
-    itemId: string,
-    reviewerId: string,
-    comment?: string,
-    now?: string,
-  ): EscalationItem {
+  reject(itemId: string, reviewerId: string, comment?: string, now?: string): EscalationItem {
     const item = this.getItem(itemId);
     const updated = rejectEscalationItem(item, reviewerId, comment, now);
     this.items.set(itemId, updated);
