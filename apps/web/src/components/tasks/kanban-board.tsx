@@ -14,18 +14,23 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import type { TaskStatus } from '@matanelcohen/openspace-shared';
 import { TASK_STATUSES } from '@matanelcohen/openspace-shared';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import { KanbanColumn } from '@/components/tasks/kanban-column';
 import { TaskCard } from '@/components/tasks/task-card';
+import { type TaskFilters, TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { applyTaskFilters, DEFAULT_FILTERS } from '@/lib/task-filters';
 
 export function KanbanBoard() {
   const { data: tasks, isLoading, error } = useTasks();
   const updateStatus = useUpdateTaskStatus();
   const updatePriority = useUpdateTaskPriority();
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+
+  const filteredTasks = useMemo(() => applyTaskFilters(tasks ?? [], filters), [tasks, filters]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
@@ -48,17 +53,18 @@ export function KanbanBoard() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4" data-testid="kanban-error">
-        <p className="text-sm text-destructive">
-          Failed to load tasks: {error.message}
-        </p>
+      <div
+        className="rounded-lg border border-destructive/50 bg-destructive/10 p-4"
+        data-testid="kanban-error"
+      >
+        <p className="text-sm text-destructive">Failed to load tasks: {error.message}</p>
       </div>
     );
   }
 
   const tasksByStatus = TASK_STATUSES.reduce(
     (acc, status) => {
-      acc[status] = (tasks ?? [])
+      acc[status] = filteredTasks
         .filter((t) => t.status === status)
         .sort((a, b) => a.sortIndex - b.sortIndex);
       return acc;
@@ -66,9 +72,13 @@ export function KanbanBoard() {
     {} as Record<TaskStatus, typeof tasks>,
   );
 
-  const activeTask = activeTaskId
-    ? tasks?.find((t) => t.id === activeTaskId)
-    : null;
+  const isFiltered =
+    filters.search !== '' ||
+    filters.status !== 'all' ||
+    filters.assignee !== 'all' ||
+    filters.priority !== 'all';
+
+  const activeTask = activeTaskId ? tasks?.find((t) => t.id === activeTaskId) : null;
 
   function handleDragStart(event: DragStartEvent) {
     setActiveTaskId(event.active.id as string);
@@ -117,24 +127,28 @@ export function KanbanBoard() {
   }
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCorners}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-    >
-      <div className="flex gap-4 overflow-x-auto pb-4" data-testid="kanban-board">
-        {TASK_STATUSES.map((status) => (
-          <KanbanColumn
-            key={status}
-            status={status}
-            tasks={tasksByStatus[status] ?? []}
-          />
-        ))}
-      </div>
-      <DragOverlay>
-        {activeTask ? <TaskCard task={activeTask} isDragging /> : null}
-      </DragOverlay>
-    </DndContext>
+    <div className="space-y-4" data-testid="kanban-board">
+      <TaskFiltersToolbar filters={filters} onFiltersChange={setFilters} />
+
+      {isFiltered && (
+        <p className="text-xs text-muted-foreground" data-testid="kanban-filter-count">
+          Showing {filteredTasks.length} of {tasks?.length ?? 0} tasks
+        </p>
+      )}
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-4 overflow-x-auto pb-4" data-testid="kanban-columns">
+          {TASK_STATUSES.map((status) => (
+            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} />
+          ))}
+        </div>
+        <DragOverlay>{activeTask ? <TaskCard task={activeTask} isDragging /> : null}</DragOverlay>
+      </DndContext>
+    </div>
   );
 }
