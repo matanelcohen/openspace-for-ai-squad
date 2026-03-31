@@ -5,6 +5,7 @@ import { ArrowLeft, CheckCircle, MessageSquare, Shield, XCircle } from 'lucide-r
 import Link from 'next/link';
 import { useState } from 'react';
 
+import { useAgents } from '@/hooks/use-agents';
 import { AuditTrailTimeline } from '@/components/escalations/audit-trail-timeline';
 import { ConfidenceBadge } from '@/components/escalations/confidence-badge';
 import { EscalationStatusBadge } from '@/components/escalations/escalation-status-badge';
@@ -31,6 +32,14 @@ export function EscalationDetailPanel({ escalation }: EscalationDetailPanelProps
   const approve = useApproveEscalation();
   const reject = useRejectEscalation();
   const requestChanges = useRequestChangesEscalation();
+  const { data: agents } = useAgents();
+
+  const resolveName = (id: string) => {
+    if (!id) return 'Unknown';
+    const agent = agents?.find((a) => a.id === id || a.name.toLowerCase() === id);
+    if (agent) return agent.name;
+    return id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
 
   const isPending =
     claim.isPending || approve.isPending || reject.isPending || requestChanges.isPending;
@@ -119,7 +128,7 @@ export function EscalationDetailPanel({ escalation }: EscalationDetailPanelProps
             {escalation.claimedBy && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Reviewer</span>
-                <span className="font-medium">{escalation.claimedBy}</span>
+                <span className="font-medium">{resolveName(escalation.claimedBy!)}</span>
               </div>
             )}
           </CardContent>

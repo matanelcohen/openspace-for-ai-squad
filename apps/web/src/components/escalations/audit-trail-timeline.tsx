@@ -3,7 +3,20 @@
 import type { AuditEntry } from '@matanelcohen/openspace-shared';
 import { CheckCircle, Clock, Eye, RotateCcw, XCircle } from 'lucide-react';
 
+import { useAgents } from '@/hooks/use-agents';
 import { cn } from '@/lib/utils';
+
+/** Resolve an agent/reviewer ID to a display name */
+function useResolveActorName() {
+  const { data: agents } = useAgents();
+  return (actorId: string): string => {
+    if (!actorId) return 'Unknown';
+    const agent = agents?.find((a) => a.id === actorId || a.name.toLowerCase() === actorId);
+    if (agent) return agent.name;
+    // Capitalize fallback: "reviewer-1" → "Reviewer 1"
+    return actorId.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+}
 
 interface AuditTrailTimelineProps {
   entries: AuditEntry[];
@@ -54,6 +67,8 @@ function formatAction(action: AuditEntry['action']): string {
 }
 
 export function AuditTrailTimeline({ entries }: AuditTrailTimelineProps) {
+  const resolveName = useResolveActorName();
+
   if (entries.length === 0) {
     return (
       <p className="text-sm text-muted-foreground" data-testid="audit-trail-empty">
@@ -82,7 +97,7 @@ export function AuditTrailTimeline({ entries }: AuditTrailTimelineProps) {
           <div className={cn('pb-6', index === sorted.length - 1 && 'pb-0')}>
             <p className="text-sm font-medium">{formatAction(entry.action)}</p>
             <p className="text-xs text-muted-foreground">
-              by <span className="font-medium">{entry.actor}</span>
+              by <span className="font-medium">{resolveName(entry.actor)}</span>
               {' · '}
               {new Date(entry.timestamp).toLocaleString(undefined, {
                 month: 'short',
