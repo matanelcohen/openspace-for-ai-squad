@@ -388,14 +388,15 @@ export class AgentWorkerService {
       });
 
       // ── Lead delegation: break down task and assign to team ──
-      // Skip delegation if this task was manually enqueued by a human.
+      // Lead agents always delegate complex tasks (even manual assignments).
+      // Non-lead agents always execute directly.
       const isLead =
         agent.role.toLowerCase().includes('lead') || agent.role.toLowerCase().includes('architect');
       const isComplex = (task.description?.length ?? 0) > 200 || task.priority === 'P0';
       const shouldSkipDelegation = this.skipDelegation.has(taskId);
       if (shouldSkipDelegation) this.skipDelegation.delete(taskId);
 
-      if (isLead && isComplex && !shouldSkipDelegation) {
+      if (isLead && isComplex) {
         await this.handleLeadDelegation(agent, task, taskId, tier);
         return;
       }
