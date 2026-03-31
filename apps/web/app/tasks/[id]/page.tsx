@@ -570,23 +570,54 @@ export default function TaskDetailPage() {
       )}
 
       {/* Description */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Description</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div
-            className="prose prose-sm dark:prose-invert max-w-none"
-            data-testid="task-description"
-          >
-            {task.description ? (
-              <Markdown remarkPlugins={[remarkGfm]}>{task.description}</Markdown>
-            ) : (
-              <p className="text-muted-foreground italic">No description provided.</p>
+      {(() => {
+        const raw = task.description ?? '';
+        const sepIdx = raw.indexOf('\n\n---\n');
+        const info = sepIdx >= 0 ? raw.substring(0, sepIdx).trim() : raw.trim();
+        const runLog = sepIdx >= 0 ? raw.substring(sepIdx + 5).trim() : '';
+        return (
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Description</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className="prose prose-sm dark:prose-invert max-w-none"
+                  data-testid="task-description"
+                >
+                  {info ? (
+                    <Markdown remarkPlugins={[remarkGfm]}>{info}</Markdown>
+                  ) : (
+                    <p className="text-muted-foreground italic">No description provided.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {runLog && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm">
+                    <Play className="h-4 w-4" />
+                    Agent Run Log
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScrollArea className="max-h-96">
+                    <div
+                      className="prose prose-sm dark:prose-invert max-w-none text-xs"
+                      data-testid="agent-run-log"
+                    >
+                      <Markdown remarkPlugins={[remarkGfm]}>{runLog}</Markdown>
+                    </div>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
             )}
-          </div>
-        </CardContent>
-      </Card>
+          </>
+        );
+      })()}
 
       {/* Timestamps */}
       <div className="flex gap-6 text-xs text-muted-foreground" data-testid="task-timestamps">
