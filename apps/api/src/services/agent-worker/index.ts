@@ -1175,20 +1175,24 @@ export class AgentWorkerService {
     taskId: string,
   ): Promise<{ passed: boolean; output: string }> {
     const { execSync } = await import('node:child_process');
-    const commands = [
-      { name: 'TypeScript', cmd: 'npx tsc --noEmit' },
-      { name: 'Tests', cmd: 'npx vitest run --reporter=verbose' },
-    ];
+    const { existsSync } = await import('node:fs');
+    const { join } = await import('node:path');
+
+    const commands = this.detectVerifyCommands(worktreePath);
+    if (commands.length === 0) {
+      console.log(`[AgentWorker] No build/test commands detected for ${taskId}, skipping verification`);
+      return { passed: true, output: '⏭️ No build/test configuration detected' };
+    }
 
     const outputs: string[] = [];
     let allPassed = true;
 
     for (const { name, cmd } of commands) {
       try {
-        const out = execSync(cmd, {
+        execSync(cmd, {
           cwd: worktreePath,
           encoding: 'utf-8',
-          timeout: 120_000,
+          timeout: 300_000, // 5 min
           stdio: ['pipe', 'pipe', 'pipe'],
           env: { ...process.env, CI: 'true' },
         });
@@ -1196,15 +1200,83 @@ export class AgentWorkerService {
         console.log(`[AgentWorker] ${agent.name} sandbox ${name}: PASSED (${taskId})`);
       } catch (err) {
         const error = err as { stderr?: string; stdout?: string };
-        const errorOutput = (error.stderr ?? error.stdout ?? 'Unknown error').substring(0, 1000);
+        const errorOutput = error.stderr ?? error.stdout ?? 'Unknown error';
         outputs.push(`❌ ${name}: FAILED\n${errorOutput}`);
         allPassed = false;
         console.log(`[AgentWorker] ${agent.name} sandbox ${name}: FAILED (${taskId})`);
-        break; // Stop on first failure
+        break;
       }
     }
 
     return { passed: allPassed, output: outputs.join('\n\n') };
+  }
+
+  /**
+   * Auto-detect build and test commands based on project files.
+   */
+  private detectVerifyCommands(dir: string): Array<{ name: string; cmd: string }> {
+    const { existsSync } = require('node:fs');
+    const { join } = require('node:path');
+    const commands: Array<{ name: string; cmd: string }> = [];
+
+    // Node.js / TypeScript
+    if (existsSync(join(dir, 'tsconfig.json'))) {
+      commands.push({ name: 'TypeScript', cmd: 'npx tsc --noEmit' });
+    }
+    if (existsSync(join(dir, 'vitest.config.ts')) || existsSync(join(dir, 'vitest.config.js'))) {
+      commands.push({ name: 'Vitest', cmd: 'npx vitest run' });
+    } else if (existsSync(join(dir, 'jest.config.ts')) || existsSync(join(dir, 'jest.config.js')) || existsSync(join(dir, 'jest.config.cjs'))) {
+      commands.push({ name: 'Jest', cmd: 'npx jest --ci' });
+    }
+
+    // .NET
+    if (this.hasFileWithExt(dir, ['.sln', '.csproj'])) {
+      commands.push({ name: 'dotnet build', cmd: 'dotnet build --no-restore' });
+      commands.push({ name: 'dotnet test', cmd: 'dotnet test --no-build' });
+    }
+
+    // Python
+    if (existsSync(join(dir, 'pytest.ini')) || existsSync(join(dir, 'pyproject.toml'))) {
+      commands.push({ name: 'pytest', cmd: 'python -m pytest' });
+    }
+
+    // Go
+    if (existsSync(join(dir, 'go.mod'))) {
+      commands.push({ name: 'go build', cmd: 'go build ./...' });
+      commands.push({ name: 'go test', cmd: 'go test ./...' });
+    }
+
+    // Rust
+    if (existsSync(join(dir, 'Cargo.toml'))) {
+      commands.push({ name: 'cargo check', cmd: 'cargo check' });
+      commands.push({ name: 'cargo test', cmd: 'cargo test' });
+    }
+
+    // Java — Maven
+    if (existsSync(join(dir, 'pom.xml'))) {
+      commands.push({ name: 'maven', cmd: 'mvn verify -q' });
+    }
+
+    // Java — Gradle
+    if (existsSync(join(dir, 'build.gradle')) || existsSync(join(dir, 'build.gradle.kts'))) {
+      commands.push({ name: 'gradle', cmd: 'gradle check --quiet' });
+    }
+
+    // Ruby
+    if (existsSync(join(dir, 'Rakefile'))) {
+      commands.push({ name: 'rake', cmd: 'bundle exec rake' });
+    }
+
+    return commands;
+  }
+
+  private hasFileWithExt(dir: string, exts: string[]): boolean {
+    try {
+      const { readdirSync } = require('node:fs');
+      return readdirSync(dir).some((f: string) => exts.some((ext) => f.endsWith(ext)));
+    } catch {
+      return false;
+    }
   }
 
   // ── Broadcasting ───────────────────────────────────────────────

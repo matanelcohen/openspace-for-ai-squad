@@ -65,7 +65,7 @@ export class WorktreeService {
     this.worktreeDir = config.worktreeDir ?? '.git-worktrees';
     this.baseBranch = config.baseBranch ?? 'main';
     this.maxWorktrees = config.maxWorktrees ?? 10;
-    this.installDeps = config.installDeps ?? false;
+    this.installDeps = config.installDeps ?? true;
     this.symlinkSquad = config.symlinkSquad ?? true;
     this.autoCommit = config.autoCommit ?? true;
     this.autoPR = config.autoPR ?? true;
@@ -469,20 +469,99 @@ export class WorktreeService {
   }
 
   private installDependencies(worktreePath: string): void {
-    const hasLockfile = existsSync(join(worktreePath, 'pnpm-lock.yaml'));
-    if (!hasLockfile) return;
+    const install = this.detectInstallCommand(worktreePath);
+    if (!install) {
+      console.log(`[WorktreeService] No recognized project type in ${worktreePath}, skipping install`);
+      return;
+    }
 
     try {
-      console.log(`[WorktreeService] Installing deps in ${worktreePath}...`);
-      execSync('pnpm install --frozen-lockfile', {
+      console.log(`[WorktreeService] Installing deps (${install.name}) in ${worktreePath}...`);
+      execSync(install.command, {
         cwd: worktreePath,
         encoding: 'utf-8',
-        timeout: 120_000,
+        timeout: 300_000, // 5 min for large installs
         stdio: 'pipe',
       });
+      console.log(`[WorktreeService] Deps installed (${install.name})`);
     } catch (err) {
       console.warn(`[WorktreeService] Dep install failed (non-blocking):`, err);
     }
+  }
+
+  /**
+   * Detect project type and return the appropriate install command.
+   */
+  private detectInstallCommand(dir: string): { name: string; command: string } | null {
+    // Node.js — check lockfiles in priority order
+    if (existsSync(join(dir, 'pnpm-lock.yaml'))) {
+      return { name: 'pnpm', command: 'pnpm install --frozen-lockfile' };
+    }
+    if (existsSync(join(dir, 'yarn.lock'))) {
+      return { name: 'yarn', command: 'yarn install --frozen-lockfile' };
+    }
+    if (existsSync(join(dir, 'bun.lockb')) || existsSync(join(dir, 'bun.lock'))) {
+      return { name: 'bun', command: 'bun install --frozen-lockfile' };
+    }
+    if (existsSync(join(dir, 'package-lock.json')) || existsSync(join(dir, 'package.json'))) {
+      return { name: 'npm', command: 'npm ci' };
+    }
+
+    // .NET
+    if (existsSync(join(dir, '*.sln')) || existsSync(join(dir, '*.csproj'))) {
+      return { name: 'dotnet', command: 'dotnet restore' };
+    }
+    // Check for .sln or .csproj with glob
+    try {
+      const files = readdirSync(dir);
+      if (files.some((f) => f.endsWith('.sln') || f.endsWith('.csproj'))) {
+        return { name: 'dotnet', command: 'dotnet restore' };
+      }
+    } catch { /* ignore */ }
+
+    // Python
+    if (existsSync(join(dir, 'requirements.txt'))) {
+      return { name: 'pip', command: 'pip install -r requirements.txt' };
+    }
+    if (existsSync(join(dir, 'pyproject.toml'))) {
+      return { name: 'python', command: 'pip install -e .' };
+    }
+    if (existsSync(join(dir, 'Pipfile'))) {
+      return { name: 'pipenv', command: 'pipenv install' };
+    }
+    if (existsSync(join(dir, 'poetry.lock'))) {
+      return { name: 'poetry', command: 'poetry install' };
+    }
+
+    // Go
+    if (existsSync(join(dir, 'go.mod'))) {
+      return { name: 'go', command: 'go mod download' };
+    }
+
+    // Rust
+    if (existsSync(join(dir, 'Cargo.toml'))) {
+      return { name: 'cargo', command: 'cargo fetch' };
+    }
+
+    // Java/Kotlin
+    if (existsSync(join(dir, 'pom.xml'))) {
+      return { name: 'maven', command: 'mvn dependency:resolve -q' };
+    }
+    if (existsSync(join(dir, 'build.gradle')) || existsSync(join(dir, 'build.gradle.kts'))) {
+      return { name: 'gradle', command: 'gradle dependencies --quiet' };
+    }
+
+    // Ruby
+    if (existsSync(join(dir, 'Gemfile'))) {
+      return { name: 'bundler', command: 'bundle install' };
+    }
+
+    // PHP
+    if (existsSync(join(dir, 'composer.json'))) {
+      return { name: 'composer', command: 'composer install --no-interaction' };
+    }
+
+    return null;
   }
 
   private git(args: string): string {
