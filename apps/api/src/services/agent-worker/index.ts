@@ -28,6 +28,7 @@ import {
 import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
 import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
+import type { TeamStatusService } from '../team-status/index.js';
 import type { CodeReviewService } from '../code-review.js';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -60,6 +61,8 @@ interface AgentWorkerConfig {
   worktreeService?: WorktreeService | null;
   /** CodeReviewService for automated review of agent-created PRs. */
   codeReviewService?: CodeReviewService;
+  /** TeamStatusService for inter-agent awareness. */
+  teamStatusService?: TeamStatusService | null;
 }
 
 interface QueueState {
@@ -1136,6 +1139,7 @@ export class AgentWorkerService {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[AgentWorker] ${agent.name} delegation failed:`, message);
+      this.recordAttempt(taskId, message);
 
       await updateTask(this.config.tasksDir, taskId, {
         status: 'blocked',
@@ -1304,6 +1308,7 @@ export class AgentWorkerService {
   }
 
   private broadcastAgentWorking(agentId: string, taskId: string, taskTitle: string): void {
+    this.config.teamStatusService?.trackWorking(agentId, taskId, taskTitle);
     this.config.wsManager?.broadcast({
       type: 'agent:working',
       payload: { agentId, taskId, taskTitle },
@@ -1312,6 +1317,7 @@ export class AgentWorkerService {
   }
 
   private broadcastAgentIdle(agentId: string): void {
+    this.config.teamStatusService?.trackIdle(agentId);
     this.config.wsManager?.broadcast({
       type: 'agent:idle',
       payload: { agentId },

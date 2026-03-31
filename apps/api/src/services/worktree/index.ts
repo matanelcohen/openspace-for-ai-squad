@@ -144,17 +144,27 @@ export class WorktreeService {
       );
     }
 
-    const base = opts?.baseBranch ?? this.baseBranch;
+    let base = opts?.baseBranch ?? this.baseBranch;
     const branchName = `task/${taskId}`;
     const worktreePath = join(this.worktreesRoot(), taskId);
 
     // If this is a subtask, ensure the parent feature branch exists
     if (opts?.parentTaskId) {
-      await this.ensureFeatureBranch(opts.parentTaskId);
+      try {
+        await this.ensureFeatureBranch(opts.parentTaskId);
+      } catch (err) {
+        console.warn(`[WorktreeService] Could not create feature branch for ${opts.parentTaskId}, using ${this.baseBranch}`);
+        base = this.baseBranch;
+      }
     }
 
-    // Ensure base branch ref exists locally
-    this.fetchBranchIfNeeded(base);
+    // Ensure base branch ref exists locally — fall back to default if not
+    try {
+      this.fetchBranchIfNeeded(base);
+    } catch {
+      console.warn(`[WorktreeService] Base branch ${base} not found, falling back to ${this.baseBranch}`);
+      base = this.baseBranch;
+    }
 
     // Create worktree + branch
     mkdirSync(this.worktreesRoot(), { recursive: true });
