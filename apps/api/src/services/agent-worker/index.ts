@@ -607,6 +607,41 @@ export class AgentWorkerService {
       let prInfo: { number: number; url: string } | undefined;
       if (worktree && this.config.worktreeService) {
         const wts = this.config.worktreeService;
+
+        // Verify build/tests pass before committing
+        const verifyResult = await this.verifyInSandbox(worktree.path, agent, taskId);
+        if (!verifyResult.passed) {
+          // Give agent one retry to fix the issues
+          console.log(`[AgentWorker] Build/test failed in sandbox, asking ${agent.name} to fix...`);
+          progressLog.push(`**[${now()}]** ❌ Build/test failed:\n\`\`\`\n${verifyResult.output.substring(0, 500)}\n\`\`\``);
+
+          if (this.config.aiProvider.agenticCompletion) {
+            const fixResult = await this.config.aiProvider.agenticCompletion({
+              taskTitle: `Fix: ${task.title}`,
+              agentId: agent.id,
+              systemPrompt: sharedOpts.systemPrompt,
+              messages: [
+                ...sharedOpts.messages,
+                { role: 'assistant' as const, content: result.content },
+                {
+                  role: 'user' as const,
+                  content: `Your changes failed build/test verification:\n\n\`\`\`\n${verifyResult.output.substring(0, 1500)}\n\`\`\`\n\nFix the issues and make sure the build and tests pass.`,
+                },
+              ],
+              workingDirectory: worktree.path,
+              onEvent,
+            } satisfies AgenticCompletionOptions);
+            progressLog.push(`**[${now()}]** 🔧 ${agent.name} attempted fixes: ${fixResult.content.substring(0, 200)}`);
+
+            // Re-verify after fix
+            const recheck = await this.verifyInSandbox(worktree.path, agent, taskId);
+            if (!recheck.passed) {
+              progressLog.push(`**[${now()}]** ⚠️ Build/test still failing after retry`);
+              console.warn(`[AgentWorker] ${agent.name} could not fix build/test failures for ${taskId}`);
+            }
+          }
+        }
+
         if (wts.autoCommit) {
           const sha = await wts.commit(taskId, `feat: ${task.title}\n\nTask: ${taskId}\nAgent: ${agent.name}`);
           if (sha && wts.autoPR) {
@@ -1123,6 +1158,49 @@ export class AgentWorkerService {
 
     // Safety: stop monitoring after 30 minutes
     setTimeout(() => clearInterval(checkInterval), 30 * 60 * 1000);
+  }
+
+  // ── Sandbox verification ──────────────────────────────────────
+
+  /**
+   * Run build and tests in a worktree sandbox. Returns pass/fail + output.
+   */
+  private async verifyInSandbox(
+    worktreePath: string,
+    agent: AgentProfile,
+    taskId: string,
+  ): Promise<{ passed: boolean; output: string }> {
+    const { execSync } = await import('node:child_process');
+    const commands = [
+      { name: 'TypeScript', cmd: 'npx tsc --noEmit' },
+      { name: 'Tests', cmd: 'npx vitest run --reporter=verbose' },
+    ];
+
+    const outputs: string[] = [];
+    let allPassed = true;
+
+    for (const { name, cmd } of commands) {
+      try {
+        const out = execSync(cmd, {
+          cwd: worktreePath,
+          encoding: 'utf-8',
+          timeout: 120_000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { ...process.env, CI: 'true' },
+        });
+        outputs.push(`✅ ${name}: passed`);
+        console.log(`[AgentWorker] ${agent.name} sandbox ${name}: PASSED (${taskId})`);
+      } catch (err) {
+        const error = err as { stderr?: string; stdout?: string };
+        const errorOutput = (error.stderr ?? error.stdout ?? 'Unknown error').substring(0, 1000);
+        outputs.push(`❌ ${name}: FAILED\n${errorOutput}`);
+        allPassed = false;
+        console.log(`[AgentWorker] ${agent.name} sandbox ${name}: FAILED (${taskId})`);
+        break; // Stop on first failure
+      }
+    }
+
+    return { passed: allPassed, output: outputs.join('\n\n') };
   }
 
   // ── Broadcasting ───────────────────────────────────────────────
