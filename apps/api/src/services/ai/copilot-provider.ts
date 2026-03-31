@@ -894,10 +894,23 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       eventCallback({ type: 'thinking', data: { content: ev.data?.content } });
     });
     session.on('tool.execution_start', (e: unknown) => {
-      const ev = e as { type: string; data?: { name?: string; arguments?: unknown } };
+      const ev = e as Record<string, unknown>;
+      const data = (ev.data ?? ev) as Record<string, unknown>;
+      // Debug: log raw event keys to find correct tool name field
+      const keys = Object.keys(data);
+      if (!data.name && !data.toolName && !data.tool_name) {
+        console.log(`[CopilotProvider] tool.execution_start keys: [${keys.join(', ')}]`, JSON.stringify(data).substring(0, 300));
+      }
+      const toolName =
+        (data.name as string) ??
+        (data.toolName as string) ??
+        (data.tool_name as string) ??
+        ((data.tool as Record<string, unknown>)?.name as string) ??
+        undefined;
+      const toolArgs = data.arguments ?? data.args ?? data.input;
       eventCallback({
         type: 'tool_start',
-        data: { name: ev.data?.name, arguments: ev.data?.arguments },
+        data: { name: toolName, arguments: toolArgs },
       });
     });
     session.on('session.info', (e: unknown) => {
