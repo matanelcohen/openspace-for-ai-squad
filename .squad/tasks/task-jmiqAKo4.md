@@ -7,8 +7,8 @@ assignee: zoidberg
 labels:
   - 'parent:task-Too8OrT7'
 created: '2026-03-26T18:05:28.314Z'
-updated: '2026-03-26T18:21:01.073Z'
-sortIndex: 206
+updated: '2026-03-31T21:51:05.059Z'
+sortIndex: 143
 ---
 Write Playwright E2E tests covering: (1) skills listing page loads and displays built-in skills, (2) search/filter by tag and phase works, (3) clicking a skill navigates to detail page with correct tabs, (4) skill creation wizard completes successfully and new skill appears in listing, (5) agent-skill assignment attach/detach works. Use the existing playwright.config.ts setup.
 

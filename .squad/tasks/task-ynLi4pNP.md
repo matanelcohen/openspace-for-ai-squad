@@ -11,8 +11,8 @@ labels:
   - observability
   - 'parent:task-oJQ0IYQc'
 created: '2026-03-25T23:19:09.264Z'
-updated: '2026-03-26T07:04:45.433Z'
-sortIndex: 143
+updated: '2026-03-31T21:51:04.850Z'
+sortIndex: 94
 ---
 Write comprehensive tests: (1) Unit tests for the Tracer SDK - span creation, nesting, context propagation, cost calculation, token counting. (2) Integration tests verifying traces are correctly emitted during real agent runs and persisted via the API. (3) E2E tests for the trace viewer UI - verify trace list loads, filtering works, clicking a trace shows the waterfall view, span details render correctly. (4) Performance test ensuring tracing overhead stays under 5% of baseline agent latency. (5) Test edge cases: failed spans, concurrent traces, very deep span trees, missing data gracefully handled in UI.
 

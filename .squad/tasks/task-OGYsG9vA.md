@@ -9,8 +9,8 @@ labels:
   - verification
   - 'parent:task-Ks-Vyr-5'
 created: '2026-03-25T13:35:22.905Z'
-updated: '2026-03-25T14:01:49.229Z'
-sortIndex: 23
+updated: '2026-03-31T21:51:04.707Z'
+sortIndex: 29
 ---
 Run the full task-parser test suite after TS fixes and fixture updates are applied. Confirm all tests pass with no regressions. Run type-check and lint as well.
 

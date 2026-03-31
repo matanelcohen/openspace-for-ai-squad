@@ -1,8 +1,4 @@
 ---
-"\U0001F916 Auto-assigned by YOLO to bender": >-
-  P0 priority. Bender (Backend Dev) is idle and this involves copying an
-  existing exponential backoff pattern into the useSandboxStream hook —
-  well-scoped implementation work.
 id: task-5aGCRfQV
 title: Add reconnection logic to useSandboxStream hook
 status: done
@@ -14,8 +10,8 @@ labels:
   - terminal
   - 'parent:task-GPxctKEl'
 created: '2026-03-26T14:47:32.479Z'
-updated: '2026-03-30T14:40:34.685Z'
-sortIndex: 185
+updated: '2026-03-31T21:51:05.022Z'
+sortIndex: 129
 ---
 **[2026-03-30 14:40:34]** 🚀 Bender started working on this task.
 

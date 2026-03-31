@@ -10,7 +10,7 @@ labels:
   - qa
   - 'parent:task-_siJJHvU'
 created: '2026-03-25T13:40:47.133Z'
-updated: '2026-03-25T14:46:43.804Z'
-sortIndex: 44
+updated: '2026-03-31T21:51:04.758Z'
+sortIndex: 50
 ---
 Write Playwright E2E tests that exercise full bulk workflows end-to-end: select multiple tasks, apply bulk action, verify UI updates and backend persistence. Cover both success and error scenarios.

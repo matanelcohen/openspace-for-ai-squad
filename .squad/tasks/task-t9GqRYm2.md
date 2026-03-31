@@ -9,8 +9,8 @@ labels:
   - testing
   - e2e
 created: '2026-03-25T20:08:14.223Z'
-updated: '2026-03-25T23:16:28.532Z'
-sortIndex: 0
+updated: '2026-03-31T21:51:04.644Z'
+sortIndex: 6
 ---
 Write end-to-end tests covering channel CRUD, message routing, and UI flows. Verify the full stack: API endpoints, React hooks, and UI components work together.
 

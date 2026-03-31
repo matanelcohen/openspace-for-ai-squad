@@ -10,8 +10,8 @@ labels:
   - channels
   - 'parent:task-5iQZEVNB'
 created: '2026-03-25T20:08:58.538Z'
-updated: '2026-03-25T21:32:53.307Z'
-sortIndex: 105
+updated: '2026-03-31T21:51:04.832Z'
+sortIndex: 85
 ---
 Build UI for creating, viewing, editing, and deleting channels. Include a channel list sidebar, create-channel dialog/form, channel settings panel with rename/delete options, and confirmation dialogs for destructive actions. Connect to the backend CRUD endpoints.
 

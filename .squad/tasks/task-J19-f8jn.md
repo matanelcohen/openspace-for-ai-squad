@@ -7,8 +7,8 @@ assignee: zoidberg
 labels:
   - 'parent:task-_U_Q7gHO'
 created: '2026-03-31T08:35:47.634Z'
-updated: '2026-03-31T08:59:41.388Z'
-sortIndex: 295
+updated: '2026-03-31T21:51:05.090Z'
+sortIndex: 156
 parent: task-_U_Q7gHO
 ---
 Run full regression tests: (1) sidebar navigation still works — all routes render correctly without blank pages or hydration errors, (2) all other WebSocket routes (if any) are unaffected by the terminal changes, (3) terminal connect/disconnect cycles don't leak resources or break other features, (4) test with multiple concurrent terminal sessions. Document any regressions found.

@@ -7,8 +7,8 @@ assignee: bender
 labels:
   - 'parent:task-OCFIYeWW'
 created: '2026-03-26T15:16:19.575Z'
-updated: '2026-03-26T15:26:53.540Z'
-sortIndex: 195
+updated: '2026-03-31T21:51:05.033Z'
+sortIndex: 134
 ---
 Improve the SkillRouter in /apps/api/src/services/skill-registry/skill-router.ts to support weighted composite triggers, fuzzy pattern matching, and skill priority tiebreaking. Currently confidence scores are static (task-type: 0.9, label: 0.8, pattern: 0.7, file: 0.6) — make them configurable per-skill and add support for learned relevance adjustments.
 

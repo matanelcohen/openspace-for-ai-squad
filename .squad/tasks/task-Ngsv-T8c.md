@@ -11,8 +11,8 @@ labels:
   - qa
   - 'parent:task-vtSOSCNr'
 created: '2026-03-26T09:57:53.134Z'
-updated: '2026-03-30T07:34:05.861Z'
-sortIndex: 175
+updated: '2026-03-31T21:51:04.910Z'
+sortIndex: 119
 ---
 Write E2E tests (Playwright, already configured via playwright.config.ts) covering: input renders correctly, auto-grows on multiline, Enter sends message, Shift+Enter adds newline, send button appears when text is present, mic button toggles recording state, and disabled states render properly. Cover both the MessageInput and Composer surfaces. Add snapshot or visual comparison if the project supports it.
 

@@ -9,8 +9,8 @@ labels:
   - backend
   - api
 created: '2026-03-25T15:02:59.698Z'
-updated: '2026-03-25T21:00:28.334Z'
-sortIndex: 66
+updated: '2026-03-31T21:51:04.800Z'
+sortIndex: 69
 ---
 Add Fastify route plugin for channels: GET /api/channels, GET /api/channels/:id, POST /api/channels, PUT /api/channels/:id, DELETE /api/channels/:id. Wire up to the channel CRUD service. Include validation and error handling.
 

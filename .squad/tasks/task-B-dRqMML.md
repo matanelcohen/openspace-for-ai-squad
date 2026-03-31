@@ -10,8 +10,8 @@ labels:
   - channels
   - 'parent:task-5iQZEVNB'
 created: '2026-03-25T20:08:58.504Z'
-updated: '2026-03-25T21:30:50.357Z'
-sortIndex: 102
+updated: '2026-03-31T21:51:04.829Z'
+sortIndex: 84
 ---
 Define the storage strategy for channels (`.squad/` files vs DB), the data model extending ChatChannel from @openspace/shared, and the CRUD method signatures for ChatService. Document decisions on file naming conventions, conflict handling, and whether channels are persisted per-workspace or globally.
 

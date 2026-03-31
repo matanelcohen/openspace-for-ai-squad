@@ -1,7 +1,4 @@
 ---
-"\U0001F916 Auto-assigned by YOLO to fry": >-
-  P0 — terminal page is a UI/frontend fix, direct match for frontend dev.
-  Highest priority idle-assignable task.
 id: task-PRYrQNNq
 title: Fix terminal page
 status: done
@@ -9,8 +6,8 @@ priority: P0
 assignee: fry
 labels: []
 created: '2026-03-30T09:03:15.756Z'
-updated: '2026-03-31T09:00:08.980Z'
-sortIndex: 212
+updated: '2026-03-31T21:51:05.060Z'
+sortIndex: 146
 ---
 **[2026-03-31 09:00:08]** 🚀 Fry started working on this task.
 

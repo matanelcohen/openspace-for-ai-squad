@@ -11,8 +11,8 @@ labels:
   - channels
   - 'parent:task-5iQZEVNB'
 created: '2026-03-25T20:08:58.547Z'
-updated: '2026-03-25T21:30:30.441Z'
-sortIndex: 106
+updated: '2026-03-31T21:51:04.832Z'
+sortIndex: 86
 ---
 Create unit tests for all ChatService channel CRUD methods covering: successful create/read/update/delete, duplicate channel name handling, not-found errors, invalid input validation, and file/DB persistence correctness. Add integration tests verifying the full round-trip through the API/WebSocket layer. Target >90% coverage of channel-related code paths.
 

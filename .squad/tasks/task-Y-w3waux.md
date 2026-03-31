@@ -10,8 +10,8 @@ labels:
   - mcp
   - 'parent:task-CRcTG6PJ'
 created: '2026-03-25T23:20:11.256Z'
-updated: '2026-03-26T05:44:18.321Z'
-sortIndex: 166
+updated: '2026-03-31T21:51:04.892Z'
+sortIndex: 110
 ---
 Create a new `packages/mcp-server` package (or add to `apps/api`) that initializes an MCP server using `@modelcontextprotocol/sdk`. Support both stdio and SSE transports so external clients (Claude Desktop, Cursor, VS Code Copilot) can connect. Register it as a Fastify plugin at `/mcp` for SSE, and expose a standalone `bin/mcp-server.ts` entry point for stdio transport. Wire up the server lifecycle (init, shutdown) and configure Turborepo build pipeline. Add `@modelcontextprotocol/sdk` dependency.
 

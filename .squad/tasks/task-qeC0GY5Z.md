@@ -11,8 +11,8 @@ labels:
   - sandbox
   - 'parent:task-RpGqbXvk'
 created: '2026-03-25T23:19:27.919Z'
-updated: '2026-03-26T06:37:57.824Z'
-sortIndex: 150
+updated: '2026-03-31T21:51:04.864Z'
+sortIndex: 99
 ---
 Build the backend service that manages isolated container lifecycles. Use Docker or a lightweight container runtime to spin up ephemeral sandboxes per agent request. Implement: container pool management, runtime provisioning (Node, Python, Go base images), command execution API (run build/test/script), stdout/stderr streaming via WebSocket, resource limits (CPU, memory, timeout), filesystem snapshot for artifact retrieval. Expose REST endpoints for create/execute/destroy and a WebSocket endpoint for real-time output streaming.
 

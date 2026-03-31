@@ -11,8 +11,8 @@ labels:
   - data-visualization
   - 'parent:task-oJQ0IYQc'
 created: '2026-03-25T23:19:09.251Z'
-updated: '2026-03-26T00:16:01.786Z'
-sortIndex: 142
+updated: '2026-03-31T21:51:04.850Z'
+sortIndex: 93
 ---
 Create a LangSmith-inspired trace viewer with: (1) Trace list page - table showing recent agent runs with columns: agent name, status, duration, total tokens, cost, timestamp. Add filters and search. (2) Trace detail page - waterfall/flame chart visualization showing the span tree (agent → steps → tool calls → LLM calls) with timing bars. Click a span to see its details: input/output, token counts, latency, cost, errors. (3) Stats dashboard - charts for latency distribution, cost over time, token usage trends, error rates. Use existing UI component patterns from the codebase. Ensure the waterfall view clearly shows parent-child span relationships and parallel execution.
 

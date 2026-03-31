@@ -11,8 +11,8 @@ labels:
   - RAG
   - 'parent:task-Kn1c77z_'
 created: '2026-03-25T23:19:13.956Z'
-updated: '2026-03-26T06:28:51.667Z'
-sortIndex: 147
+updated: '2026-03-31T21:51:04.862Z'
+sortIndex: 96
 ---
 Create a UI component in the agent dashboard that visualizes RAG knowledge base status and allows manual querying. Include: a search bar for testing similarity queries, results display with source attribution and relevance scores, ingestion status/progress indicators, and a knowledge base stats panel (document count, last sync time, source breakdown). This helps the team monitor and debug the RAG system.
 

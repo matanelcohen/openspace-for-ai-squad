@@ -11,8 +11,8 @@ labels:
   - unit-tests
   - 'parent:task--zQtayst'
 created: '2026-03-25T23:18:41.503Z'
-updated: '2026-03-26T06:52:22.448Z'
-sortIndex: 134
+updated: '2026-03-31T21:51:04.839Z'
+sortIndex: 89
 ---
 Write comprehensive tests for the tool registry: unit tests for registry CRUD operations and schema validation, integration tests for built-in tool adapters (git, search, file ops, APIs), E2E tests for the full flow of agent discovering and invoking tools dynamically, tests for custom tool registration via config including hot-reload, and edge cases (invalid schemas, tool timeouts, concurrent access, missing tools). Target 90%+ coverage on registry core.
 

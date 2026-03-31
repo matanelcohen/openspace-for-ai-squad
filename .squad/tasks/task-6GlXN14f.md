@@ -11,8 +11,8 @@ labels:
   - components
   - 'parent:task-meNX3cL6'
 created: '2026-03-25T13:45:36.772Z'
-updated: '2026-03-25T14:08:17.312Z'
-sortIndex: 60
+updated: '2026-03-31T21:51:04.784Z'
+sortIndex: 64
 ---
 Add a 'Clear Chat' button to the chat UI in apps/web/src/components/chat/chat-sidebar.tsx (or chat-client.tsx header area). Use the existing shadcn Button component and a Radix AlertDialog for confirmation ('Are you sure? This will permanently delete all messages in this chat.'). Wire it to the useClearChat hook. Include a trash/eraser icon (lucide-react). Support clearing per-channel (current chat) and optionally an 'all chats' option via a dropdown menu.
 

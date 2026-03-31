@@ -6,8 +6,8 @@ priority: P0
 assignee: fry
 labels: []
 created: '2026-03-24T13:48:45.285Z'
-updated: '2026-03-24T15:19:36.977Z'
-sortIndex: 0
+updated: '2026-03-31T21:51:04.642Z'
+sortIndex: 5
 ---
 create page with boom animiation
 

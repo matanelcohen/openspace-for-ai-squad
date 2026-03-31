@@ -11,8 +11,8 @@ labels:
   - integration
   - 'parent:task-eLmi8eT_'
 created: '2026-03-25T15:03:32.028Z'
-updated: '2026-03-25T19:00:58.885Z'
-sortIndex: 85
+updated: '2026-03-31T21:51:04.816Z'
+sortIndex: 78
 ---
 Wire up WebSocket event listeners (e.g. 'channel.created', 'channel.updated', 'channel.deleted') to invalidate or update TanStack Query cache entries. Use queryClient.invalidateQueries(['channels']) or queryClient.setQueryData for granular updates. Ensure invalidation is debounced/batched to avoid redundant refetches. Coordinate with existing WebSocket infrastructure.
 

@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-Too8OrT7'
 created: '2026-03-26T18:05:28.112Z'
-updated: '2026-03-26T18:14:34.950Z'
-sortIndex: 202
+updated: '2026-03-31T21:51:05.055Z'
+sortIndex: 141
 ---
 Implement the /skills page using SkillGrid, SkillCard, and SkillFiltersToolbar components. Wire up the useSkills hook to fetch from GET /api/skills with search, tag, and phase query params. Include 30s auto-refetch via React Query. Display skill name, description, icon, tags, and phase badge for each card.
 

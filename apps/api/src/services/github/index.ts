@@ -9,6 +9,13 @@ import { tmpdir } from 'node:os';
 
 import type { GitHubIssue, GitHubPR } from '@matanelcohen/openspace-shared';
 
+/** Status of a single CI check run on a PR. */
+export interface PRCheckRun {
+  name: string;
+  state: string;
+  conclusion: string;
+}
+
 export class GitHubService {
   constructor(private projectDir: string) {}
 
@@ -98,6 +105,52 @@ export class GitHubService {
     } finally {
       try { unlinkSync(bodyFile); } catch { /* ignore */ }
     }
+  }
+
+  /**
+   * Get a single PR by number.
+   */
+  async getPR(prNumber: number): Promise<GitHubPR> {
+    const raw = this.exec(
+      `gh pr view ${prNumber} --json number,title,body,state,headRefName,baseRefName,url`,
+    );
+    const item = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      number: item.number as number,
+      title: item.title as string,
+      body: (item.body as string) ?? '',
+      state: item.state as string,
+      head: { ref: item.headRefName as string },
+      base: { ref: item.baseRefName as string },
+      url: item.url as string,
+    };
+  }
+
+  /**
+   * Get CI/check status for a PR.
+   */
+  async getPRChecks(prNumber: number): Promise<PRCheckRun[]> {
+    try {
+      const raw = this.exec(
+        `gh pr checks ${prNumber} --json name,state,conclusion`,
+      );
+      return JSON.parse(raw) as PRCheckRun[];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Merge a PR via the GitHub CLI.
+   */
+  async mergePR(
+    prNumber: number,
+    method: 'squash' | 'merge' | 'rebase' = 'squash',
+  ): Promise<void> {
+    this.exec(
+      `gh pr merge ${prNumber} --${method} --delete-branch`,
+      120_000,
+    );
   }
 
   async listPRs(state?: 'open' | 'closed'): Promise<GitHubPR[]> {

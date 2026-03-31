@@ -10,8 +10,8 @@ labels:
   - tests
   - 'parent:task-h0oYAnT5'
 created: '2026-03-25T13:35:39.381Z'
-updated: '2026-03-25T13:57:46.481Z'
-sortIndex: 31
+updated: '2026-03-31T21:51:04.722Z'
+sortIndex: 37
 ---
 In packages/shared/src/__tests__/shared.test.ts line 128, the Task object literal is missing the required `assigneeType` field. Add `assigneeType: 'agent'` to the fixture to match the Task interface defined in types/task.ts.
 

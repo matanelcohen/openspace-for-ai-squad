@@ -10,8 +10,8 @@ labels:
   - api
   - 'parent:task-CRcTG6PJ'
 created: '2026-03-25T23:20:11.269Z'
-updated: '2026-03-26T05:49:59.436Z'
-sortIndex: 167
+updated: '2026-03-31T21:51:04.894Z'
+sortIndex: 111
 ---
 Register MCP tools that map to existing API service methods. Tools to expose:
 - `create_task` / `update_task` / `delete_task` / `list_tasks` / `get_task` — full task CRUD via SquadWriter/SquadParser

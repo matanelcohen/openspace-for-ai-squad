@@ -11,8 +11,8 @@ labels:
   - new-feature
   - 'parent:task-hhMHoacH'
 created: '2026-03-26T14:32:45.182Z'
-updated: '2026-03-26T14:37:09.302Z'
-sortIndex: 180
+updated: '2026-03-31T21:51:05.014Z'
+sortIndex: 124
 ---
 Install `node-pty` in apps/api. Create a new route file `apps/api/src/routes/terminal.ts` that registers a WebSocket endpoint at `/api/terminal/ws`. On connection, spawn a PTY process (default: bash) using node-pty. Pipe PTY stdout to WebSocket messages (type 'output') and WebSocket input messages (type 'input') to PTY stdin. Handle resize messages (type 'resize' with cols/rows) by calling pty.resize(). Clean up the PTY process on WebSocket close. Register the route in `apps/api/src/app.ts`.
 

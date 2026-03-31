@@ -10,8 +10,8 @@ labels:
   - blocker
   - 'parent:task-8FztpO9u'
 created: '2026-03-25T13:35:32.236Z'
-updated: '2026-03-25T14:08:03.319Z'
-sortIndex: 24
+updated: '2026-03-31T21:51:04.709Z'
+sortIndex: 30
 ---
 Identify and fix the TypeScript compilation errors that are blocking the realtime integration test from running. These TS fixes are a prerequisite for the test assertion fix.
 

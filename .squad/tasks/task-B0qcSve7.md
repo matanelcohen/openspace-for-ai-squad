@@ -10,8 +10,8 @@ labels:
   - tanstack-query
   - 'parent:task-eLmi8eT_'
 created: '2026-03-25T15:03:31.999Z'
-updated: '2026-03-25T16:37:49.795Z'
-sortIndex: 83
+updated: '2026-03-31T21:51:04.811Z'
+sortIndex: 76
 ---
 Create useChannels (list) and useChannel (single by ID) hooks using TanStack Query's useQuery. Connect to GET /api/channels and GET /api/channels/:id REST endpoints. Define query keys (e.g. ['channels'] and ['channels', id]), configure staleTime/cacheTime, handle loading/error states, and export TypeScript types for Channel entities.
 

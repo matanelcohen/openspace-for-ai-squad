@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-OpAaDISd'
 created: '2026-03-30T14:40:26.520Z'
-updated: '2026-03-30T15:07:58.905Z'
-sortIndex: 228
+updated: '2026-03-31T21:51:05.072Z'
+sortIndex: 148
 parent: task-OpAaDISd
 ---
 Create the full Escalation Review Dashboard page and supporting components in apps/web. This includes: (1) A ReviewQueuePage at /escalations with filterable/sortable table of pending escalations using the existing useEscalations() hook, (2) An EscalationDetailPanel showing full context — agent reasoning, confidence score (use confidence-badge), proposed action diff (use proposed-action-diff), audit trail timeline, and approve/reject/request-changes action buttons wired to existing hooks (useClaimEscalation, useApproveEscalation, useRejectEscalation, useRequestChangesEscalation), (3) A ReviewerNotificationBell component showing pending count via usePendingEscalationCount() with a dropdown of recent escalations, (4) Bulk action toolbar for bulk approve/reject using useBulkApproveEscalations/useBulkRejectEscalations, (5) SLA countdown timers on pending items showing time remaining before auto-escalation. Use shadcn/ui components, Tailwind, and ensure real-time updates via the existing WebSocket escalation events. Place components in apps/web/src/components/escalations/. Existing components to build on: escalation-status-badge.tsx, confidence-badge.tsx, priority-indicator.tsx, proposed-action-diff.tsx.

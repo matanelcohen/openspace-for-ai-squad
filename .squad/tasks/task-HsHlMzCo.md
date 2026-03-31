@@ -11,8 +11,8 @@ labels:
   - RAG
   - 'parent:task-Kn1c77z_'
 created: '2026-03-25T23:19:13.972Z'
-updated: '2026-03-26T07:19:53.070Z'
-sortIndex: 148
+updated: '2026-03-31T21:51:04.862Z'
+sortIndex: 97
 ---
 Write comprehensive tests for the RAG knowledge base: unit tests for each ingestion connector (commit, PR, docs, tasks), unit tests for chunking and embedding generation, integration tests for the full ingest→embed→store→query pipeline, retrieval quality benchmarks using known query/answer pairs to measure precision@k and recall, and E2E tests verifying agents receive relevant context when querying. Include edge cases: empty repos, large diffs, non-English content, and concurrent ingestion.
 

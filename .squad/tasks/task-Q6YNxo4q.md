@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-_U_Q7gHO'
 created: '2026-03-31T08:35:47.597Z'
-updated: '2026-03-31T08:46:37.445Z'
-sortIndex: 294
+updated: '2026-03-31T21:51:05.090Z'
+sortIndex: 155
 parent: task-_U_Q7gHO
 ---
 Confirm the terminal feature works correctly within the single-port architecture (Fastify serving Next.js on port 3000). Test WebSocket upgrade for the terminal route, verify PTY sessions open/close cleanly, and check that terminal I/O (typing, output, resize) behaves correctly. Update the README with any Node.js version requirements introduced by the node-pty change.

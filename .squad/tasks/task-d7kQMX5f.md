@@ -12,8 +12,8 @@ labels:
   - hitl
   - 'parent:task-OpAaDISd'
 created: '2026-03-25T23:19:55.030Z'
-updated: '2026-03-26T00:47:01.354Z'
-sortIndex: 159
+updated: '2026-03-31T21:51:04.876Z'
+sortIndex: 106
 ---
 Build the backend services for the HITL framework:
 1. **Escalation Engine**: API to create escalation requests with configurable confidence thresholds. When an agent's confidence falls below the threshold, serialize workflow state and create a pending escalation. Support timeout-based auto-escalation and escalation chains (e.g., agent → reviewer → admin).

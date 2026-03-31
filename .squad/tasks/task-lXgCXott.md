@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-PRYrQNNq'
 created: '2026-03-31T07:56:59.924Z'
-updated: '2026-03-31T08:01:28.279Z'
-sortIndex: 231
+updated: '2026-03-31T21:51:05.085Z'
+sortIndex: 151
 parent: task-PRYrQNNq
 ---
 In apps/web/src/components/terminal/terminal.tsx line 279, the failed status displays 'Unable to reach the backend — is the API server running?' but the tests expect 'Connection failed'. Decide on the correct user-facing message and update the component if needed. Also review the connectRef pattern (line 145) — it's mutated outside useEffect. Add a clarifying comment or refactor into a useEffect with [connect] dependency.

@@ -28,6 +28,7 @@ import {
 import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
 import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
+import type { CodeReviewService } from '../code-review.js';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -57,6 +58,8 @@ interface AgentWorkerConfig {
   a2aBaseUrl?: string | null;
   /** WorktreeService for sandboxed parallel execution. */
   worktreeService?: WorktreeService | null;
+  /** CodeReviewService for automated review of agent-created PRs. */
+  codeReviewService?: CodeReviewService;
 }
 
 interface QueueState {
@@ -193,10 +196,59 @@ export class AgentWorkerService {
 
   // ── Recovery ───────────────────────────────────────────────────
 
+  /** Track actual execution attempts (not string matching). */
+  private taskAttempts = new Map<string, { count: number; lastError?: string; lastAttempt: string }>();
+
+  private loadAttempts(): void {
+    try {
+      const attemptsPath = join(dirname(this.queueFilePath), 'task-attempts.json');
+      if (existsSync(attemptsPath)) {
+        const data = JSON.parse(readFileSync(attemptsPath, 'utf-8')) as Record<string, { count: number; lastError?: string; lastAttempt: string }>;
+        for (const [k, v] of Object.entries(data)) {
+          this.taskAttempts.set(k, v);
+        }
+      }
+    } catch { /* ignore */ }
+  }
+
+  private persistAttempts(): void {
+    try {
+      const attemptsPath = join(dirname(this.queueFilePath), 'task-attempts.json');
+      const dir = dirname(attemptsPath);
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      const data: Record<string, { count: number; lastError?: string; lastAttempt: string }> = {};
+      for (const [k, v] of this.taskAttempts) data[k] = v;
+      writeFileSync(attemptsPath, JSON.stringify(data, null, 2), 'utf-8');
+    } catch { /* ignore */ }
+  }
+
+  /** Record an execution attempt for a task. */
+  recordAttempt(taskId: string, error?: string): number {
+    const existing = this.taskAttempts.get(taskId) ?? { count: 0, lastAttempt: '' };
+    existing.count++;
+    existing.lastAttempt = new Date().toISOString();
+    if (error) existing.lastError = error;
+    this.taskAttempts.set(taskId, existing);
+    this.persistAttempts();
+    return existing.count;
+  }
+
+  /** Clear attempt history for a task (e.g. when manually reset). */
+  clearAttempts(taskId: string): void {
+    this.taskAttempts.delete(taskId);
+    this.persistAttempts();
+  }
+
+  /** Get attempt count for a task. */
+  getAttempts(taskId: string): number {
+    return this.taskAttempts.get(taskId)?.count ?? 0;
+  }
+
   /** Recover queue state from disk + re-enqueue in-progress tasks. */
   private async recover(): Promise<void> {
-    // 1. Load persisted queue state
+    // 1. Load persisted queue state + attempt history
     this.loadQueue();
+    this.loadAttempts();
 
     // 2. Scan for orphaned in-progress tasks (server crashed mid-work)
     try {
@@ -212,26 +264,23 @@ export class AgentWorkerService {
             const isAlreadyQueued = queue?.includes(task.id);
             const isActive = this.activeTask.get(task.assignee) === task.id;
 
-            // Check retry count from description
-            const retryCount = (task.description.match(/🚀.*started working/g) ?? []).length;
-            if (retryCount >= 3) {
-              // Too many retries — mark as blocked permanently with reason
-              const lastError =
-                task.description.match(/\*\*Error:\*\*\s*(.+)/g)?.pop() ??
-                'Unknown — server likely crashed before error could be captured';
+            const attempts = this.getAttempts(taskId);
+            const MAX_ATTEMPTS = 5;
+
+            if (attempts >= MAX_ATTEMPTS) {
+              const lastError = this.taskAttempts.get(taskId)?.lastError ?? 'Agent crashed or timed out';
               await updateTask(this.config.tasksDir, taskId, {
                 status: 'blocked',
                 description:
                   task.description +
-                  `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Permanently blocked after ${retryCount} failed attempts.\n\n**Last known error:** ${lastError}\n\n**Diagnosis:** Task was found in-progress after server restart. The agent likely crashed or the copilot-sdk session failed. Check server logs for details.`,
+                  `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Blocked after ${attempts} failed execution attempts.\n\n**Last error:** ${lastError}`,
               });
-              // Remove from queue to prevent infinite retry loop
               if (queue) {
                 const idx = queue.indexOf(task.id);
                 if (idx >= 0) queue.splice(idx, 1);
               }
               console.log(
-                `[AgentWorker] Task ${taskId} permanently blocked after ${retryCount} retries — removed from queue`,
+                `[AgentWorker] Task ${taskId} blocked after ${attempts} real attempts`,
               );
               continue;
             }
@@ -240,7 +289,7 @@ export class AgentWorkerService {
               await updateTask(this.config.tasksDir, taskId, { status: 'pending' });
               queue?.push(task.id);
               console.log(
-                `[AgentWorker] Recovered orphaned task ${taskId} for ${task.assignee} (attempt ${retryCount + 1})`,
+                `[AgentWorker] Recovered orphaned task ${taskId} for ${task.assignee} (attempt ${attempts + 1}/${MAX_ATTEMPTS})`,
               );
               this.emitActivity(task.assignee, 'spawned', `Recovered after restart: ${task.title}`);
             }
@@ -336,15 +385,17 @@ export class AgentWorkerService {
         return;
       }
 
-      // Check retry count — don't even start if too many retries
-      const retryCount = (task.description.match(/🚀.*started working/g) ?? []).length;
-      if (retryCount >= 5) {
-        console.log(`[AgentWorker] Task ${taskId} has ${retryCount} retries — marking blocked`);
+      // Check retry count using structured tracking (not string matching)
+      const attempts = this.getAttempts(taskId);
+      const MAX_ATTEMPTS = 5;
+      if (attempts >= MAX_ATTEMPTS) {
+        const lastError = this.taskAttempts.get(taskId)?.lastError ?? 'Max attempts reached';
+        console.log(`[AgentWorker] Task ${taskId} has ${attempts} attempts — marking blocked`);
         await updateTask(this.config.tasksDir, taskId, {
           status: 'blocked',
           description:
             task.description +
-            `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Permanently blocked after ${retryCount} failed attempts.`,
+            `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Blocked after ${attempts} execution attempts.\n\n**Last error:** ${lastError}`,
         });
         this.activeTask.delete(agentId);
         this.persistQueue();
@@ -358,6 +409,9 @@ export class AgentWorkerService {
         this.persistQueue();
         return;
       }
+
+      // Record this execution attempt
+      this.recordAttempt(taskId);
 
       const now = () => new Date().toISOString().replace('T', ' ').substring(0, 19);
 
@@ -670,6 +724,14 @@ export class AgentWorkerService {
             }
           }
         }
+
+        // Fire-and-forget code review for agent-created PRs
+        if (this.config.codeReviewService && prInfo) {
+          this.config.codeReviewService.reviewPR(prInfo.number, {
+            title: task.title,
+            agentName: agent.name,
+          }).catch((err) => console.warn('[AgentWorker] Code review failed:', err));
+        }
       }
 
       const progressSection =
@@ -680,8 +742,10 @@ export class AgentWorkerService {
         : '';
 
       await updateTask(this.config.tasksDir, taskId, {
-        status: 'done',
-        labels: prInfo ? [...(task.labels ?? []), `pr:${prInfo.number}`] : task.labels,
+        status: prInfo ? 'in-progress' : 'done',
+        labels: prInfo
+          ? [...(task.labels ?? []), `pr:${prInfo.number}`, 'merge:auto']
+          : task.labels,
         description:
           task.description +
           `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.` +
@@ -689,7 +753,7 @@ export class AgentWorkerService {
           branchSection +
           `\n\n**[${now()}]** ✅ ${agent.name} completed this task.\n\n**Result:**\n${result.content}`,
       });
-      this.broadcastTaskUpdate(taskId, 'done');
+      this.broadcastTaskUpdate(taskId, prInfo ? 'in-progress' : 'done');
       this.emitActivity(
         agentId,
         'completed',
@@ -697,6 +761,9 @@ export class AgentWorkerService {
       );
 
       console.log(`[AgentWorker] ${agent.name} completed: ${task.title}`);
+
+      // Clear retry attempts on success
+      this.clearAttempts(taskId);
 
       // Extract and save memories from this task using LLM-based extraction
       try {
@@ -764,6 +831,9 @@ export class AgentWorkerService {
       const message = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? err.stack?.substring(0, 500) : '';
       console.error(`[AgentWorker] ${agentId} failed on ${taskId}:`, message);
+
+      // Record the failure with actual error message
+      this.recordAttempt(taskId, message);
 
       // Persist error to a crash-safe log file (survives server restarts)
       try {

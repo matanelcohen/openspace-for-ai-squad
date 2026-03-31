@@ -10,8 +10,8 @@ labels:
   - sandbox
   - 'parent:task-RpGqbXvk'
 created: '2026-03-25T23:19:27.904Z'
-updated: '2026-03-26T06:28:29.849Z'
-sortIndex: 149
+updated: '2026-03-31T21:51:04.863Z'
+sortIndex: 98
 ---
 Define the overall architecture for sandboxed code execution: container lifecycle (create, execute, destroy), API surface (REST/WebSocket endpoints), security model (resource limits, network isolation, filesystem isolation), and runtime plugin interface for supporting Node, Python, Go. Produce an architecture doc and OpenAPI spec that bender and fry can build against.
 

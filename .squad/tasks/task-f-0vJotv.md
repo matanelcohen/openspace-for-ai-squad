@@ -12,8 +12,8 @@ labels:
   - hitl
   - 'parent:task-OpAaDISd'
 created: '2026-03-25T23:19:55.056Z'
-updated: '2026-03-25T23:46:05.455Z'
-sortIndex: 161
+updated: '2026-03-31T21:51:04.886Z'
+sortIndex: 108
 ---
 Comprehensive test coverage for the escalation framework:
 1. **Unit tests**: Confidence threshold evaluation logic, state serialization/deserialization, timeout calculations, escalation chain resolution.

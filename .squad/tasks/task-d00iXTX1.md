@@ -10,8 +10,8 @@ labels:
   - integration
   - 'parent:task-CRcTG6PJ'
 created: '2026-03-25T23:20:11.295Z'
-updated: '2026-03-26T08:02:53.480Z'
-sortIndex: 169
+updated: '2026-03-31T21:51:04.894Z'
+sortIndex: 113
 ---
 Write integration tests verifying MCP protocol compliance:
 - Server initialization and capability negotiation (tools, resources, prompts)

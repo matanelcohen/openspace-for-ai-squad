@@ -9,8 +9,8 @@ labels:
   - frontend
   - hooks
 created: '2026-03-25T15:03:00.032Z'
-updated: '2026-03-25T20:13:46.196Z'
-sortIndex: 68
+updated: '2026-03-31T21:51:04.801Z'
+sortIndex: 70
 ---
 Create useChannels, useChannel, useCreateChannel, useUpdateChannel hooks using TanStack Query. Connect to the channel REST API endpoints. Include optimistic updates and WebSocket-driven cache invalidation.
 

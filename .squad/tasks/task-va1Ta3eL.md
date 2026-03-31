@@ -11,8 +11,8 @@ labels:
   - terminal
   - 'parent:task-RpGqbXvk'
 created: '2026-03-25T23:19:27.934Z'
-updated: '2026-03-26T00:56:57.743Z'
-sortIndex: 151
+updated: '2026-03-31T21:51:04.864Z'
+sortIndex: 100
 ---
 Create the frontend components for agents to interact with sandboxes: a sandbox panel showing active containers and their status, a terminal-style output viewer with ANSI color support for streaming build/test output, runtime selector (Node/Python/Go), and controls to run commands, stop execution, and destroy sandboxes. Integrate with the WebSocket streaming endpoint for real-time output.
 

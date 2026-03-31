@@ -11,8 +11,8 @@ labels:
   - react-query
   - 'parent:task-meNX3cL6'
 created: '2026-03-25T13:45:36.759Z'
-updated: '2026-03-25T13:53:06.720Z'
-sortIndex: 59
+updated: '2026-03-31T21:51:04.784Z'
+sortIndex: 63
 ---
 Create a useClearChat() mutation hook in apps/web/src/hooks/use-chat.ts following the existing useDeleteTeamMember pattern. Use api.delete('/api/chat/messages') with optional agent param. On success, invalidate the ['chat', recipient] query key so the UI refreshes. Include optimistic update to immediately clear the message list, with rollback on error. Optionally broadcast a WebSocket event so other clients update too.
 

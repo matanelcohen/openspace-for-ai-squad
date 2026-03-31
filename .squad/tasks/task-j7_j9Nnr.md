@@ -7,8 +7,8 @@ assignee: bender
 labels:
   - 'parent:task-OCFIYeWW'
 created: '2026-03-26T15:16:19.712Z'
-updated: '2026-03-26T15:31:57.516Z'
-sortIndex: 198
+updated: '2026-03-31T21:51:05.045Z'
+sortIndex: 137
 ---
 Create 2 new reference skills in /packages/skills-core/src/: (1) docs-writer — generates and updates documentation using file:read, file:write tools; (2) security-scanner — analyzes code for vulnerabilities using static analysis tool declarations. Each needs manifest.json, prompts/, and tools/ directories following the existing git-expert pattern.
 

@@ -10,8 +10,8 @@ labels:
   - tests
   - 'parent:task-h0oYAnT5'
 created: '2026-03-25T13:35:39.387Z'
-updated: '2026-03-25T13:55:39.932Z'
-sortIndex: 32
+updated: '2026-03-31T21:51:04.722Z'
+sortIndex: 38
 ---
 In packages/shared/src/__tests__/shared.test.ts line 247, the byStatus record is missing the `'pending-approval'` key. Add `'pending-approval': 0` to the byStatus object and update the length assertion on line 259 from 5 to 6 to account for all 6 TaskStatus values.
 

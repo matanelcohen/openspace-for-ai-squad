@@ -10,8 +10,8 @@ labels:
   - blocker
   - 'parent:task-FZARd7GU'
 created: '2026-03-25T13:35:32.630Z'
-updated: '2026-03-25T14:04:36.063Z'
-sortIndex: 27
+updated: '2026-03-31T21:51:04.719Z'
+sortIndex: 33
 ---
 Resolve the TypeScript compilation errors that are currently blocking the chat test suite from running. Investigate and fix type mismatches, missing imports, or incorrect type definitions in the chat-related source code.
 

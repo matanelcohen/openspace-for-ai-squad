@@ -11,8 +11,8 @@ labels:
   - channel-routing
   - 'parent:task-yGjl5lID'
 created: '2026-03-25T15:03:21.808Z'
-updated: '2026-03-25T16:40:27.102Z'
-sortIndex: 82
+updated: '2026-03-31T21:51:04.802Z'
+sortIndex: 75
 ---
 Write tests verifying: (1) Messages sent in channel A are received only by channel A members, (2) Non-members of a channel do not receive its messages, (3) A user in multiple channels receives messages only in the correct channel context, (4) Membership validation rejects messages from non-members, (5) Real-time subscription updates when joining/leaving channels. Include both unit tests for the WebSocket manager and E2E tests simulating multi-user, multi-channel scenarios.
 

@@ -8,8 +8,8 @@ labels:
   - channels
   - backend
 created: '2026-03-25T15:02:59.470Z'
-updated: '2026-03-25T21:31:49.304Z'
-sortIndex: 65
+updated: '2026-03-31T21:51:04.790Z'
+sortIndex: 68
 ---
 Implement create, read, update, delete operations for channels in the chat service layer. Channels should support name, description, and member list. Store as .squad/channels/*.md or integrate with existing DB layer.
 

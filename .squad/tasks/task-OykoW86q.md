@@ -11,8 +11,8 @@ labels:
   - settings
   - 'parent:task-tZU9Gv4Q'
 created: '2026-03-25T23:18:33.949Z'
-updated: '2026-03-25T23:42:47.897Z'
-sortIndex: 128
+updated: '2026-03-31T21:51:04.832Z'
+sortIndex: 87
 ---
 Create a UI for users to view, search, edit, and delete agent memories. Include: (1) Memory browser — searchable list of all stored memories, filterable by agent, type (preference/pattern/decision), and date. (2) Memory detail view — show content, source session, associated agent, and when it was last recalled. (3) Edit/delete controls — let users correct or remove memories. (4) Memory toggle — allow users to enable/disable memory per agent or globally. Keep it minimal and accessible from the agent settings or sidebar.
 

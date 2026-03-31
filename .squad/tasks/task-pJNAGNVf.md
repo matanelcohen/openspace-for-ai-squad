@@ -10,8 +10,8 @@ labels:
   - api
   - 'parent:task-CRcTG6PJ'
 created: '2026-03-25T23:20:11.283Z'
-updated: '2026-03-26T05:56:37.876Z'
-sortIndex: 168
+updated: '2026-03-31T21:51:04.894Z'
+sortIndex: 112
 ---
 Register MCP resources that let clients read squad state:
 - `squad://agents` — list of agents with roles, expertise, status

@@ -11,8 +11,8 @@ labels:
   - sandbox
   - 'parent:task-RpGqbXvk'
 created: '2026-03-25T23:19:27.947Z'
-updated: '2026-03-26T07:29:27.440Z'
-sortIndex: 152
+updated: '2026-03-31T21:51:04.863Z'
+sortIndex: 101
 ---
 Write comprehensive tests covering: container lifecycle (create → execute → destroy), multi-runtime execution (Node, Python, Go each run a hello-world + dependency install), resource limit enforcement (CPU/memory/timeout kills), concurrent sandbox isolation (two sandboxes don't leak state), WebSocket streaming correctness, error handling (bad commands, container crashes, OOM). Include both integration tests against the real backend and E2E tests through the UI.
 

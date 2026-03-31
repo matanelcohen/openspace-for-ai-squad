@@ -6,8 +6,8 @@ priority: P0
 assignee: bender
 labels: []
 created: '2026-03-24T19:51:46.576Z'
-updated: '2026-03-25T20:55:17.718Z'
-sortIndex: 2
+updated: '2026-03-31T21:51:04.652Z'
+sortIndex: 8
 ---
 I don’t see the team member in ui
 

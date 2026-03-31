@@ -202,6 +202,10 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
           task.assignee &&
           app.agentWorker
         ) {
+          // Clear retry history when manually resetting a task
+          if (status === 'pending') {
+            app.agentWorker.clearAttempts(request.params.id);
+          }
           app.agentWorker.enqueue(task, { skipDelegation: true });
         }
 

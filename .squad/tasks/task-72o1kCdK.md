@@ -11,8 +11,8 @@ labels:
   - hitl
   - 'parent:task-OpAaDISd'
 created: '2026-03-25T23:19:55.044Z'
-updated: '2026-03-26T00:34:15.533Z'
-sortIndex: 160
+updated: '2026-03-31T21:51:04.879Z'
+sortIndex: 107
 ---
 Create the frontend for human reviewers:
 1. **Review Queue Dashboard**: Filterable, sortable list of pending escalations showing agent name, workflow context, confidence score, priority, and time waiting. Real-time updates via WebSocket.

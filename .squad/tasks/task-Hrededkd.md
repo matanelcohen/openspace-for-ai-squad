@@ -11,8 +11,8 @@ labels:
   - UX
   - 'parent:task-jynkIPT9'
 created: '2026-03-26T10:22:46.166Z'
-updated: '2026-03-26T10:38:16.367Z'
-sortIndex: 176
+updated: '2026-03-31T21:51:04.916Z'
+sortIndex: 120
 ---
 Update /apps/web/src/components/chat/message-input.tsx to match ChatGPT's input box behavior: centered/compact when closed (no text), expanding to full-width aligned when open/focused. Add smooth open/close transitions (scale, padding, width changes). The input should start minimal and expand on focus or when typing, similar to ChatGPT's collapsible input pattern. Use existing Tailwind classes and cn() utility for styling.
 

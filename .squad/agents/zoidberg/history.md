@@ -36,6 +36,32 @@
 - 03-24 — P5-4 + P5-5 Error handling, resilience, loading & empty states complete. 71 new tests across 8 test files (61 web + 10 API). P5-4 deliverables: Global `ErrorBoundary` class component with friendly fallback UI, `withErrorBoundary` HOC, TanStack Query retry logic (3 retries with exponential backoff, skips 4xx client errors), standardized API error format (`{ error, code, details? }`) with `ErrorCodes` constants and `sendError` helper, Fastify global error handler for uncaught exceptions, graceful degradation tested when `.squad/` directory is missing. WebSocket auto-reconnect with exponential backoff (1s→30s cap) already implemented in `use-websocket.ts` — verified with 11 dedicated resilience tests. P5-5 deliverables: Reusable `EmptyState` component (icon + title + description + optional action), `LoadingSpinner` with size variants, `SkeletonCard` with configurable lines. Existing components already had loading/empty states (AgentGrid, SummaryStats, KanbanBoard, MessageList, ActivityFeed) — tested comprehensively. All pre-existing test failures are in voice-related test files (not introduced by these changes).
 - 03-24 — P4-9 Voice pipeline integration tests complete. 60 new tests in `apps/api/src/services/voice/voice-pipeline-integration.test.ts` covering the full voice pipeline end-to-end with mocked APIs. Test coverage: (1) Full STT → Router → TTS round-trip with sentence chunking and audio events, (2) complete session lifecycle (create → join → speak → respond → leave → end → persist), (3) multi-agent routing — direct name mention (`"Bender"` → bender), broadcast keywords (`"Hey team"` → all), keyword domain matching, LLM fallback, and default-to-leela, (4) per-agent voice selection — 4 unique voices (nova/onyx/echo/shimmer) verified per agent, speed settings, runtime config updates, unknown-agent fallback to alloy, (5) voice commands → API operations — create/assign/update/prioritize/query tasks and decisions via regex intent parsing with mock executors, (6) conversation context across turns — accumulation, topic tracking, LLM summary, window limits, action logging, disk persistence, session isolation, (7) error cases — empty audio, STT/TTS API failures with graceful degradation, invalid sessions, concurrent session context isolation. Also includes a full standup simulation (5 participants, broadcast + direct routing + voice command + persist). All 207 voice tests pass (147 pre-existing + 60 new).
 - 03-24 — P5-8 E2E tests created. 28 Playwright tests in `e2e/user-journeys.spec.ts` covering 9 critical user journeys: (1) Dashboard — agent cards, summary stats, known agent presence, (2) Tasks — Kanban board with 5 columns, task cards, board/list view toggle, (3) Task creation — dialog form, validation error on empty title, new task appears on board, (4) Drag-and-drop — move task card between columns, (5) Chat — sidebar with team/agent channels, send message, message appears in list, (6) Decisions — search input filters results, expand card for details, (7) Voice — voice room UI with session controls, agent circles, agent selector, (8) Dark mode — toggle light↔dark, persistence across navigation, all pages render in dark mode, (9) Responsive layout — tablet width (768px) on dashboard, tasks, chat, voice, and navigation. Tests use existing `playwright.config.ts`, target `data-testid` attributes, and run against the full stack (web + api). Cross-cutting navigation test verifies sidebar links route to all 5 pages correctly.
+- Tests live in __tests__ directories adjacent to source files (e.g., apps/api/src/services/agent-worker/__tests__/team-status.test.ts) and use vitest with `npx vitest run` to execute.
+- The project uses pnpm workspaces as the package manager. Run `pnpm install --frozen-lockfile` to install dependencies.
+- Squad tasks execute in git worktrees under .git-worktrees/task-<id>/ directories for parallel isolated work.
+- Completed "Test team status injection end-to-end": Done. Here's what I built:
+
+**`team-status.ts`** — `TeamStatusService` with:
+- `buildTeamStatusBlock()` — produces markdown for system prompt injection
+- `formatAgentEntry()` — formats individual agent status lines
+- `isStale()` — filters agents idle >30min
+- Title truncation at 80 chars
+
+**`team-status.test.ts`** — 33 tests across 6 describe blocks:
+- **buildTeamStatusBlock** (8 tests): markdown format, agent exclusion, empty maps, stale filtering, boundary at 30min
+- **formatAgentEntry** (6 te
+- TeamStatusService tracks agent working events with timestamps and uses a 30-minute staleness threshold to exclude inactive agents from team status output.
+- Tests in this monorepo use vitest and are placed in __tests__ directories adjacent to the source files they test (e.g., services/team-status/__tests__/team-status.test.ts).
+- The project uses pnpm workspaces with a monorepo structure under apps/ and packages/ directories, with vitest as the test runner configured at the root level.
+- AgentWorkerService exposes a getStatus() method that returns agent state information, used by other services like TeamStatusService to query active agents and their current tasks.
+- Completed "Test TeamStatusService and system prompt integration": All 17 tests pass. Here's a summary:
+
+**Created 2 files:**
+
+1. **`apps/api/src/services/team-status/index.ts`** — `TeamStatusService` that tracks active agents via `recordWorkingEvent()`/`clearWorkingEvent()` and formats markdown via `getFormattedStatus(excludeAgentId?)`. Excludes stale events (>30 min) automatically.
+
+2. **`apps/api/src/services/team-status/__tests__/team-status.test.ts`** — 17 tests across 5 groups:
+   - **Active agents (4)**: Markdown format, `excludeAgentId` filtering, task 
 
 ## ✅ Task Complete — Chat Input Responsiveness & Accessibility
 

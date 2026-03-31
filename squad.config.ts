@@ -58,6 +58,7 @@ export default defineSquad({
       capabilities: [
         { name: 'testing', level: 'expert' },
         { name: 'quality-assurance', level: 'expert' },
+        { name: 'code-review', level: 'expert' },
       ],
     }),
   ],

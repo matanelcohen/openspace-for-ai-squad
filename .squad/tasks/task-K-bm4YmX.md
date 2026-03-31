@@ -1,8 +1,4 @@
 ---
-"\U0001F916 Auto-assigned by YOLO to leela": >-
-  P1 backend integration task. Bender is busy, but Leela as Lead has the
-  architectural context to hook MemoryRecallEngine into the agent worker
-  pipeline correctly.
 id: task-K-bm4YmX
 title: Integrate memory recall into agent worker pipeline
 status: done
@@ -11,8 +7,8 @@ assignee: leela
 labels:
   - 'parent:task-tZU9Gv4Q'
 created: '2026-03-31T08:04:27.513Z'
-updated: '2026-03-31T08:32:15.652Z'
-sortIndex: 234
+updated: '2026-03-31T21:51:05.088Z'
+sortIndex: 152
 parent: task-tZU9Gv4Q
 ---
 **[2026-03-31 08:32:15]** 🚀 Leela started working on this task.

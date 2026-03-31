@@ -10,8 +10,8 @@ labels:
   - realtime
   - 'parent:task-8FztpO9u'
 created: '2026-03-25T13:35:32.239Z'
-updated: '2026-03-25T14:05:00.252Z'
-sortIndex: 25
+updated: '2026-03-31T21:51:04.709Z'
+sortIndex: 31
 ---
 Once TS errors are resolved, investigate and fix the coordinator broadcast count assertion in the realtime integration test. Determine the correct expected broadcast count and update the assertion accordingly.
 

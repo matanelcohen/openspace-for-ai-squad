@@ -10,8 +10,8 @@ labels:
   - documentation
   - 'parent:task-PRYrQNNq'
 created: '2026-03-30T09:05:40.017Z'
-updated: '2026-03-31T08:59:49.812Z'
-sortIndex: 216
+updated: '2026-03-31T21:51:05.070Z'
+sortIndex: 147
 ---
 After bender's fix lands: (1) review the node-pty version change for security and stability, (2) verify PTY cleanup on disconnect works correctly (current catch block at line 103 may mask issues), (3) confirm the terminal works in the single-port architecture (Fastify + Next.js on port 3000), (4) validate no regressions in sidebar navigation or other WebSocket routes. Update README with any Node version requirements.
 

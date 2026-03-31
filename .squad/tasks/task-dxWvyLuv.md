@@ -10,8 +10,8 @@ labels:
   - channels
   - 'parent:task-NQ2p_jgu'
 created: '2026-03-25T15:03:35.315Z'
-updated: '2026-03-25T17:00:41.683Z'
-sortIndex: 91
+updated: '2026-03-31T21:51:04.816Z'
+sortIndex: 80
 ---
 Create a ChannelSidebar component that renders a scrollable list of channels the user belongs to. Highlight the active channel, support channel categories/sections, and show unread indicators. Use shadcn/ui ScrollArea, Button, and Badge primitives. Wire up to useChannels() hook for data and useNavigate/router for channel switching.
 

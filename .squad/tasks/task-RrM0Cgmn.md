@@ -10,8 +10,8 @@ labels:
   - config
   - 'parent:task-CRcTG6PJ'
 created: '2026-03-25T23:20:11.307Z'
-updated: '2026-03-26T01:16:08.837Z'
-sortIndex: 170
+updated: '2026-03-31T21:51:04.901Z'
+sortIndex: 114
 ---
 Update `.copilot/mcp-config.json` to register the squad's own MCP server (both stdio and SSE entries). Update README.md with:
 - How to connect Claude Desktop / Cursor / VS Code to the squad MCP server

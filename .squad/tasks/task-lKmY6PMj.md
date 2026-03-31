@@ -12,8 +12,8 @@ labels:
   - unit-tests
   - 'parent:task-tZU9Gv4Q'
 created: '2026-03-25T23:18:33.962Z'
-updated: '2026-03-26T06:33:21.661Z'
-sortIndex: 129
+updated: '2026-03-31T21:51:04.837Z'
+sortIndex: 88
 ---
 Comprehensive testing for the memory system: (1) Unit tests — memory CRUD operations, embedding generation, similarity search correctness, deduplication logic, decay/expiration. (2) Integration tests — end-to-end flow of memory extraction from a session, storage, and retrieval in a subsequent session. Verify agents correctly receive and use recalled memories. (3) Retrieval quality tests — validate that relevant memories are returned for given queries and irrelevant ones are filtered out (precision/recall benchmarks). (4) Edge cases — memory conflicts, large memory stores, concurrent access, empty memory scenarios. (5) E2E test — simulate multi-session agent interaction and verify memory continuity.
 

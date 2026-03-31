@@ -9,8 +9,8 @@ labels:
   - bug-fix
   - 'parent:task-ixh2mo-Z'
 created: '2026-03-25T13:35:14.116Z'
-updated: '2026-03-25T14:08:36.631Z'
-sortIndex: 18
+updated: '2026-03-31T21:51:04.695Z'
+sortIndex: 24
 ---
 Fix import/export sorting lint errors in a2a.ts. Run `npx eslint` on the file and resolve all reported issues (likely import order or export sorting violations).
 

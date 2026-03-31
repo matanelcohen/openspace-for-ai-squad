@@ -10,7 +10,7 @@ labels:
   - cli
   - 'parent:task-5NsiKbtI'
 created: '2026-03-25T13:40:57.227Z'
-updated: '2026-03-25T14:46:43.999Z'
-sortIndex: 51
+updated: '2026-03-31T21:51:04.761Z'
+sortIndex: 55
 ---
 Confirm that tasks created via the CLI are correctly persisted to the backend/database, and that CRUD operations round-trip properly. Check API calls and error handling for network failures.

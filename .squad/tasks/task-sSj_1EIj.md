@@ -10,8 +10,8 @@ labels:
   - hitl
   - 'parent:task-OpAaDISd'
 created: '2026-03-25T23:19:55.018Z'
-updated: '2026-03-26T01:09:14.578Z'
-sortIndex: 158
+updated: '2026-03-31T21:51:04.873Z'
+sortIndex: 105
 ---
 Define the core architecture for human-in-the-loop interrupts inspired by LangGraph. Design the interrupt point abstraction that can be inserted into DAG workflow nodes. Specify the data model for escalation requests (confidence score, context snapshot, timeout policy, escalation chain). Define state serialization so workflows can pause/resume cleanly. Document the integration contract with the DAG Workflow Engine — how nodes signal uncertainty, how execution halts, and how it resumes after human decision.
 

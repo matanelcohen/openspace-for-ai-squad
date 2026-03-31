@@ -9,8 +9,8 @@ labels:
   - frontend
   - tracing
 created: '2026-03-25T23:18:09.576Z'
-updated: '2026-03-26T10:08:29.618Z'
-sortIndex: 0
+updated: '2026-03-31T21:51:04.642Z'
+sortIndex: 4
 ---
 Add observability to every agent action: trace reasoning steps, tool calls, token usage, latency, and costs. Build a trace viewer UI to inspect agent runs. Inspired by LangSmith.
 

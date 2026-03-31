@@ -10,8 +10,8 @@ labels:
   - skills
   - 'parent:task-hgTK5Dbi'
 created: '2026-03-25T23:19:39.369Z'
-updated: '2026-03-26T00:34:04.268Z'
-sortIndex: 153
+updated: '2026-03-31T21:51:04.876Z'
+sortIndex: 102
 ---
 Define the skill manifest format (JSON/YAML) including: skill metadata (name, version, description), required tools declarations, prompt templates with variable interpolation, task-type matching rules, and dependency declarations. Design the plugin lifecycle (discover → validate → load → activate → deactivate). Document the contract between skills and the agent runtime. Output: architecture doc + TypeScript interfaces for SkillManifest, SkillContext, SkillRegistry.
 

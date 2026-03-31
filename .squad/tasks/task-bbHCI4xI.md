@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-OCFIYeWW'
 created: '2026-03-26T15:16:19.639Z'
-updated: '2026-03-26T15:28:22.549Z'
-sortIndex: 196
+updated: '2026-03-31T21:51:05.039Z'
+sortIndex: 135
 ---
 Build a new skill creation wizard in /apps/web/src/components/skills/ that guides users through authoring a skill manifest (name, tools, triggers, prompts, config). Include a JSON/YAML editor with live validation against the manifest schema, and a preview pane showing how the skill card will appear in the skill-grid.
 

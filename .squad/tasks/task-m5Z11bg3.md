@@ -11,8 +11,8 @@ labels:
   - management
   - 'parent:task-ZOSFVe1k'
 created: '2026-03-24T16:03:22.001Z'
-updated: '2026-03-24T16:33:19.266Z'
-sortIndex: 6
+updated: '2026-03-31T21:51:04.676Z'
+sortIndex: 18
 ---
 Build the ranking/management UI and logic. Include: (1) Ability to change a member's rank (junior→mid→senior→lead→principal) with a rank management UI. (2) Status management (active/inactive/on-leave) with visual indicators. (3) Department overview showing member counts and distribution. (4) Skills display and editing on member profiles. (5) Add summary stats for team members to the main dashboard (total members, by department, by rank). Follow existing dashboard summary-stats patterns.
 

@@ -11,8 +11,8 @@ labels:
   - optimistic-updates
   - 'parent:task-eLmi8eT_'
 created: '2026-03-25T15:03:32.011Z'
-updated: '2026-03-25T16:44:23.819Z'
-sortIndex: 84
+updated: '2026-03-31T21:51:04.815Z'
+sortIndex: 77
 ---
 Create useCreateChannel and useUpdateChannel hooks using TanStack Query's useMutation. Connect to POST /api/channels and PATCH /api/channels/:id endpoints. Implement optimistic updates: on mutate, update the query cache immediately (append new channel or merge updated fields), and rollback on error using onError context. Invalidate ['channels'] queries on settlement.
 

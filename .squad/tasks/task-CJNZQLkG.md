@@ -10,8 +10,8 @@ labels:
   - validation
   - 'parent:task-yGjl5lID'
 created: '2026-03-25T15:03:21.782Z'
-updated: '2026-03-25T18:38:43.589Z'
-sortIndex: 80
+updated: '2026-03-31T21:51:04.801Z'
+sortIndex: 74
 ---
 Implement server-side validation that ensures a user is a member of a channel before their message is routed to it. When a message is received via WebSocket, verify the sender's membership in the target channel before broadcasting. Return an appropriate error to the sender if they attempt to send to a channel they don't belong to. This is a security-critical path — no message should leak to non-members.
 

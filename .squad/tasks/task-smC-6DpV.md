@@ -9,8 +9,8 @@ labels:
   - bug-fix
   - 'parent:task-ixh2mo-Z'
 created: '2026-03-25T13:35:14.132Z'
-updated: '2026-03-25T14:12:01.899Z'
-sortIndex: 19
+updated: '2026-03-31T21:51:04.697Z'
+sortIndex: 25
 ---
 Fix import/export sorting lint errors in voice/index.ts. Run `npx eslint` on the file and resolve all reported issues (likely import order or export sorting violations).
 

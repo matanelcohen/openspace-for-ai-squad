@@ -6,8 +6,8 @@ priority: P0
 assignee: leela
 labels: []
 created: '2026-03-25T13:43:00.986Z'
-updated: '2026-03-25T13:56:52.024Z'
-sortIndex: 0
+updated: '2026-03-31T21:51:04.642Z'
+sortIndex: 3
 ---
 add options to wipe chat data
 

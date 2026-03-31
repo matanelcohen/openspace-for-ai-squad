@@ -11,8 +11,8 @@ labels:
   - edge-cases
   - 'parent:task-pCv6tILK'
 created: '2026-03-25T23:20:00.396Z'
-updated: '2026-03-26T07:49:32.646Z'
-sortIndex: 165
+updated: '2026-03-31T21:51:04.892Z'
+sortIndex: 109
 ---
 Write comprehensive tests for the A2A communication protocol: (1) Unit tests for message schema validation and serialization, (2) Integration tests for full delegation flows — request → accept → status updates → result merge, (3) Negotiation tests — reject, counter-propose, timeout scenarios, (4) Handoff tests verifying clean ownership transfer with no dropped context, (5) Edge cases: concurrent delegation requests to same agent, circular delegation detection, message delivery failures and retries, split-work with partial failures. Include E2E tests simulating multi-agent collaboration on a real task.
 

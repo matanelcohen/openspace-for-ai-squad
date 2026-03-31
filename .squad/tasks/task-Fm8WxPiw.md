@@ -11,8 +11,8 @@ labels:
   - CRUD
   - 'parent:task-ZOSFVe1k'
 created: '2026-03-24T16:03:21.995Z'
-updated: '2026-03-24T18:46:54.898Z'
-sortIndex: 3
+updated: '2026-03-31T21:51:04.661Z'
+sortIndex: 12
 ---
 Add a `team_members` SQLite table (with FTS5 support) to the existing DB init in apps/api/. Create full CRUD REST routes at `/api/team-members` following the existing patterns in `routes/tasks.ts`. Endpoints: GET (list with filtering by department/status/rank), POST (create), GET /:id, PUT /:id (update), DELETE /:id, GET /:id/tasks (assigned tasks). Use the existing TeamMember type from packages/shared. Store directly in SQLite (not markdown files). Include proper validation and error handling.
 

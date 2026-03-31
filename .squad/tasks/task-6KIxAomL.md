@@ -11,8 +11,8 @@ labels:
   - channels
   - 'parent:task-NQ2p_jgu'
 created: '2026-03-25T15:03:35.344Z'
-updated: '2026-03-25T19:13:35.582Z'
-sortIndex: 94
+updated: '2026-03-31T21:51:04.817Z'
+sortIndex: 81
 ---
 Verify or implement the channel data hooks: useChannels(), useChannel(id), useCreateChannel(), and useChannelMessages(channelId). Each hook should handle loading, error, and success states. Ensure WebSocket/real-time subscriptions are wired for live message updates and channel list changes. Coordinate with frontend on expected data shapes and return types.
 

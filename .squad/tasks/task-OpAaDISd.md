@@ -1,8 +1,4 @@
 ---
-"\U0001F916 Auto-assigned by YOLO to leela": >-
-  HITL framework requires cross-cutting architectural decisions (confidence
-  thresholds, approval flows, audit trails). Lead architect is the right fit for
-  designing and implementing this system.
 id: task-OpAaDISd
 title: HITL Escalation Framework
 status: done
@@ -13,8 +9,8 @@ labels:
   - hitl
   - escalation
 created: '2026-03-25T23:18:11.138Z'
-updated: '2026-03-30T14:40:26.573Z'
-sortIndex: 9
+updated: '2026-03-31T21:51:04.695Z'
+sortIndex: 21
 ---
 **[2026-03-30 14:40:26]** 📋 Leela broke this task into 3 sub-tasks:
 

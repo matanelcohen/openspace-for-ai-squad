@@ -11,8 +11,8 @@ labels:
   - UX
   - 'parent:task-jynkIPT9'
 created: '2026-03-26T10:22:46.199Z'
-updated: '2026-03-26T10:42:28.088Z'
-sortIndex: 177
+updated: '2026-03-31T21:51:04.917Z'
+sortIndex: 121
 ---
 Update the Composer component in /apps/web/src/components/assistant-ui/thread.tsx (the @assistant-ui/react ComposerPrimitive wrapper) to have the same ChatGPT-style open/close alignment as the MessageInput. Ensure both input boxes have consistent look and feel. The ComposerPrimitive.Root wrapper div styling needs to support compact/expanded states with transitions.
 

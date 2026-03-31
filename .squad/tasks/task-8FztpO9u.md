@@ -9,8 +9,8 @@ labels:
   - tests
   - realtime
 created: '2026-03-25T13:35:07.317Z'
-updated: '2026-03-25T18:49:10.968Z'
-sortIndex: 5
+updated: '2026-03-31T21:51:04.676Z'
+sortIndex: 17
 ---
 Fix coordinator broadcast count assertion in the realtime integration test. Blocked by TS error fixes.
 

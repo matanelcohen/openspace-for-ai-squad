@@ -9,8 +9,8 @@ labels:
   - frontend
   - ui
 created: '2026-03-25T20:08:14.091Z'
-updated: '2026-03-26T09:46:59.788Z'
-sortIndex: 100
+updated: '2026-03-31T21:51:04.829Z'
+sortIndex: 83
 ---
 Build ChannelDialog, ChannelHeader, DeleteChannelDialog, and ChatSidebar channel list UI. Support create/edit/delete flows with proper validation and loading states.
 

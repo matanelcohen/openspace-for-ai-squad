@@ -11,8 +11,8 @@ labels:
   - xterm
   - 'parent:task-hhMHoacH'
 created: '2026-03-26T14:32:45.208Z'
-updated: '2026-03-26T14:38:40.775Z'
-sortIndex: 181
+updated: '2026-03-31T21:51:05.013Z'
+sortIndex: 125
 ---
 Install `@xterm/xterm` and `@xterm/addon-fit` in apps/web. Create a new Next.js page at `apps/web/app/terminal/page.tsx`. Build a `<Terminal>` component in `apps/web/src/components/terminal/terminal.tsx` that: (1) renders an xterm.js instance in a full-height container, (2) connects to the backend PTY WebSocket at `ws://<API_HOST>/api/terminal/ws` using the existing API URL config, (3) pipes xterm input to WebSocket and WebSocket output to xterm, (4) uses the fit addon to auto-resize and sends resize events to the backend, (5) handles reconnection on disconnect. Style with Tailwind to match the existing dark theme. Add a nav link to the terminal page in the sidebar/navigation component.
 

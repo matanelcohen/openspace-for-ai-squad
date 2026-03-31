@@ -66,6 +66,7 @@ import type { WebSocketManager } from './services/websocket/index.js';
 import { wsPlugin } from './services/websocket/index.js';
 import { WorkspaceService } from './services/workspace/index.js';
 import { WorktreeService } from './services/worktree/index.js';
+import { CodeReviewService } from './services/code-review.js';
 import { YoloService } from './services/yolo/index.js';
 
 /** Voice service bundle exposed on the Fastify instance. */
@@ -360,6 +361,7 @@ export async function buildApp(opts: AppOptions = {}) {
       app.decorate('worktreeService', worktreeService);
 
       // Start agent worker service with A2A delegation capability
+      const codeReviewService = new CodeReviewService(projectDir);
       const workerService = new AgentWorkerService({
         tasksDir: resolve(squadDir, 'tasks'),
         squadDir,
@@ -370,6 +372,7 @@ export async function buildApp(opts: AppOptions = {}) {
         db,
         a2aBaseUrl,
         worktreeService,
+        codeReviewService,
       });
       // Start worker in background — don't block onReady hook
       workerService.start().then(async () => {

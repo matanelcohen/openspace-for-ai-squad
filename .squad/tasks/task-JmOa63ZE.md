@@ -11,8 +11,8 @@ labels:
   - dag
   - 'parent:task-DkHSQ8li'
 created: '2026-03-25T23:18:52.941Z'
-updated: '2026-03-26T06:57:45.838Z'
-sortIndex: 138
+updated: '2026-03-31T21:51:04.847Z'
+sortIndex: 91
 ---
 Write unit and integration tests covering: (1) Graph validation — cycle detection rejects invalid graphs, valid DAGs accepted. (2) Linear execution — steps run in correct order. (3) Parallel fan-out/fan-in — independent branches execute concurrently, join node waits for all parents. (4) Conditional edges — predicates route execution correctly, dead branches are skipped. (5) Checkpoint/resume — executor resumes from last checkpoint after simulated failure. (6) Error handling — step failure propagates correctly, partial results preserved. (7) Edge cases — empty graph, single node, diamond dependencies.
 

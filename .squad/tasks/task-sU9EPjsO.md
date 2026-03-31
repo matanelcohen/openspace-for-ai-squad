@@ -10,8 +10,8 @@ labels:
   - blocker
   - 'parent:task-Ks-Vyr-5'
 created: '2026-03-25T13:35:22.848Z'
-updated: '2026-03-25T14:11:39.032Z'
-sortIndex: 21
+updated: '2026-03-31T21:51:04.708Z'
+sortIndex: 27
 ---
 Investigate and fix the TypeScript compilation errors that are currently blocking the task-parser test suite. Ensure all types related to assigneeType are properly defined and exported.
 

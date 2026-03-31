@@ -10,8 +10,8 @@ labels:
   - RAG
   - 'parent:task-Kn1c77z_'
 created: '2026-03-25T23:19:13.902Z'
-updated: '2026-03-26T00:14:33.637Z'
-sortIndex: 144
+updated: '2026-03-31T21:51:04.851Z'
+sortIndex: 95
 ---
 Define the overall architecture for the RAG knowledge base: vector store selection (e.g., pgvector, Pinecone, Qdrant), embedding model choice (e.g., OpenAI ada-002, local model), chunking strategy for different source types (commits, PRs, docs, tasks), metadata schema for filtered retrieval, and the query/retrieval pipeline design. Document integration points with the Persistent Agent Memory system.
 

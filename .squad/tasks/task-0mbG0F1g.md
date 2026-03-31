@@ -11,8 +11,8 @@ labels:
   - core
   - 'parent:task-hgTK5Dbi'
 created: '2026-03-25T23:19:39.394Z'
-updated: '2026-03-26T01:02:49.908Z'
-sortIndex: 155
+updated: '2026-03-31T21:51:04.876Z'
+sortIndex: 103
 ---
 Implement 3 reference skills as proof-of-concept: 1) git-expert: manifest with git tools (diff, log, blame), prompt templates for commit analysis & PR review. 2) test-runner: manifest with shell/test-framework tools, templates for test generation & failure analysis. 3) code-reviewer: manifest with file-read/AST tools, templates for code quality & security checks. Each skill should be a self-contained directory with manifest.json, tools/, and prompts/. These serve as both useful defaults and examples for custom skill authors.
 

@@ -11,8 +11,8 @@ labels:
   - coverage
   - 'parent:task-OCFIYeWW'
 created: '2026-03-26T15:16:09.733Z'
-updated: '2026-03-31T09:19:29.978Z'
-sortIndex: 194
+updated: '2026-03-31T21:51:05.029Z'
+sortIndex: 133
 ---
 ⏭️ YOLO skipped: P1 testing task — Zoidberg is the right fit but busy. No other agent matches tester role. Queue until Zoidberg is free.
 

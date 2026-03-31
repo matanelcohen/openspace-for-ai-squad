@@ -162,6 +162,22 @@ Here's what I did:
 - Tests in apps/web require mocking next/navigation (useSearchParams, useRouter, usePathname) when components use URL-based state. Tests use vitest.
 - The project uses git worktrees for task branches, located at .git-worktrees/task-{id}/ directories.
 - User prefers URL search params for persisting UI filter state (using router.replace to avoid history pollution), keeping URLs clean by only writing non-default values.
+- Uses @xyflow/react for DAG/graph visualization in the frontend, with topological layout via Kahn's algorithm.
+- This monorepo uses pnpm workspaces with apps/api, apps/web, and packages/shared. Shared types (e.g., Task interface) live in packages/shared/src/types/.
+- Task metadata is stored in YAML frontmatter in markdown files, parsed and written by squad-parser/task-parser.ts and squad-writer/task-writer.ts services.
+- Git worktrees are used for task branches, located at .git-worktrees/task-<id> relative to the repo root.
+- The web app uses Next.js App Router (app/tasks/[id]/page.tsx pattern) with vitest for component testing and test files in __tests__/ directories.
+- Completed "Frontend: Dependency graph visualization on task detail page": Here's a summary of what I built:
+
+### ✅ Dependency Graph Visualization — Complete
+
+**9 files changed, 433 lines added across the full stack:**
+
+1. **Shared types** — Added `dependencies?: string[]` to `Task` interface
+2. **Backend parser/writer** — Reads/writes dependencies in YAML frontmatter
+3. **API endpoint** — `GET /api/tasks/:id/dependency-graph` traverses the full dependency graph (upstream + downstream)
+4. **`TaskDependencyGraph` component** — Interactive DAG using `@xyflow/react`:
+   -
 
 ## Summary
 

@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-Too8OrT7'
 created: '2026-03-26T18:05:28.283Z'
-updated: '2026-03-26T18:33:26.889Z'
-sortIndex: 205
+updated: '2026-03-31T21:51:05.059Z'
+sortIndex: 142
 ---
 Implement the /skills/agents/[agentId] page using AgentSkillList. Support attaching/detaching skills to agents via POST/DELETE /api/agents/:id/skills. Add drag-and-drop reordering with @dnd-kit using the useReorderAgentSkills hook. Show skill phase badges and enable/disable toggles per agent.
 

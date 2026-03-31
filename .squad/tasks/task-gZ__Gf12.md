@@ -9,7 +9,7 @@ labels:
   - scope
   - 'parent:task-bCCSdBDd'
 created: '2026-03-25T13:41:05.271Z'
-updated: '2026-03-25T14:46:44.036Z'
-sortIndex: 52
+updated: '2026-03-31T21:51:04.762Z'
+sortIndex: 56
 ---
 Clarify what 'Batch test B' covers — identify the specific batch operations, inputs, expected outputs, and acceptance criteria. Document in a brief spec.

@@ -11,7 +11,7 @@ labels:
   - unit-test
   - 'parent:task-Mfqbvb2z'
 created: '2026-03-24T19:53:28.987Z'
-updated: '2026-03-25T14:46:36.399Z'
-sortIndex: 11
+updated: '2026-03-31T21:51:04.698Z'
+sortIndex: 23
 ---
 Add unit tests for the new seed/sync logic in the TeamMemberService. Update apps/api/src/routes/team-members.test.ts to cover the sync endpoint. Update e2e/team-members.spec.ts to verify team members appear on page load after seeding. Test edge cases: re-seeding doesn't duplicate, deleted members can be re-synced, FTS5 index is updated after seed.

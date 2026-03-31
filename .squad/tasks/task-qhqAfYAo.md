@@ -11,8 +11,8 @@ labels:
   - instrumentation
   - 'parent:task-oJQ0IYQc'
 created: '2026-03-25T23:19:09.221Z'
-updated: '2026-03-26T00:18:42.441Z'
-sortIndex: 140
+updated: '2026-03-31T21:51:04.847Z'
+sortIndex: 92
 ---
 Build a tracing SDK that agents use to emit spans. Implement: (1) A `Tracer` class with `startSpan()`, `endSpan()`, `recordEvent()` methods. (2) Middleware/wrapper for tool calls that auto-captures input, output, latency, and errors. (3) LLM call instrumentation that captures model name, token counts (prompt/completion), cost calculation, and streaming latency. (4) A `TraceCollector` that batches and persists traces to the backend. (5) Context propagation so nested spans (agent → reasoning → tool call → LLM) form a proper tree. Include cost calculation using a configurable price table per model.
 

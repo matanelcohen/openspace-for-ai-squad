@@ -7,8 +7,8 @@ assignee: bender
 labels:
   - 'parent:task-_U_Q7gHO'
 created: '2026-03-31T08:35:47.555Z'
-updated: '2026-03-31T08:50:44.942Z'
-sortIndex: 293
+updated: '2026-03-31T21:51:05.090Z'
+sortIndex: 154
 parent: task-_U_Q7gHO
 ---
 Review bender's node-pty version change for security and stability implications. Audit the PTY cleanup-on-disconnect logic — specifically the catch block around line 103 in the terminal backend code that may be silently masking errors. Ensure proper resource cleanup (no zombie PTY processes) and that error handling is explicit. Flag any concerns with the version bump (breaking changes, CVEs, compatibility).

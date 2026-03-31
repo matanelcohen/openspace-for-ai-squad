@@ -9,8 +9,8 @@ labels:
   - frontend
   - ui
 created: '2026-03-25T15:03:00.200Z'
-updated: '2026-03-25T20:12:14.048Z'
-sortIndex: 69
+updated: '2026-03-31T21:51:04.801Z'
+sortIndex: 71
 ---
 Build channel sidebar list, channel creation dialog, channel header, and channel message view components. Use existing shadcn/ui primitives. Integrate with channel hooks for data fetching and mutations.
 

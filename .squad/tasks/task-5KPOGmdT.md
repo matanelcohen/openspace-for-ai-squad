@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-tZU9Gv4Q'
 created: '2026-03-31T08:04:27.545Z'
-updated: '2026-03-31T08:32:34.435Z'
-sortIndex: 235
+updated: '2026-03-31T21:51:05.087Z'
+sortIndex: 153
 parent: task-tZU9Gv4Q
 ---
 In apps/web/src/components/memories/ and app/memories/page.tsx, add: (1) per-agent memory profile view showing memory count, types, strength distribution, (2) recall history timeline showing when memories were used in decisions, (3) manual memory creation/editing form, (4) memory search with both keyword and semantic results. Use existing TanStack Query hooks and the /api/memories endpoints.

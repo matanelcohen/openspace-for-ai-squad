@@ -10,8 +10,8 @@ labels:
   - frontend
   - 'parent:task-Too8OrT7'
 created: '2026-03-26T18:07:17.996Z'
-updated: '2026-03-26T22:42:36.828Z'
-sortIndex: 207
+updated: '2026-03-31T21:51:05.064Z'
+sortIndex: 144
 ---
 Only skill-creation-wizard has tests. Add unit tests for skill-card, skill-grid, skill-detail-overview, skill-detail-tools, skill-detail-prompts, skill-detail-dependencies, skill-filters-toolbar, agent-skill-list, and skill-dependency-graph components. Use Vitest + React Testing Library following existing patterns in __tests__/skill-creation-wizard.test.tsx.
 

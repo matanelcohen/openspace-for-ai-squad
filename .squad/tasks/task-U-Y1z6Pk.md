@@ -9,7 +9,7 @@ labels:
   - scope
   - 'parent:task-z6v3Er2k'
 created: '2026-03-25T13:41:06.265Z'
-updated: '2026-03-25T14:46:44.159Z'
-sortIndex: 55
+updated: '2026-03-31T21:51:04.775Z'
+sortIndex: 59
 ---
 Clarify what 'Batch test A' covers — identify the target modules, expected inputs/outputs, and acceptance criteria. Document in a brief spec.

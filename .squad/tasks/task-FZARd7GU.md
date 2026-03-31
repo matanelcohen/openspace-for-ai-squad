@@ -9,8 +9,8 @@ labels:
   - tests
   - chat
 created: '2026-03-25T13:35:07.150Z'
-updated: '2026-03-25T19:11:44.752Z'
-sortIndex: 4
+updated: '2026-03-31T21:51:04.665Z'
+sortIndex: 14
 ---
 Fix coordinator echo test, message ordering test, and WebSocket events test. Blocked by TS error fixes.
 

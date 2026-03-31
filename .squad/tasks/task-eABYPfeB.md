@@ -9,8 +9,8 @@ labels:
   - fixtures
   - 'parent:task-Ks-Vyr-5'
 created: '2026-03-25T13:35:22.897Z'
-updated: '2026-03-25T14:07:28.239Z'
-sortIndex: 22
+updated: '2026-03-31T21:51:04.707Z'
+sortIndex: 28
 ---
 Update all test fixtures in the task-parser test file to include the assigneeType field with appropriate values (e.g., 'human' or 'agent'). Ensure fixtures match the current schema/type definitions.
 

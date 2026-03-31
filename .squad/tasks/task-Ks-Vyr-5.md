@@ -8,8 +8,8 @@ labels:
   - ci
   - tests
 created: '2026-03-25T13:35:06.937Z'
-updated: '2026-03-25T19:14:07.387Z'
-sortIndex: 3
+updated: '2026-03-31T21:51:04.661Z'
+sortIndex: 11
 ---
 Add assigneeType to task-parser test fixtures so the test passes. Blocked by TS error fixes.
 

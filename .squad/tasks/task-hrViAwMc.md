@@ -11,8 +11,8 @@ labels:
   - filters
   - 'parent:task-XGIIS5pk'
 created: '2026-03-31T13:01:34.357Z'
-updated: '2026-03-31T21:00:51.388Z'
-sortIndex: 328
+updated: '2026-03-31T21:51:05.104Z'
+sortIndex: 157
 ---
 Persist the active kanban filters (status, priority, assignee, search) in URL query parameters so filters survive page refreshes and can be shared via URL. Use Next.js `useSearchParams` + `useRouter` to sync filter state with the URL. Initialize filters from URL params on mount. This ensures a consistent UX with the list view and supports bookmarkable filtered views.
 

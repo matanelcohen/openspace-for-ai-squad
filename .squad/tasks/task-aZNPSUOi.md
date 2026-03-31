@@ -10,8 +10,8 @@ labels:
   - UI
   - 'parent:task-hhMHoacH'
 created: '2026-03-26T14:32:45.231Z'
-updated: '2026-03-30T08:58:59.316Z'
-sortIndex: 182
+updated: '2026-03-31T21:51:05.014Z'
+sortIndex: 126
 ---
 Add a 'Terminal' entry to the sidebar navigation (look at existing nav items in the layout or sidebar component). Use a terminal icon from lucide-react (e.g., `TerminalSquare` or `Terminal`). Place it logically near 'Sandboxes' in the nav order. Ensure it highlights as active when on the /terminal route.
 

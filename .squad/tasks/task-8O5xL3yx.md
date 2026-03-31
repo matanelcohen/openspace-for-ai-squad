@@ -4,7 +4,6 @@ title: Seed team_members table from team.md on DB init
 status: done
 priority: P0
 assignee: bender
-assigneeType: agent
 labels:
   - bug
   - backend
@@ -12,8 +11,8 @@ labels:
   - team-members
   - 'parent:task-Mfqbvb2z'
 created: '2026-03-24T19:53:28.983Z'
-updated: '2026-03-24T20:24:16.271Z'
-sortIndex: 9
+updated: '2026-03-31T21:51:04.678Z'
+sortIndex: 20
 ---
 The team_members SQLite table in apps/api/src/services/db/schema.ts starts empty. Create a seed/sync mechanism in the DB initialization (or TeamMemberService) that reads agent definitions from .squad/team.md and inserts them into the team_members table if it's empty. Map agent fields (name, role/expertise) to team_member columns (name, role, department, skills, status='active', rank='mid'). Run on first DB init and expose a re-sync API endpoint (POST /api/team-members/sync) for manual refresh.
 

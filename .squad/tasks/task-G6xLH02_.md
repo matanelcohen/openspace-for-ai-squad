@@ -10,8 +10,8 @@ labels:
   - storage
   - 'parent:task-inwjKYOc'
 created: '2026-03-25T15:03:16.614Z'
-updated: '2026-03-25T15:31:05.857Z'
-sortIndex: 71
+updated: '2026-03-31T21:51:04.801Z'
+sortIndex: 72
 ---
 Design the Channel interface/type with fields: id, name, description, memberList, createdAt, updatedAt. Implement the storage layer using .squad/channels/*.md files (or integrate with existing DB layer if one exists). Include serialization/deserialization logic for reading and writing channel data to disk.
 

@@ -10,7 +10,7 @@ labels:
   - qa
   - 'parent:task-5NsiKbtI'
 created: '2026-03-25T13:40:57.210Z'
-updated: '2026-03-25T14:46:43.961Z'
-sortIndex: 50
+updated: '2026-03-31T21:51:04.761Z'
+sortIndex: 54
 ---
 Test all task-cli commands (create, list, update, delete) from the terminal. Verify correct output formatting, error messages, and edge cases like missing arguments or invalid input.

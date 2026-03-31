@@ -12,8 +12,8 @@ labels:
   - unit-tests
   - 'parent:task-hgTK5Dbi'
 created: '2026-03-25T23:19:39.419Z'
-updated: '2026-03-26T07:46:22.084Z'
-sortIndex: 157
+updated: '2026-03-31T21:51:04.876Z'
+sortIndex: 104
 ---
 Write tests covering: 1) Unit tests for SkillRegistry discovery, SkillLoader validation (valid/invalid manifests, missing deps, circular deps), and SkillRouter task matching. 2) Integration tests for skill lifecycle (load → attach to agent → execute task → detach). 3) E2E tests: agent receives a git-related task → router selects git-expert skill → skill tools and prompts are injected → agent produces correct output. 4) Edge cases: malformed manifests, duplicate skill names, skill hot-reload, concurrent skill loading. Target 90%+ coverage on the registry/loader/router modules.
 

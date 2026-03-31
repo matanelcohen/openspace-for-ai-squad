@@ -9,7 +9,7 @@ labels:
   - smoke-test
   - 'parent:task-laKiOJJk'
 created: '2026-03-25T13:39:59.581Z'
-updated: '2026-03-25T14:46:43.527Z'
-sortIndex: 40
+updated: '2026-03-31T21:51:04.746Z'
+sortIndex: 46
 ---
 Create a small suite of smoke tests that exercise the CLI tool's core workflow: invoking a command, receiving a response, and displaying results. Cover happy path and basic error scenarios.

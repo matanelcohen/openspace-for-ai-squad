@@ -10,7 +10,7 @@ labels:
   - ui
   - 'parent:task-_siJJHvU'
 created: '2026-03-25T13:40:47.120Z'
-updated: '2026-03-25T14:46:43.757Z'
-sortIndex: 43
+updated: '2026-03-31T21:51:04.748Z'
+sortIndex: 49
 ---
 Write unit tests for frontend bulk UI flows in apps/web/ (e.g., multi-select on task board, bulk actions toolbar). Use Vitest + React Testing Library to verify correct state management and API call batching.

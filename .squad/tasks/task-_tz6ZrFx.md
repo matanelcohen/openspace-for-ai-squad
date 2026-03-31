@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - 'parent:task-OCFIYeWW'
 created: '2026-03-26T15:16:19.684Z'
-updated: '2026-03-26T15:36:02.065Z'
-sortIndex: 197
+updated: '2026-03-31T21:51:05.043Z'
+sortIndex: 136
 ---
 Enhance the existing skills-editor.tsx and agent-skill-list.tsx components to support drag-and-drop reordering, bulk enable/disable, and a visual dependency graph. Add inline skill config editing so users don't need to navigate away from the agent page.
 

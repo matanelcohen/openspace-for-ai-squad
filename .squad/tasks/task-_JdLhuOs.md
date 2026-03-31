@@ -10,7 +10,7 @@ labels:
   - validation
   - 'parent:task-z6v3Er2k'
 created: '2026-03-25T13:41:06.291Z'
-updated: '2026-03-25T14:46:44.239Z'
-sortIndex: 57
+updated: '2026-03-31T21:51:04.775Z'
+sortIndex: 61
 ---
 Run the batch test suite, review results for correctness, and ensure tests integrate cleanly with the existing CI pipeline. Fix any flaky or failing tests.

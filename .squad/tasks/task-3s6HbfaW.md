@@ -11,8 +11,8 @@ labels:
   - database
   - 'parent:task-meNX3cL6'
 created: '2026-03-25T13:45:36.752Z'
-updated: '2026-03-25T13:55:24.125Z'
-sortIndex: 58
+updated: '2026-03-31T21:51:04.775Z'
+sortIndex: 62
 ---
 Create a new Fastify route in apps/api/src/routes/chat.ts that handles DELETE /api/chat/messages. Support clearing all messages or filtering by agent/channel via query params (e.g., ?agent=<id>). Must delete from both SQLite (chat_messages table) and the .squad/sessions/ markdown files. Follow the existing DELETE pattern used in team-members.ts. Return 200 with count of deleted messages.
 

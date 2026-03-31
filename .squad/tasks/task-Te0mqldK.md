@@ -9,8 +9,8 @@ labels:
   - backend
   - api
 created: '2026-03-25T20:08:13.697Z'
-updated: '2026-03-25T22:30:58.825Z'
-sortIndex: 2
+updated: '2026-03-31T21:51:04.661Z'
+sortIndex: 9
 ---
 Expose channel CRUD via REST endpoints: GET/POST /api/channels, GET/PUT/DELETE /api/channels/:id. Wire up to the ChatService channel methods.
 

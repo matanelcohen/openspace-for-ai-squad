@@ -10,8 +10,8 @@ labels:
   - playwright
   - 'parent:task-q-mlnm7Z'
 created: '2026-03-25T15:03:35.225Z'
-updated: '2026-03-25T18:25:52.470Z'
-sortIndex: 90
+updated: '2026-03-31T21:51:04.816Z'
+sortIndex: 79
 ---
 Write Playwright E2E tests covering the complete channel workflow: 1) Create a new channel, 2) Navigate to channel, 3) Send a message, 4) Verify message delivery and display. Add scenarios for: empty channel state, multiple messages, permission boundaries (user without access cannot see/join channel). Ensure tests are isolated and clean up after themselves.
 

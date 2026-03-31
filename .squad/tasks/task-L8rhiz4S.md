@@ -11,8 +11,8 @@ labels:
   - parallelism
   - 'parent:task-DkHSQ8li'
 created: '2026-03-25T23:18:52.912Z'
-updated: '2026-03-26T00:12:31.130Z'
-sortIndex: 136
+updated: '2026-03-31T21:51:04.847Z'
+sortIndex: 90
 ---
 Build the backend engine: (1) DAGBuilder API for composing workflows from steps — addStep(), addEdge(), addConditionalEdge(), validate() with cycle detection. (2) DAGExecutor that resolves execution order via topological sort, runs independent steps in parallel (Promise.all or worker pool), evaluates conditional edges, and propagates results through the graph. (3) CheckpointStore interface with an in-memory implementation for persisting execution state at each step so workflows can resume from last checkpoint on failure. Integrate with Tool Registry for step resolution.
 

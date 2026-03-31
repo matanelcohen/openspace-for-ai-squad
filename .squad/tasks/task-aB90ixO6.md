@@ -7,8 +7,8 @@ assignee: fry
 labels:
   - docs
 created: '2026-03-25T13:35:07.485Z'
-updated: '2026-03-25T17:52:43.840Z'
-sortIndex: 0
+updated: '2026-03-31T21:51:04.634Z'
+sortIndex: 1
 ---
 Update docs to cover the new pending-approval task status: what it means, how tasks move through the flow, and how approval/rejection works.
 

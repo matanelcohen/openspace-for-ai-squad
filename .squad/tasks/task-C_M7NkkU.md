@@ -9,8 +9,8 @@ labels:
   - typescript
   - 'parent:task-h0oYAnT5'
 created: '2026-03-25T13:35:39.392Z'
-updated: '2026-03-25T13:57:32.343Z'
-sortIndex: 33
+updated: '2026-03-31T21:51:04.732Z'
+sortIndex: 39
 ---
 Run `npx tsc --noEmit -p packages/shared/tsconfig.json` and confirm zero errors. Also run the shared test suite (`vitest run` for the shared package) to ensure all tests pass with the updated fixtures.
 

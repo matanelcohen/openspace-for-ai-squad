@@ -7,8 +7,8 @@ assignee: zoidberg
 labels:
   - 'parent:task-OCFIYeWW'
 created: '2026-03-26T15:16:19.740Z'
-updated: '2026-03-26T15:27:23.839Z'
-sortIndex: 199
+updated: '2026-03-31T21:51:05.046Z'
+sortIndex: 138
 ---
 Add tests for: (1) enhanced router matching with configurable confidence in skill-router.test.ts, (2) new reference skill manifests validate correctly in skill-loader.test.ts, (3) E2E test for skill creation wizard using Playwright in /e2e/. Ensure edge cases like invalid manifests, circular deps, and tiebreaking are covered.
 

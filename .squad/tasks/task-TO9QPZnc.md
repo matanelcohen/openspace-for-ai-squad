@@ -10,8 +10,8 @@ labels:
   - channels
   - 'parent:task-NQ2p_jgu'
 created: '2026-03-25T15:03:35.356Z'
-updated: '2026-03-25T18:43:54.456Z'
-sortIndex: 95
+updated: '2026-03-31T21:51:04.824Z'
+sortIndex: 82
 ---
 Write unit tests for ChannelSidebar, CreateChannelDialog, ChannelHeader, and ChannelMessageView. Test: rendering with mock data, empty states, loading states, error states, channel switching interaction, form validation in creation dialog, and message list scroll behavior. Use existing test framework (Vitest + Testing Library). Add at least one integration test verifying the create-channel flow end-to-end with mocked API.
 

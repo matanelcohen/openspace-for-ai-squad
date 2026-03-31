@@ -6,8 +6,8 @@ priority: P0
 assignee: fry
 labels: []
 created: '2026-03-26T09:56:50.171Z'
-updated: '2026-03-26T10:19:07.934Z'
-sortIndex: 171
+updated: '2026-03-31T21:51:04.905Z'
+sortIndex: 115
 ---
 the chat input looks like ametur did it.
 
