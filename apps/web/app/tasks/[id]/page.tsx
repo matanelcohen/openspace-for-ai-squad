@@ -2,7 +2,7 @@
 
 import type { TaskStatus } from '@matanelcohen/openspace-shared';
 import { TASK_STATUS_LABELS, TASK_STATUSES } from '@matanelcohen/openspace-shared';
-import { ArrowLeft, GitBranch, GitPullRequest, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
+import { ArrowLeft, Box, GitBranch, GitPullRequest, Loader2, Pencil, Play, RotateCcw, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -29,6 +29,7 @@ import { useAgents } from '@/hooks/use-agents';
 import { useCreateBranch, useCreatePR } from '@/hooks/use-github';
 import { useTaskEvents } from '@/hooks/use-task-events';
 import { useDeleteTask, useEnqueueTask, useSubtasks, useTask, useUpdateTask, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useWorktree } from '@/hooks/use-worktrees';
 import { selectTier } from '@/lib/tiers';
 
 export default function TaskDetailPage() {
@@ -48,6 +49,7 @@ export default function TaskDetailPage() {
   const createBranch = useCreateBranch();
   const createPR = useCreatePR();
   const { data: subtasks } = useSubtasks(id);
+  const { data: worktree } = useWorktree(id);
   const logEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll progress log
@@ -376,6 +378,42 @@ export default function TaskDetailPage() {
                 <div ref={logEndRef} />
               </div>
             </ScrollArea>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Sandbox (Worktree) */}
+      {worktree && (
+        <Card data-testid="sandbox-section">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Box className="h-4 w-4" />
+              Sandbox
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="font-mono text-xs">
+                <GitBranch className="mr-1 h-3 w-3" />
+                {worktree.branch}
+              </Badge>
+              <span className="text-muted-foreground text-xs">
+                from <span className="font-mono">{worktree.baseBranch}</span>
+              </span>
+            </div>
+            {worktree.pr && (
+              <div className="flex items-center gap-2">
+                <GitPullRequest className="h-3 w-3 text-green-600" />
+                <a
+                  href={worktree.pr.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  PR #{worktree.pr.number}
+                </a>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
