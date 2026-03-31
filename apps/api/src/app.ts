@@ -352,7 +352,6 @@ export async function buildApp(opts: AppOptions = {}) {
         baseBranch: sandboxCfg?.baseBranch ?? process.env.WORKTREE_BASE_BRANCH ?? 'main',
         maxWorktrees: sandboxCfg?.maxWorktrees ?? (Number(process.env.WORKTREE_MAX) || 10),
         worktreeDir: sandboxCfg?.worktreeDir ?? '.git-worktrees',
-        installDeps: sandboxCfg?.installDeps ?? process.env.WORKTREE_INSTALL_DEPS === 'true',
         symlinkSquad: true,
         autoCommit: sandboxCfg?.autoCommit ?? process.env.WORKTREE_AUTO_COMMIT !== 'false',
         autoPR: sandboxCfg?.autoPR ?? process.env.WORKTREE_AUTO_PR !== 'false',

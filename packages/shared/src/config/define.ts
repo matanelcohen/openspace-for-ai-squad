@@ -98,8 +98,6 @@ export interface SandboxDefinition {
   baseBranch?: string;
   /** Directory for worktrees (relative to repo root). Default: .git-worktrees */
   worktreeDir?: string;
-  /** Run pnpm install in new worktrees. Default: false */
-  installDeps?: boolean;
   /** Auto-commit changes on task completion. Default: true */
   autoCommit?: boolean;
   /** Auto-create PR on task completion. Default: true */

@@ -543,6 +543,7 @@ export class AgentWorkerService {
         `- Only modify files under apps/, packages/, src/, or other project source directories.\n` +
         `- Complete the task in a single pass. Do not create sub-tasks.\n` +
         `- After making changes, ALWAYS run the project's build and test commands to verify your work.\n` +
+        `- Install dependencies first if node_modules or equivalent is missing.\n` +
         `- If build or tests fail, fix the issues and re-run until everything passes.\n` +
         `- Do not consider the task done until build and tests pass.\n\n` +
         (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
