@@ -532,6 +532,10 @@ export class AgentWorkerService {
         `Personality: ${agent.personality}\n\n` +
         `You have been assigned a task. Execute it fully — write code, create files, make changes. ` +
         `Do the actual work, don't just describe what you would do.\n\n` +
+        `IMPORTANT RULES:\n` +
+        `- Do NOT create subtasks or task files in .squad/tasks/. You are not a project manager.\n` +
+        `- Do NOT modify files in .squad/ (it contains system config). Only work on project source code.\n` +
+        `- Focus on completing the assigned task in one go.\n\n` +
         (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
         (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
         `When done, provide a brief summary of what you did.`;
