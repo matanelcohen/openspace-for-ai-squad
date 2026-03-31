@@ -6,12 +6,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 
 vi.mock('@/hooks/use-tasks');
+vi.mock('@/hooks/use-agents');
 
-import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useAgents } from '@/hooks/use-agents';
+import {
+  useApproveTask,
+  useRejectTask,
+  useTasks,
+  useUpdateTaskPriority,
+  useUpdateTaskStatus,
+} from '@/hooks/use-tasks';
 
 const mockedUseTasks = vi.mocked(useTasks);
+const mockedUseAgents = vi.mocked(useAgents);
 const mockedUseUpdateTaskStatus = vi.mocked(useUpdateTaskStatus);
 const mockedUseUpdateTaskPriority = vi.mocked(useUpdateTaskPriority);
+const mockedUseApproveTask = vi.mocked(useApproveTask);
+const mockedUseRejectTask = vi.mocked(useRejectTask);
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -23,7 +34,7 @@ const mockTasks: Task[] = [
     id: 'task-1',
     title: 'Build login page',
     description: '',
-    status: 'backlog',
+    status: 'pending',
     priority: 'P1',
     assignee: 'fry',
     labels: ['frontend'],
@@ -59,6 +70,11 @@ const mockTasks: Task[] = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockedUseAgents.mockReturnValue({
+    data: [],
+    isLoading: false,
+    error: null,
+  } as ReturnType<typeof useAgents>);
   mockedUseUpdateTaskStatus.mockReturnValue({
     mutate: vi.fn(),
     mutateAsync: vi.fn(),
@@ -69,6 +85,16 @@ beforeEach(() => {
     mutateAsync: vi.fn(),
     isPending: false,
   } as unknown as ReturnType<typeof useUpdateTaskPriority>);
+  mockedUseApproveTask.mockReturnValue({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof useApproveTask>);
+  mockedUseRejectTask.mockReturnValue({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+  } as unknown as ReturnType<typeof useRejectTask>);
 });
 
 afterEach(() => {
@@ -108,11 +134,11 @@ describe('KanbanBoard', () => {
 
     render(<KanbanBoard />, { wrapper });
     expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
-    expect(screen.getByTestId('kanban-column-backlog')).toBeInTheDocument();
+    expect(screen.getByTestId('kanban-column-pending')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-in-progress')).toBeInTheDocument();
-    expect(screen.getByTestId('kanban-column-in-review')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-done')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-blocked')).toBeInTheDocument();
+    expect(screen.getByTestId('kanban-column-delegated')).toBeInTheDocument();
   });
 
   it('renders tasks in correct columns', () => {
@@ -123,9 +149,9 @@ describe('KanbanBoard', () => {
     } as ReturnType<typeof useTasks>);
 
     render(<KanbanBoard />, { wrapper });
-    // task-1 in backlog
-    const backlogCol = screen.getByTestId('kanban-column-backlog');
-    expect(backlogCol).toHaveTextContent('Build login page');
+    // task-1 in pending
+    const pendingCol = screen.getByTestId('kanban-column-pending');
+    expect(pendingCol).toHaveTextContent('Build login page');
 
     // task-2 in in-progress
     const inProgressCol = screen.getByTestId('kanban-column-in-progress');
@@ -144,9 +170,9 @@ describe('KanbanBoard', () => {
     } as ReturnType<typeof useTasks>);
 
     render(<KanbanBoard />, { wrapper });
-    // Backlog should have 1, in-progress 1, done 1, others 0
-    const backlogCol = screen.getByTestId('kanban-column-backlog');
-    expect(backlogCol).toHaveTextContent('1');
+    // Pending should have 1, in-progress 1, done 1, others 0
+    const pendingCol = screen.getByTestId('kanban-column-pending');
+    expect(pendingCol).toHaveTextContent('1');
   });
 
   it('renders empty columns with placeholder', () => {
@@ -157,8 +183,34 @@ describe('KanbanBoard', () => {
     } as ReturnType<typeof useTasks>);
 
     render(<KanbanBoard />, { wrapper });
-    // in-review and blocked columns should be empty
-    const reviewCol = screen.getByTestId('kanban-column-in-review');
-    expect(reviewCol).toHaveTextContent('Drop tasks here');
+    // blocked and delegated columns should be empty
+    const blockedCol = screen.getByTestId('kanban-column-blocked');
+    expect(blockedCol).toHaveTextContent('Drop tasks here');
+  });
+
+  it('renders the filters toolbar', () => {
+    mockedUseTasks.mockReturnValue({
+      data: mockTasks,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTasks>);
+
+    render(<KanbanBoard />, { wrapper });
+    expect(screen.getByTestId('task-filters-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-search')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-status')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-assignee')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-priority')).toBeInTheDocument();
+  });
+
+  it('does not show filter count when no filters are active', () => {
+    mockedUseTasks.mockReturnValue({
+      data: mockTasks,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTasks>);
+
+    render(<KanbanBoard />, { wrapper });
+    expect(screen.queryByTestId('kanban-filter-count')).not.toBeInTheDocument();
   });
 });

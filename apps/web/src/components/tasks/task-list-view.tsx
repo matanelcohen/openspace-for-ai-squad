@@ -8,6 +8,7 @@ import { useMemo, useState } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { PriorityBadge } from '@/components/priority-badge';
+import { applyFilters } from '@/components/tasks/task-filter-utils';
 import { type TaskFilters, TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,25 +33,6 @@ const statusOrder: Record<TaskStatus, number> = {
   blocked: 3,
   delegated: 4,
 };
-
-function applyFilters(tasks: Task[], filters: TaskFilters): Task[] {
-  return tasks.filter((t) => {
-    if (filters.status !== 'all' && t.status !== filters.status) return false;
-    if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
-    if (filters.assignee !== 'all') {
-      if (filters.assignee === 'unassigned' && t.assignee !== null) return false;
-      if (filters.assignee !== 'unassigned' && t.assignee !== filters.assignee) return false;
-    }
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      const matchTitle = t.title.toLowerCase().includes(q);
-      const matchDesc = t.description.toLowerCase().includes(q);
-      const matchLabels = t.labels.some((l) => l.toLowerCase().includes(q));
-      if (!matchTitle && !matchDesc && !matchLabels) return false;
-    }
-    return true;
-  });
-}
 
 function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
   const sorted = [...tasks].sort((a, b) => {
