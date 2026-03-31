@@ -1,64 +1,90 @@
 /**
  * Sandbox types — containers for agent code execution.
+ *
+ * These types mirror the API implementation in apps/api/src/services/sandbox/types.ts.
  */
 
-export type SandboxStatus = 'creating' | 'running' | 'stopped' | 'error' | 'destroying';
+// ── Runtime environments ──────────────────────────────────────────
 
 export type SandboxRuntime = 'node' | 'python' | 'go';
 
-export interface Sandbox {
+export const SANDBOX_RUNTIMES: readonly SandboxRuntime[] = ['node', 'python', 'go'];
+
+// ── Lifecycle ─────────────────────────────────────────────────────
+
+export type SandboxStatus = 'creating' | 'ready' | 'busy' | 'stopped' | 'destroyed' | 'error';
+
+export interface SandboxResourceLimits {
+  /** CPU shares (relative weight). Default: 1024 (1 CPU). */
+  cpuShares?: number;
+  /** Memory limit in bytes. Default: 512MB. */
+  memoryBytes?: number;
+  /** Execution timeout in milliseconds. Default: 300_000 (5 min). */
+  timeoutMs?: number;
+}
+
+export interface SandboxInfo {
   id: string;
-  name: string;
+  containerId: string;
   runtime: SandboxRuntime;
   status: SandboxStatus;
-  agentId: string | null;
+  limits: Required<SandboxResourceLimits>;
   createdAt: string;
-  lastActivityAt: string;
-  /** Container image tag, e.g. "node:20-slim" */
-  image: string;
-  /** Exposed port for dev server, if any */
-  port: number | null;
-  /** CPU / memory usage summary */
-  resources: SandboxResources;
 }
 
-export interface SandboxResources {
-  cpuPercent: number;
-  memoryMb: number;
-  memoryLimitMb: number;
+export interface SandboxCreateInput {
+  runtime: SandboxRuntime;
+  limits?: SandboxResourceLimits;
+  env?: Record<string, string>;
 }
 
-export interface SandboxCommand {
-  sandboxId: string;
+// ── Command execution ─────────────────────────────────────────────
+
+export interface ExecRequest {
+  /** Shell command to execute inside the sandbox. */
   command: string;
+  /** Working directory inside the container. Default: /workspace */
+  workdir?: string;
+  /** Additional env vars for this execution only. */
+  env?: Record<string, string>;
+  /** Override the timeout for this specific exec. */
+  timeoutMs?: number;
 }
 
-export interface SandboxOutputLine {
-  /** Monotonic line index */
-  index: number;
-  /** Raw text, may include ANSI escape sequences */
-  text: string;
-  /** ISO timestamp */
-  timestamp: string;
-  /** Stream source */
+export interface ExecResult {
+  /** Unique execution ID. */
+  execId: string;
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  /** Whether the command was killed due to timeout. */
+  timedOut: boolean;
+  durationMs: number;
+}
+
+// ── Streaming output ──────────────────────────────────────────────
+
+export interface StreamChunk {
+  execId: string;
   stream: 'stdout' | 'stderr';
+  data: string;
+  timestamp: string;
 }
 
-/** File node in a sandbox file tree. */
+export interface StreamEnd {
+  execId: string;
+  exitCode: number;
+  timedOut: boolean;
+  durationMs: number;
+}
+
+// ── File operations ───────────────────────────────────────────────
+
 export interface SandboxFile {
   name: string;
   path: string;
   type: 'file' | 'directory';
   size?: number;
+  modifiedAt?: string;
   children?: SandboxFile[];
-}
-
-/** Pre-configured sandbox template for quick starts. */
-export interface SandboxTemplate {
-  id: string;
-  name: string;
-  description: string;
-  runtime: SandboxRuntime;
-  icon: string;
-  setupCommand?: string;
 }

@@ -149,15 +149,18 @@ export type {
   VectorStoreProvider,
 } from './rag.js';
 export type {
-  Sandbox,
-  SandboxCommand,
+  ExecRequest,
+  ExecResult,
+  SandboxCreateInput,
   SandboxFile,
-  SandboxOutputLine,
-  SandboxResources,
+  SandboxInfo,
+  SandboxResourceLimits,
   SandboxRuntime,
   SandboxStatus,
-  SandboxTemplate,
+  StreamChunk,
+  StreamEnd,
 } from './sandbox.js';
+export { SANDBOX_RUNTIMES } from './sandbox.js';
 export type {
   CompositeTrigger,
   FileTrigger,

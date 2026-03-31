@@ -250,6 +250,23 @@ describe('ContainerManager', () => {
     });
   });
 
+  describe('stop', () => {
+    it('stops a running container without removing it', async () => {
+      await manager.stop('container-abc123');
+
+      expect(mockContainer.stop).toHaveBeenCalledWith({ t: 5 });
+      expect(mockContainer.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('restart', () => {
+    it('starts a stopped container', async () => {
+      await manager.restart('container-abc123');
+
+      expect(mockContainer.start).toHaveBeenCalled();
+    });
+  });
+
   describe('isRunning', () => {
     it('returns true for running container', async () => {
       const result = await manager.isRunning('container-abc123');

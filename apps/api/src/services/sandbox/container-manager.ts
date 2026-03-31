@@ -199,6 +199,22 @@ export class ContainerManager extends EventEmitter {
   }
 
   /**
+   * Stop a running container (without removing it).
+   */
+  async stop(containerId: string): Promise<void> {
+    const container = this.docker.getContainer(containerId);
+    await container.stop({ t: 5 });
+  }
+
+  /**
+   * Restart a stopped container.
+   */
+  async restart(containerId: string): Promise<void> {
+    const container = this.docker.getContainer(containerId);
+    await container.start();
+  }
+
+  /**
    * Stop and remove a container.
    */
   async destroy(containerId: string): Promise<void> {

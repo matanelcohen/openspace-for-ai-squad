@@ -101,10 +101,46 @@ export class SandboxService {
   }
 
   /**
-   * List all active sandboxes.
+   * List all active sandboxes, optionally filtered.
    */
-  list(): SandboxInfo[] {
-    return this.pool.list();
+  list(filters?: { status?: string; runtime?: string }): SandboxInfo[] {
+    let sandboxes = this.pool.list();
+    if (filters?.status) {
+      sandboxes = sandboxes.filter((s) => s.status === filters.status);
+    }
+    if (filters?.runtime) {
+      sandboxes = sandboxes.filter((s) => s.runtime === filters.runtime);
+    }
+    return sandboxes;
+  }
+
+  /**
+   * Stop a running sandbox (container stays in pool as 'stopped').
+   */
+  async stop(sandboxId: string): Promise<void> {
+    const info = this.pool.get(sandboxId);
+    if (!info) {
+      throw new SandboxNotFoundError(sandboxId);
+    }
+    if (info.status === 'stopped') return; // already stopped
+    if (info.status !== 'ready' && info.status !== 'busy') {
+      throw new SandboxStoppedError(sandboxId);
+    }
+    await this.pool.stop(sandboxId);
+  }
+
+  /**
+   * Restart a stopped sandbox.
+   */
+  async restart(sandboxId: string): Promise<void> {
+    const info = this.pool.get(sandboxId);
+    if (!info) {
+      throw new SandboxNotFoundError(sandboxId);
+    }
+    if (info.status !== 'stopped') {
+      throw new SandboxNotStoppedError(sandboxId);
+    }
+    await this.pool.restart(sandboxId);
   }
 
   /**
@@ -172,5 +208,23 @@ export class SandboxDestroyedError extends Error {
   constructor(sandboxId: string) {
     super(`Sandbox already destroyed: ${sandboxId}`);
     this.name = 'SandboxDestroyedError';
+  }
+}
+
+export class SandboxStoppedError extends Error {
+  readonly code = 'SANDBOX_NOT_RUNNING';
+
+  constructor(sandboxId: string) {
+    super(`Sandbox is not running: ${sandboxId}`);
+    this.name = 'SandboxStoppedError';
+  }
+}
+
+export class SandboxNotStoppedError extends Error {
+  readonly code = 'SANDBOX_NOT_STOPPED';
+
+  constructor(sandboxId: string) {
+    super(`Sandbox is not stopped: ${sandboxId}`);
+    this.name = 'SandboxNotStoppedError';
   }
 }

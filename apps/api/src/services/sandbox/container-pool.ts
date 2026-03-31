@@ -128,6 +128,43 @@ export class ContainerPool {
   }
 
   /**
+   * Stop a sandbox container (keep it in the pool as 'stopped').
+   */
+  async stop(sandboxId: string): Promise<void> {
+    const entry = this.entries.get(sandboxId);
+    if (!entry) return;
+    if (entry.info.status !== 'ready' && entry.info.status !== 'busy') return;
+
+    try {
+      await this.manager.stop(entry.info.containerId);
+      entry.info.status = 'stopped';
+      entry.lastActivity = Date.now();
+    } catch (err) {
+      entry.info.status = 'error';
+      throw err;
+    }
+  }
+
+  /**
+   * Restart a stopped sandbox container.
+   */
+  async restart(sandboxId: string): Promise<void> {
+    const entry = this.entries.get(sandboxId);
+    if (!entry) return;
+    if (entry.info.status !== 'stopped') return;
+
+    try {
+      entry.info.status = 'creating';
+      await this.manager.restart(entry.info.containerId);
+      entry.info.status = 'ready';
+      entry.lastActivity = Date.now();
+    } catch (err) {
+      entry.info.status = 'error';
+      throw err;
+    }
+  }
+
+  /**
    * Destroy a sandbox and release resources.
    */
   async release(sandboxId: string): Promise<void> {

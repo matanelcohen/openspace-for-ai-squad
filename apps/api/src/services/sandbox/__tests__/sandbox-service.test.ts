@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ContainerManager } from '../container-manager.js';
 import { PoolCapacityError } from '../container-pool.js';
-import { SandboxDestroyedError, SandboxNotFoundError, SandboxService } from '../index.js';
+import { SandboxDestroyedError, SandboxNotFoundError, SandboxNotStoppedError, SandboxService } from '../index.js';
 import type { ExecResult } from '../types.js';
 
 // ── Mock ContainerManager ─────────────────────────────────────────
@@ -22,6 +22,8 @@ function createMockManager() {
   const manager = {
     create: vi.fn().mockImplementation(async () => `container-${++counter}`),
     destroy: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    restart: vi.fn().mockResolvedValue(undefined),
     exec: vi.fn().mockImplementation(
       async (_containerId: string, request: { command: string }): Promise<ExecResult> => ({
         execId: `exec-${Date.now()}`,
@@ -411,6 +413,82 @@ describe('SandboxService', () => {
       await expect(service.copyFrom('nonexistent', '/workspace/file')).rejects.toThrow(
         SandboxNotFoundError,
       );
+    });
+  });
+
+  // ── Stop / Restart ──────────────────────────────────────────────
+
+  describe('stop', () => {
+    it('stops a running sandbox', async () => {
+      const info = await service.create({ runtime: 'node' });
+      await service.stop(info.id);
+
+      expect(service.get(info.id)?.status).toBe('stopped');
+    });
+
+    it('throws SandboxNotFoundError for unknown sandbox', async () => {
+      await expect(service.stop('nonexistent')).rejects.toThrow(SandboxNotFoundError);
+    });
+
+    it('is idempotent for already-stopped sandbox', async () => {
+      const info = await service.create({ runtime: 'node' });
+      await service.stop(info.id);
+      await expect(service.stop(info.id)).resolves.toBeUndefined();
+      expect(service.get(info.id)?.status).toBe('stopped');
+    });
+  });
+
+  describe('restart', () => {
+    it('restarts a stopped sandbox', async () => {
+      const info = await service.create({ runtime: 'node' });
+      await service.stop(info.id);
+      expect(service.get(info.id)?.status).toBe('stopped');
+
+      await service.restart(info.id);
+      expect(service.get(info.id)?.status).toBe('ready');
+    });
+
+    it('throws SandboxNotFoundError for unknown sandbox', async () => {
+      await expect(service.restart('nonexistent')).rejects.toThrow(SandboxNotFoundError);
+    });
+
+    it('throws SandboxNotStoppedError for running sandbox', async () => {
+      const info = await service.create({ runtime: 'node' });
+      await expect(service.restart(info.id)).rejects.toThrow(SandboxNotStoppedError);
+    });
+  });
+
+  // ── Filtered listing ────────────────────────────────────────────
+
+  describe('list with filters', () => {
+    it('filters by runtime', async () => {
+      await service.create({ runtime: 'node' });
+      await service.create({ runtime: 'python' });
+      await service.create({ runtime: 'node' });
+
+      const nodeOnly = service.list({ runtime: 'node' });
+      expect(nodeOnly).toHaveLength(2);
+      expect(nodeOnly.every((s) => s.runtime === 'node')).toBe(true);
+    });
+
+    it('filters by status', async () => {
+      const sb1 = await service.create({ runtime: 'node' });
+      await service.create({ runtime: 'python' });
+      await service.stop(sb1.id);
+
+      const stopped = service.list({ status: 'stopped' });
+      expect(stopped).toHaveLength(1);
+      expect(stopped[0].id).toBe(sb1.id);
+
+      const ready = service.list({ status: 'ready' });
+      expect(ready).toHaveLength(1);
+    });
+
+    it('returns all when no filters', async () => {
+      await service.create({ runtime: 'node' });
+      await service.create({ runtime: 'python' });
+
+      expect(service.list()).toHaveLength(2);
     });
   });
 

@@ -156,18 +156,20 @@ export const TEAM_MEMBER_RANK_LABELS: Record<TeamMemberRank, string> = {
 
 export const SANDBOX_STATUSES = [
   'creating',
-  'running',
+  'ready',
+  'busy',
   'stopped',
+  'destroyed',
   'error',
-  'destroying',
 ] as const satisfies readonly SandboxStatus[];
 
 export const SANDBOX_STATUS_LABELS: Record<SandboxStatus, string> = {
   creating: 'Creating',
-  running: 'Running',
+  ready: 'Ready',
+  busy: 'Busy',
   stopped: 'Stopped',
+  destroyed: 'Destroyed',
   error: 'Error',
-  destroying: 'Destroying',
 };
 
 export const SANDBOX_RUNTIMES = ['node', 'python', 'go'] as const satisfies readonly SandboxRuntime[];

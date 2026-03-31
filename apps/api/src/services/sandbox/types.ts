@@ -36,7 +36,7 @@ export const DEFAULT_RESOURCE_LIMITS: Required<ResourceLimits> = {
 
 // ── Sandbox lifecycle ─────────────────────────────────────────────
 
-export type SandboxStatus = 'creating' | 'ready' | 'busy' | 'destroyed' | 'error';
+export type SandboxStatus = 'creating' | 'ready' | 'busy' | 'stopped' | 'destroyed' | 'error';
 
 export interface SandboxConfig {
   runtime: SandboxRuntime;

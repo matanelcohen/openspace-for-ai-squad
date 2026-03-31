@@ -14,6 +14,8 @@ function createMockManager() {
   const manager = {
     create: vi.fn().mockImplementation(async () => `container-${++counter}`),
     destroy: vi.fn().mockResolvedValue(undefined),
+    stop: vi.fn().mockResolvedValue(undefined),
+    restart: vi.fn().mockResolvedValue(undefined),
     exec: vi.fn().mockResolvedValue({
       execId: 'exec-1',
       exitCode: 0,
@@ -128,6 +130,48 @@ describe('ContainerPool', () => {
 
       pool.markReady(info.id);
       expect(pool.get(info.id)?.status).toBe('ready');
+    });
+  });
+
+  describe('stop / restart', () => {
+    it('stops a running sandbox', async () => {
+      const info = await pool.acquire({ runtime: 'node' });
+      expect(pool.get(info.id)?.status).toBe('ready');
+
+      await pool.stop(info.id);
+      expect(pool.get(info.id)?.status).toBe('stopped');
+      expect((manager.stop as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(info.containerId);
+    });
+
+    it('restarts a stopped sandbox', async () => {
+      const info = await pool.acquire({ runtime: 'node' });
+      await pool.stop(info.id);
+      expect(pool.get(info.id)?.status).toBe('stopped');
+
+      await pool.restart(info.id);
+      expect(pool.get(info.id)?.status).toBe('ready');
+      expect((manager.restart as ReturnType<typeof vi.fn>)).toHaveBeenCalledWith(info.containerId);
+    });
+
+    it('no-ops stop for unknown sandbox', async () => {
+      await expect(pool.stop('nonexistent')).resolves.toBeUndefined();
+    });
+
+    it('no-ops restart for non-stopped sandbox', async () => {
+      const info = await pool.acquire({ runtime: 'node' });
+      // Sandbox is 'ready', not 'stopped' — restart should no-op
+      await pool.restart(info.id);
+      expect(pool.get(info.id)?.status).toBe('ready');
+    });
+
+    it('marks sandbox as error if stop fails', async () => {
+      const info = await pool.acquire({ runtime: 'node' });
+      (manager.stop as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error('Docker daemon error'),
+      );
+
+      await expect(pool.stop(info.id)).rejects.toThrow('Docker daemon error');
+      expect(pool.get(info.id)?.status).toBe('error');
     });
   });
 

@@ -19,12 +19,14 @@ const mockSandboxService = {
   get: vi.fn(),
   list: vi.fn(),
   destroy: vi.fn(),
+  stop: vi.fn(),
+  restart: vi.fn(),
   onStreamData: vi.fn(),
   onStreamEnd: vi.fn(),
   offStreamData: vi.fn(),
   offStreamEnd: vi.fn(),
-  start: vi.fn(),
-  shutdown: vi.fn(),
+  start: vi.fn().mockResolvedValue(undefined),
+  shutdown: vi.fn().mockResolvedValue(undefined),
 };
 
 vi.mock('../services/sandbox/index.js', async (importOriginal) => {
@@ -41,7 +43,7 @@ describe('Sandboxes API', () => {
   let app: FastifyInstance;
 
   beforeAll(async () => {
-    app = buildApp({ logger: false });
+    app = await buildApp({ logger: false });
     await app.ready();
   });
 
@@ -115,6 +117,38 @@ describe('Sandboxes API', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body).toHaveLength(2);
+    });
+
+    it('passes status filter to service', async () => {
+      mockSandboxService.list.mockReturnValueOnce([
+        { id: 'sb-1', runtime: 'node', status: 'ready' },
+      ]);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/sandboxes?status=ready',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockSandboxService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'ready' }),
+      );
+    });
+
+    it('passes runtime filter to service', async () => {
+      mockSandboxService.list.mockReturnValueOnce([
+        { id: 'sb-1', runtime: 'python', status: 'ready' },
+      ]);
+
+      const response = await app.inject({
+        method: 'GET',
+        url: '/api/sandboxes?runtime=python',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(mockSandboxService.list).toHaveBeenCalledWith(
+        expect.objectContaining({ runtime: 'python' }),
+      );
     });
   });
 
@@ -191,6 +225,90 @@ describe('Sandboxes API', () => {
       });
 
       expect(response.statusCode).toBe(404);
+    });
+  });
+
+  describe('POST /api/sandboxes/:id/stop', () => {
+    it('stops a running sandbox', async () => {
+      mockSandboxService.stop.mockResolvedValueOnce(undefined);
+      mockSandboxService.get.mockReturnValueOnce({
+        id: 'sb-1',
+        runtime: 'node',
+        status: 'stopped',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/sandboxes/sb-1/stop',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('stopped');
+    });
+
+    it('returns 404 for unknown sandbox', async () => {
+      mockSandboxService.stop.mockRejectedValueOnce(new SandboxNotFoundError('sb-unknown'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/sandboxes/sb-unknown/stop',
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('returns 409 when sandbox is not running', async () => {
+      const { SandboxStoppedError } = await import('../services/sandbox/index.js');
+      mockSandboxService.stop.mockRejectedValueOnce(new SandboxStoppedError('sb-1'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/sandboxes/sb-1/stop',
+      });
+
+      expect(response.statusCode).toBe(409);
+    });
+  });
+
+  describe('POST /api/sandboxes/:id/restart', () => {
+    it('restarts a stopped sandbox', async () => {
+      mockSandboxService.restart.mockResolvedValueOnce(undefined);
+      mockSandboxService.get.mockReturnValueOnce({
+        id: 'sb-1',
+        runtime: 'node',
+        status: 'ready',
+      });
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/sandboxes/sb-1/restart',
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().status).toBe('ready');
+    });
+
+    it('returns 404 for unknown sandbox', async () => {
+      mockSandboxService.restart.mockRejectedValueOnce(new SandboxNotFoundError('sb-unknown'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/sandboxes/sb-unknown/restart',
+      });
+
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('returns 409 when sandbox is not stopped', async () => {
+      const { SandboxNotStoppedError } = await import('../services/sandbox/index.js');
+      mockSandboxService.restart.mockRejectedValueOnce(new SandboxNotStoppedError('sb-1'));
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/sandboxes/sb-1/restart',
+      });
+
+      expect(response.statusCode).toBe(409);
     });
   });
 

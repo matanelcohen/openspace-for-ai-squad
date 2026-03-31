@@ -2,9 +2,11 @@
  * Sandboxes API
  *
  * POST   /api/sandboxes              — Create a sandbox container
- * GET    /api/sandboxes              — List all sandboxes
+ * GET    /api/sandboxes              — List all sandboxes (supports ?status=, ?runtime=)
  * GET    /api/sandboxes/:id          — Get sandbox status
  * POST   /api/sandboxes/:id/exec     — Execute command in sandbox
+ * POST   /api/sandboxes/:id/stop     — Stop a running sandbox
+ * POST   /api/sandboxes/:id/restart  — Restart a stopped sandbox
  * GET    /api/sandboxes/:id/files/*  — Retrieve file from sandbox (tar)
  * DELETE /api/sandboxes/:id          — Destroy sandbox
  * GET    /api/sandboxes/:id/stream   — WebSocket: real-time stdout/stderr
@@ -17,7 +19,9 @@ import {
   type ExecRequest,
   SANDBOX_RUNTIMES,
   SandboxNotFoundError,
+  SandboxNotStoppedError,
   type SandboxRuntime,
+  SandboxStoppedError,
   type StreamChunk,
   type StreamEnd,
 } from '../services/sandbox/index.js';
@@ -61,11 +65,17 @@ const sandboxesRoute: FastifyPluginAsync = async (app) => {
     }
   });
 
-  // GET /api/sandboxes — list all
-  app.get('/sandboxes', async (_request, reply) => {
-    const sandboxes = app.sandboxService.list();
-    return reply.send(sandboxes);
-  });
+  // GET /api/sandboxes — list all (supports ?status= and ?runtime= filters)
+  app.get<{ Querystring: { status?: string; runtime?: string } }>(
+    '/sandboxes',
+    async (request, reply) => {
+      const { status, runtime } = request.query;
+      const filters =
+        status || runtime ? { status: status || undefined, runtime: runtime || undefined } : undefined;
+      const sandboxes = app.sandboxService.list(filters);
+      return reply.send(sandboxes);
+    },
+  );
 
   // GET /api/sandboxes/:id — status
   app.get<{ Params: { id: string } }>('/sandboxes/:id', async (request, reply) => {
@@ -141,6 +151,42 @@ const sandboxesRoute: FastifyPluginAsync = async (app) => {
       }
     },
   );
+
+  // POST /api/sandboxes/:id/stop — stop a running sandbox
+  app.post<{ Params: { id: string } }>('/sandboxes/:id/stop', async (request, reply) => {
+    try {
+      await app.sandboxService.stop(request.params.id);
+      const info = app.sandboxService.get(request.params.id);
+      return reply.send(info);
+    } catch (err) {
+      if (err instanceof SandboxNotFoundError) {
+        return sendError(reply, 404, ErrorCodes.NOT_FOUND, err.message);
+      }
+      if (err instanceof SandboxStoppedError) {
+        return sendError(reply, 409, err.code, err.message);
+      }
+      request.log.error(err, 'Failed to stop sandbox');
+      return sendError(reply, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to stop sandbox');
+    }
+  });
+
+  // POST /api/sandboxes/:id/restart — restart a stopped sandbox
+  app.post<{ Params: { id: string } }>('/sandboxes/:id/restart', async (request, reply) => {
+    try {
+      await app.sandboxService.restart(request.params.id);
+      const info = app.sandboxService.get(request.params.id);
+      return reply.send(info);
+    } catch (err) {
+      if (err instanceof SandboxNotFoundError) {
+        return sendError(reply, 404, ErrorCodes.NOT_FOUND, err.message);
+      }
+      if (err instanceof SandboxNotStoppedError) {
+        return sendError(reply, 409, err.code, err.message);
+      }
+      request.log.error(err, 'Failed to restart sandbox');
+      return sendError(reply, 500, ErrorCodes.INTERNAL_ERROR, 'Failed to restart sandbox');
+    }
+  });
 
   // DELETE /api/sandboxes/:id — destroy
   app.delete<{ Params: { id: string } }>('/sandboxes/:id', async (request, reply) => {

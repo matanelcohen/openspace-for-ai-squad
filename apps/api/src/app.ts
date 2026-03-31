@@ -244,6 +244,9 @@ export async function buildApp(opts: AppOptions = {}) {
     chatService.setWebSocketManager(app.wsManager);
     chatService.setActivityFeed(activityFeed);
 
+    // Start sandbox pool warmup + idle cleanup
+    sandboxService.start().catch((err) => console.error('[Sandbox] Start failed:', err));
+
     // Wire WebSocket chat:send messages through ChatService.send()
     // which validates channel membership before persisting or broadcasting.
     app.wsManager.setChatSendHandler(async (input) => {
