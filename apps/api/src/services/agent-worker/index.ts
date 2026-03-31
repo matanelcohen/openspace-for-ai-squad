@@ -541,7 +541,10 @@ export class AgentWorkerService {
         `RULES:\n` +
         `- Do NOT create or modify files in .squad/ — it is managed by the system.\n` +
         `- Only modify files under apps/, packages/, src/, or other project source directories.\n` +
-        `- Complete the task in a single pass. Do not create sub-tasks.\n\n` +
+        `- Complete the task in a single pass. Do not create sub-tasks.\n` +
+        `- After making changes, ALWAYS run the project's build and test commands to verify your work.\n` +
+        `- If build or tests fail, fix the issues and re-run until everything passes.\n` +
+        `- Do not consider the task done until build and tests pass.\n\n` +
         (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
         (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
         `When done, provide a brief summary of what you did.`;
@@ -607,44 +610,6 @@ export class AgentWorkerService {
       let prInfo: { number: number; url: string } | undefined;
       if (worktree && this.config.worktreeService) {
         const wts = this.config.worktreeService;
-
-        // Verify build/tests pass — iterate until green or max attempts
-        const MAX_FIX_ATTEMPTS = 5;
-        let verified = await this.verifyInSandbox(worktree.path, agent, taskId);
-        let attempt = 0;
-        const fixMessages = [...sharedOpts.messages, { role: 'assistant' as const, content: result.content }];
-
-        while (!verified.passed && attempt < MAX_FIX_ATTEMPTS && this.config.aiProvider.agenticCompletion) {
-          attempt++;
-          console.log(`[AgentWorker] Build/test failed (attempt ${attempt}/${MAX_FIX_ATTEMPTS}), ${agent.name} fixing...`);
-          progressLog.push(`**[${now()}]** ❌ Build/test failed (attempt ${attempt}):\n\`\`\`\n${verified.output.substring(0, 500)}\n\`\`\``);
-
-          fixMessages.push({
-            role: 'user' as const,
-            content: `Build/test verification failed (attempt ${attempt}/${MAX_FIX_ATTEMPTS}):\n\n\`\`\`\n${verified.output.substring(0, 1500)}\n\`\`\`\n\nFix the issues and make sure the build and tests pass.`,
-          });
-
-          const fixResult = await this.config.aiProvider.agenticCompletion({
-            taskTitle: `Fix: ${task.title}`,
-            agentId: agent.id,
-            systemPrompt: sharedOpts.systemPrompt,
-            messages: fixMessages,
-            workingDirectory: worktree.path,
-            onEvent,
-          } satisfies AgenticCompletionOptions);
-
-          fixMessages.push({ role: 'assistant' as const, content: fixResult.content });
-          progressLog.push(`**[${now()}]** 🔧 Fix attempt ${attempt}: ${fixResult.content.substring(0, 200)}`);
-
-          verified = await this.verifyInSandbox(worktree.path, agent, taskId);
-        }
-
-        if (verified.passed) {
-          progressLog.push(`**[${now()}]** ✅ Build/test passed${attempt > 0 ? ` (after ${attempt} fix${attempt > 1 ? 'es' : ''})` : ''}`);
-        } else {
-          progressLog.push(`**[${now()}]** ⚠️ Build/test still failing after ${attempt} attempts — committing anyway`);
-          console.warn(`[AgentWorker] ${agent.name} exhausted ${MAX_FIX_ATTEMPTS} fix attempts for ${taskId}`);
-        }
 
         if (wts.autoCommit) {
           const sha = await wts.commit(taskId, `feat: ${task.title}\n\nTask: ${taskId}\nAgent: ${agent.name}`);
@@ -1162,121 +1127,6 @@ export class AgentWorkerService {
 
     // Safety: stop monitoring after 30 minutes
     setTimeout(() => clearInterval(checkInterval), 30 * 60 * 1000);
-  }
-
-  // ── Sandbox verification ──────────────────────────────────────
-
-  /**
-   * Run build and tests in a worktree sandbox. Returns pass/fail + output.
-   */
-  private async verifyInSandbox(
-    worktreePath: string,
-    agent: AgentProfile,
-    taskId: string,
-  ): Promise<{ passed: boolean; output: string }> {
-    const { execSync } = await import('node:child_process');
-    const { existsSync } = await import('node:fs');
-    const { join } = await import('node:path');
-
-    const commands = this.detectVerifyCommands(worktreePath);
-    if (commands.length === 0) {
-      console.log(`[AgentWorker] No build/test commands detected for ${taskId}, skipping verification`);
-      return { passed: true, output: '⏭️ No build/test configuration detected' };
-    }
-
-    const outputs: string[] = [];
-    let allPassed = true;
-
-    for (const { name, cmd } of commands) {
-      try {
-        execSync(cmd, {
-          cwd: worktreePath,
-          encoding: 'utf-8',
-          timeout: 300_000, // 5 min
-          stdio: ['pipe', 'pipe', 'pipe'],
-          env: { ...process.env, CI: 'true' },
-        });
-        outputs.push(`✅ ${name}: passed`);
-        console.log(`[AgentWorker] ${agent.name} sandbox ${name}: PASSED (${taskId})`);
-      } catch (err) {
-        const error = err as { stderr?: string; stdout?: string };
-        const errorOutput = error.stderr ?? error.stdout ?? 'Unknown error';
-        outputs.push(`❌ ${name}: FAILED\n${errorOutput}`);
-        allPassed = false;
-        console.log(`[AgentWorker] ${agent.name} sandbox ${name}: FAILED (${taskId})`);
-        break;
-      }
-    }
-
-    return { passed: allPassed, output: outputs.join('\n\n') };
-  }
-
-  /**
-   * Auto-detect build and test commands based on project files.
-   */
-  private detectVerifyCommands(dir: string): Array<{ name: string; cmd: string }> {
-    const { existsSync } = require('node:fs');
-    const { join } = require('node:path');
-    const commands: Array<{ name: string; cmd: string }> = [];
-
-    // Node.js / TypeScript
-    if (existsSync(join(dir, 'tsconfig.json'))) {
-      commands.push({ name: 'TypeScript', cmd: 'npx tsc --noEmit' });
-    }
-    if (existsSync(join(dir, 'vitest.config.ts')) || existsSync(join(dir, 'vitest.config.js'))) {
-      commands.push({ name: 'Vitest', cmd: 'npx vitest run' });
-    } else if (existsSync(join(dir, 'jest.config.ts')) || existsSync(join(dir, 'jest.config.js')) || existsSync(join(dir, 'jest.config.cjs'))) {
-      commands.push({ name: 'Jest', cmd: 'npx jest --ci' });
-    }
-
-    // .NET
-    if (this.hasFileWithExt(dir, ['.sln', '.csproj'])) {
-      commands.push({ name: 'dotnet build', cmd: 'dotnet build --no-restore' });
-      commands.push({ name: 'dotnet test', cmd: 'dotnet test --no-build' });
-    }
-
-    // Python
-    if (existsSync(join(dir, 'pytest.ini')) || existsSync(join(dir, 'pyproject.toml'))) {
-      commands.push({ name: 'pytest', cmd: 'python -m pytest' });
-    }
-
-    // Go
-    if (existsSync(join(dir, 'go.mod'))) {
-      commands.push({ name: 'go build', cmd: 'go build ./...' });
-      commands.push({ name: 'go test', cmd: 'go test ./...' });
-    }
-
-    // Rust
-    if (existsSync(join(dir, 'Cargo.toml'))) {
-      commands.push({ name: 'cargo check', cmd: 'cargo check' });
-      commands.push({ name: 'cargo test', cmd: 'cargo test' });
-    }
-
-    // Java — Maven
-    if (existsSync(join(dir, 'pom.xml'))) {
-      commands.push({ name: 'maven', cmd: 'mvn verify -q' });
-    }
-
-    // Java — Gradle
-    if (existsSync(join(dir, 'build.gradle')) || existsSync(join(dir, 'build.gradle.kts'))) {
-      commands.push({ name: 'gradle', cmd: 'gradle check --quiet' });
-    }
-
-    // Ruby
-    if (existsSync(join(dir, 'Rakefile'))) {
-      commands.push({ name: 'rake', cmd: 'bundle exec rake' });
-    }
-
-    return commands;
-  }
-
-  private hasFileWithExt(dir: string, exts: string[]): boolean {
-    try {
-      const { readdirSync } = require('node:fs');
-      return readdirSync(dir).some((f: string) => exts.some((ext) => f.endsWith(ext)));
-    } catch {
-      return false;
-    }
   }
 
   // ── Broadcasting ───────────────────────────────────────────────
