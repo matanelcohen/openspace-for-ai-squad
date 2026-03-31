@@ -98,6 +98,26 @@ export class WorktreeService {
     }
   }
 
+  /**
+   * Clean up worktrees for completed/blocked tasks.
+   * Called after agent worker recovery to free up slots.
+   */
+  async cleanupDoneTasks(getTaskStatus: (taskId: string) => string | null): Promise<void> {
+    const toClean: string[] = [];
+    for (const [taskId] of this.registry) {
+      const status = getTaskStatus(taskId);
+      if (status === 'done' || status === 'blocked' || status === null) {
+        toClean.push(taskId);
+      }
+    }
+    for (const taskId of toClean) {
+      await this.destroy(taskId);
+    }
+    if (toClean.length > 0) {
+      console.log(`[WorktreeService] Auto-cleaned ${toClean.length} stale worktree(s)`);
+    }
+  }
+
   // ── Create ─────────────────────────────────────────────────────
 
   /**

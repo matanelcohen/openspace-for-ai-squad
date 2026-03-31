@@ -372,7 +372,18 @@ export async function buildApp(opts: AppOptions = {}) {
         worktreeService,
       });
       // Start worker in background — don't block onReady hook
-      workerService.start().catch((err) => console.error('[AgentWorker] Start failed:', err));
+      workerService.start().then(async () => {
+        // After recovery, clean up worktrees for done/blocked tasks
+        await worktreeService.cleanupDoneTasks((taskId) => {
+          try {
+            const { readFileSync } = require('node:fs');
+            const { join } = require('node:path');
+            const content = readFileSync(join(resolve(squadDir, 'tasks'), `${taskId}.md`), 'utf-8');
+            const match = content.match(/^status:\s*(.+)$/m);
+            return match?.[1]?.trim() ?? null;
+          } catch { return null; }
+        });
+      }).catch((err) => console.error('[AgentWorker] Start failed:', err));
       app.decorate('agentWorker', workerService);
 
       // Initialize A2A service with bridge to chat + activity + tasks
