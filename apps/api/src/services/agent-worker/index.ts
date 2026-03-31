@@ -392,7 +392,7 @@ export class AgentWorkerService {
       // Non-lead agents always execute directly.
       const isLead =
         agent.role.toLowerCase().includes('lead') || agent.role.toLowerCase().includes('architect');
-      const isComplex = (task.description?.length ?? 0) > 200 || task.priority === 'P0';
+      const isComplex = (task.description?.length ?? 0) > 200;
       const shouldSkipDelegation = this.skipDelegation.has(taskId);
       if (shouldSkipDelegation) this.skipDelegation.delete(taskId);
 
