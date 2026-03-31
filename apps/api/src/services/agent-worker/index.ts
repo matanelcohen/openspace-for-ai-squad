@@ -608,38 +608,42 @@ export class AgentWorkerService {
       if (worktree && this.config.worktreeService) {
         const wts = this.config.worktreeService;
 
-        // Verify build/tests pass before committing
-        const verifyResult = await this.verifyInSandbox(worktree.path, agent, taskId);
-        if (!verifyResult.passed) {
-          // Give agent one retry to fix the issues
-          console.log(`[AgentWorker] Build/test failed in sandbox, asking ${agent.name} to fix...`);
-          progressLog.push(`**[${now()}]** ❌ Build/test failed:\n\`\`\`\n${verifyResult.output.substring(0, 500)}\n\`\`\``);
+        // Verify build/tests pass — iterate until green or max attempts
+        const MAX_FIX_ATTEMPTS = 5;
+        let verified = await this.verifyInSandbox(worktree.path, agent, taskId);
+        let attempt = 0;
+        const fixMessages = [...sharedOpts.messages, { role: 'assistant' as const, content: result.content }];
 
-          if (this.config.aiProvider.agenticCompletion) {
-            const fixResult = await this.config.aiProvider.agenticCompletion({
-              taskTitle: `Fix: ${task.title}`,
-              agentId: agent.id,
-              systemPrompt: sharedOpts.systemPrompt,
-              messages: [
-                ...sharedOpts.messages,
-                { role: 'assistant' as const, content: result.content },
-                {
-                  role: 'user' as const,
-                  content: `Your changes failed build/test verification:\n\n\`\`\`\n${verifyResult.output.substring(0, 1500)}\n\`\`\`\n\nFix the issues and make sure the build and tests pass.`,
-                },
-              ],
-              workingDirectory: worktree.path,
-              onEvent,
-            } satisfies AgenticCompletionOptions);
-            progressLog.push(`**[${now()}]** 🔧 ${agent.name} attempted fixes: ${fixResult.content.substring(0, 200)}`);
+        while (!verified.passed && attempt < MAX_FIX_ATTEMPTS && this.config.aiProvider.agenticCompletion) {
+          attempt++;
+          console.log(`[AgentWorker] Build/test failed (attempt ${attempt}/${MAX_FIX_ATTEMPTS}), ${agent.name} fixing...`);
+          progressLog.push(`**[${now()}]** ❌ Build/test failed (attempt ${attempt}):\n\`\`\`\n${verified.output.substring(0, 500)}\n\`\`\``);
 
-            // Re-verify after fix
-            const recheck = await this.verifyInSandbox(worktree.path, agent, taskId);
-            if (!recheck.passed) {
-              progressLog.push(`**[${now()}]** ⚠️ Build/test still failing after retry`);
-              console.warn(`[AgentWorker] ${agent.name} could not fix build/test failures for ${taskId}`);
-            }
-          }
+          fixMessages.push({
+            role: 'user' as const,
+            content: `Build/test verification failed (attempt ${attempt}/${MAX_FIX_ATTEMPTS}):\n\n\`\`\`\n${verified.output.substring(0, 1500)}\n\`\`\`\n\nFix the issues and make sure the build and tests pass.`,
+          });
+
+          const fixResult = await this.config.aiProvider.agenticCompletion({
+            taskTitle: `Fix: ${task.title}`,
+            agentId: agent.id,
+            systemPrompt: sharedOpts.systemPrompt,
+            messages: fixMessages,
+            workingDirectory: worktree.path,
+            onEvent,
+          } satisfies AgenticCompletionOptions);
+
+          fixMessages.push({ role: 'assistant' as const, content: fixResult.content });
+          progressLog.push(`**[${now()}]** 🔧 Fix attempt ${attempt}: ${fixResult.content.substring(0, 200)}`);
+
+          verified = await this.verifyInSandbox(worktree.path, agent, taskId);
+        }
+
+        if (verified.passed) {
+          progressLog.push(`**[${now()}]** ✅ Build/test passed${attempt > 0 ? ` (after ${attempt} fix${attempt > 1 ? 'es' : ''})` : ''}`);
+        } else {
+          progressLog.push(`**[${now()}]** ⚠️ Build/test still failing after ${attempt} attempts — committing anyway`);
+          console.warn(`[AgentWorker] ${agent.name} exhausted ${MAX_FIX_ATTEMPTS} fix attempts for ${taskId}`);
         }
 
         if (wts.autoCommit) {
