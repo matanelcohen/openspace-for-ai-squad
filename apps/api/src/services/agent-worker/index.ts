@@ -29,7 +29,7 @@ import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js'
 import type { WebSocketManager } from '../websocket/index.js';
 import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
 import type { TeamStatusService } from '../team-status/index.js';
-import type { CodeReviewService } from '../code-review.js';
+import type { CodeReviewService } from '../code-review/index.js';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -181,6 +181,28 @@ export class AgentWorkerService {
       };
     }
     return status;
+  }
+
+  private buildTeamStatusPrompt(currentAgentId: string): string {
+    const lines: string[] = ['## Team Status\n'];
+    for (const agent of this.config.agents) {
+      if (agent.id === currentAgentId) continue;
+      const activeTask = this.activeTask.get(agent.id);
+      const queueLen = this.queues.get(agent.id)?.length ?? 0;
+      if (activeTask) {
+        const status = this.getStatus();
+        const info = status[agent.id];
+        const taskTitle = (info?.activeTask as any)?.title ?? activeTask;
+        lines.push(`- **${agent.name}** (${agent.role}): Working on "${taskTitle}"`);
+      } else if (queueLen > 0) {
+        lines.push(`- **${agent.name}** (${agent.role}): ${queueLen} task(s) queued`);
+      } else {
+        lines.push(`- **${agent.name}** (${agent.role}): Idle`);
+      }
+    }
+    if (lines.length === 1) return '';
+    lines.push('\nCoordinate with your team — avoid duplicating work that others are already doing.\n');
+    return lines.join('\n');
   }
 
   /** Return the configured agent profiles. */
@@ -406,6 +428,24 @@ export class AgentWorkerService {
         return;
       }
 
+      // Check dependencies — skip if any are not done
+      if (task.dependsOn?.length) {
+        const allDone = await Promise.all(
+          task.dependsOn.map(depId => getTask(this.config.tasksDir, depId).catch(() => null))
+        );
+        const pending = allDone.filter(t => t && t.status !== 'done');
+        if (pending.length > 0) {
+          console.log(`[AgentWorker] Task ${taskId} has ${pending.length} pending dependencies — re-queuing`);
+          // Put it back at the END of the queue
+          const queue = this.queues.get(agentId);
+          if (queue) queue.push(taskId);
+          this.activeTask.delete(agentId);
+          this.persistQueue();
+          setTimeout(() => this.processNext(agentId), 10_000); // Check again in 10s
+          return;
+        }
+      }
+
       const agent = this.config.agents.find((a) => a.id === agentId);
       if (!agent) {
         this.activeTask.delete(agentId);
@@ -595,6 +635,18 @@ export class AgentWorkerService {
       };
 
       // ── AI completion — prefer agentic mode when available ──────
+      let teamStatusPrompt = '';
+      if (this.config.teamStatusService) {
+        try {
+          teamStatusPrompt = await this.config.teamStatusService.getFormattedStatus(agentId);
+        } catch {
+          /* best effort */
+        }
+      }
+      if (!teamStatusPrompt) {
+        teamStatusPrompt = this.buildTeamStatusPrompt(agentId);
+      }
+
       const systemPrompt =
         `You are ${agent.name}, the ${agent.role} of the openspace.ai squad. ` +
         `Personality: ${agent.personality}\n\n` +
@@ -608,6 +660,7 @@ export class AgentWorkerService {
         `- Install dependencies first if node_modules or equivalent is missing.\n` +
         `- If build or tests fail, fix the issues and re-run until everything passes.\n` +
         `- Do not consider the task done until build and tests pass.\n\n` +
+        (teamStatusPrompt ? `${teamStatusPrompt}\n` : '') +
         (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
         (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
         `When done, provide a brief summary of what you did.`;
@@ -636,6 +689,7 @@ export class AgentWorkerService {
           memories: memoryAttributions,
           memoriesPrompt: memoriesPrompt || null,
           skillsPrompt: skillsPrompt || null,
+          teamStatus: teamStatusPrompt || null,
           tier,
           workingDirectory: join(this.config.squadDir, '..'),
           branch: null as string | null,
@@ -1014,9 +1068,10 @@ export class AgentWorkerService {
           `Response tier: ${tier} (${tierDef.description}). Max agents: ${tierDef.maxAgents}.\n\n` +
           `Available team members:\n${agentList}\n\n` +
           `Respond ONLY with valid JSON — an array of 2-4 sub-tasks:\n` +
-          `[{"title": "...", "description": "...", "assignee": "agent_id"}]\n\n` +
+          `[{"title": "...", "description": "...", "assignee": "agent_id", "dependsOn": ["other-subtask-title"]}]\n\n` +
           `Rules:\n` +
           `- Break the task into 2-${Math.min(4, maxSubTasks)} focused sub-tasks\n` +
+          `- You may specify dependencies between subtasks using "dependsOn": ["other-subtask-title"]\n` +
           `- Assign frontend work to the Frontend Dev\n` +
           `- Assign backend/API work to the Backend Dev\n` +
           `- Assign testing to the Tester\n` +
@@ -1031,7 +1086,7 @@ export class AgentWorkerService {
       });
 
       // Parse sub-tasks from AI response
-      let subTasks: Array<{ title: string; description: string; assignee: string }> = [];
+      let subTasks: Array<{ title: string; description: string; assignee: string; dependsOn?: string[] }> = [];
       try {
         const jsonMatch = result.content.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
@@ -1062,6 +1117,8 @@ export class AgentWorkerService {
         console.log(`[AgentWorker] Created feature branch: ${featureBranch} for delegation`);
       }
 
+      // First pass: create all subtasks, track title→id mapping
+      const titleToId = new Map<string, string>();
       const createdSubTasks: string[] = [];
       const subtaskIds: string[] = [];
       for (const sub of subTasks) {
@@ -1078,26 +1135,45 @@ export class AgentWorkerService {
           parent: taskId,
         });
 
-        this.enqueue(subTask);
+        titleToId.set(sub.title, subTask.id);
         createdSubTasks.push(`- **${sub.title}** → ${validAssignee.name} (${validAssignee.role})`);
         subtaskIds.push(subTask.id);
+
+        console.log(
+          `[AgentWorker] ${agent.name} delegated "${sub.title}" to ${validAssignee.name}`,
+        );
+      }
+
+      // Second pass: resolve dependsOn title references to actual task IDs and enqueue
+      for (const sub of subTasks) {
+        const subTaskId = titleToId.get(sub.title);
+        if (!subTaskId) continue;
+
+        if (sub.dependsOn?.length) {
+          const resolvedDeps = sub.dependsOn
+            .map(dep => titleToId.get(dep) ?? dep) // resolve title→id, keep raw IDs
+            .filter(depId => subtaskIds.includes(depId)); // only valid subtask IDs
+          if (resolvedDeps.length > 0) {
+            await updateTask(this.config.tasksDir, subTaskId, { dependsOn: resolvedDeps });
+          }
+        }
+
+        // Enqueue the subtask (read the latest version which may have dependsOn)
+        const latestSubTask = await getTask(this.config.tasksDir, subTaskId);
+        this.enqueue(latestSubTask);
 
         // Broadcast subtask created event
         this.config.wsManager?.broadcast({
           type: 'task:subtask_created',
           payload: {
             parentTaskId: taskId,
-            subtaskId: subTask.id,
-            title: subTask.title,
-            assignee: sub.assignee,
-            assigneeName: validAssignee.name,
+            subtaskId: subTaskId,
+            title: latestSubTask.title,
+            assignee: latestSubTask.assignee,
+            assigneeName: this.config.agents.find(a => a.id === latestSubTask.assignee)?.name ?? latestSubTask.assignee,
           },
           timestamp: new Date().toISOString(),
         });
-
-        console.log(
-          `[AgentWorker] ${agent.name} delegated "${sub.title}" to ${validAssignee.name}`,
-        );
       }
 
       // Mark parent task as "delegated" with delegation summary

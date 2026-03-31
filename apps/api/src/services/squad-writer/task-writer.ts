@@ -26,6 +26,7 @@ export interface CreateTaskInput {
   assignee?: string | null;
   labels?: string[];
   parent?: string | null;
+  dependsOn?: string[];
 }
 
 export type UpdateTaskInput = Partial<Omit<Task, 'id' | 'createdAt'>>;
@@ -48,6 +49,9 @@ function taskToFrontmatter(task: Task): Record<string, unknown> {
   };
   if (task.parent) {
     fm.parent = task.parent;
+  }
+  if (task.dependsOn?.length) {
+    fm.dependsOn = task.dependsOn;
   }
   return fm;
 }
@@ -99,6 +103,7 @@ export async function createTask(tasksDir: string, input: CreateTaskInput): Prom
     updatedAt: now,
     sortIndex: maxSortIndex + 1,
     parent: input.parent ?? null,
+    dependsOn: input.dependsOn?.length ? input.dependsOn : undefined,
   };
 
   const filePath = taskFilePath(tasksDir, task.id);

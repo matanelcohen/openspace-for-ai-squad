@@ -57,6 +57,7 @@ import { SkillGalleryService } from './services/skill-gallery/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import { TraceService } from './services/traces/index.js';
 import { MemoryLifecycleService } from './services/memory/memory-lifecycle.js';
+import { TeamStatusService } from './services/team-status/index.js';
 import {
   ConversationContextManager,
   VoiceRouter,
@@ -66,7 +67,7 @@ import type { WebSocketManager } from './services/websocket/index.js';
 import { wsPlugin } from './services/websocket/index.js';
 import { WorkspaceService } from './services/workspace/index.js';
 import { WorktreeService } from './services/worktree/index.js';
-import { CodeReviewService } from './services/code-review.js';
+import { CodeReviewService } from './services/code-review/index.js';
 import { YoloService } from './services/yolo/index.js';
 
 /** Voice service bundle exposed on the Fastify instance. */
@@ -360,8 +361,14 @@ export async function buildApp(opts: AppOptions = {}) {
       worktreeService.init();
       app.decorate('worktreeService', worktreeService);
 
+      // Initialize team status service for inter-agent awareness
+      const teamStatusService = new TeamStatusService({
+        tasksDir: resolve(squadDir, 'tasks'),
+        worktreeService,
+      });
+
       // Start agent worker service with A2A delegation capability
-      const codeReviewService = new CodeReviewService(projectDir);
+      const codeReviewService = new CodeReviewService(provider, projectDir);
       const workerService = new AgentWorkerService({
         tasksDir: resolve(squadDir, 'tasks'),
         squadDir,
@@ -373,7 +380,9 @@ export async function buildApp(opts: AppOptions = {}) {
         a2aBaseUrl,
         worktreeService,
         codeReviewService,
+        teamStatusService,
       });
+      teamStatusService.setAgentWorker(workerService);
       // Start worker in background — don't block onReady hook
       workerService.start().then(async () => {
         // After recovery, clean up worktrees for done/blocked tasks

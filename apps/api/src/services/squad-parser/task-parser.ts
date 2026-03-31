@@ -95,6 +95,7 @@ export function parseTaskFile(content: string, filePath: string): ParseTaskResul
     updatedAt: toISOString(fm.updated),
     sortIndex: typeof fm.sortIndex === 'number' ? fm.sortIndex : 0,
     parent: typeof fm.parent === 'string' && fm.parent !== 'null' ? fm.parent : null,
+    dependsOn: toStringArray(fm.dependsOn).length > 0 ? toStringArray(fm.dependsOn) : undefined,
   };
 
   return { task, filePath };

@@ -406,6 +406,15 @@ export default function TaskDetailPage() {
                       </div>
                     )}
 
+                    {typeof promptData.teamStatus === 'string' && promptData.teamStatus.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold text-sm mb-1">Team Status</h4>
+                        <pre className="whitespace-pre-wrap rounded bg-muted p-3 font-mono text-xs overflow-auto">
+                          {promptData.teamStatus}
+                        </pre>
+                      </div>
+                    )}
+
                     <div className="flex gap-4 text-muted-foreground">
                       <span>Tier: <span className="font-mono">{String(promptData.tier)}</span></span>
                       {typeof promptData.branch === 'string' && <span>Branch: <span className="font-mono">{promptData.branch}</span></span>}
@@ -482,6 +491,24 @@ export default function TaskDetailPage() {
                 </a>
               </div>
             )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Dependencies */}
+      {(task.dependsOn?.length ?? 0) > 0 && (
+        <Card data-testid="dependencies-section">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Dependencies</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-1">
+              {task.dependsOn!.map(depId => (
+                <Link key={depId} href={`/tasks/${depId}`} className="flex items-center gap-2 text-xs hover:underline">
+                  <span className="font-mono">{depId}</span>
+                </Link>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
