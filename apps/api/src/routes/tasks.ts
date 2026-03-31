@@ -169,7 +169,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
         const task = await updateTask(tasksDir(), request.params.id, body);
 
         if (task.status === 'pending' && task.assignee && app.agentWorker) {
-          app.agentWorker.enqueue(task);
+          app.agentWorker.enqueue(task, { skipDelegation: true });
         }
 
         return reply.send(task);
@@ -210,7 +210,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
           task.assignee &&
           app.agentWorker
         ) {
-          app.agentWorker.enqueue(task);
+          app.agentWorker.enqueue(task, { skipDelegation: true });
         }
 
         return reply.send(task);
@@ -251,7 +251,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
 
       // Enqueue for the assigned agent to pick up
       if (app.agentWorker && task.assignee) {
-        app.agentWorker.enqueue(task);
+        app.agentWorker.enqueue(task, { skipDelegation: true });
       }
 
       return reply.send(task);
@@ -290,7 +290,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
         });
 
         if (app.agentWorker) {
-          app.agentWorker.enqueue(task);
+          app.agentWorker.enqueue(task, { skipDelegation: true });
         }
 
         return reply.send({ success: true, taskId: task.id, agentId });

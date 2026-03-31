@@ -122,16 +122,23 @@ export class AgentWorkerService {
   }
 
   /** Add a task to the assigned agent's queue. */
-  enqueue(task: Task): void {
+  /** Tasks that should skip delegation (manually assigned). */
+  private readonly skipDelegation = new Set<string>();
+
+  enqueue(task: Task, opts?: { skipDelegation?: boolean }): void {
     if (!task.assignee) return;
     const queue = this.queues.get(task.assignee);
     if (!queue) return;
 
     if (queue.includes(task.id) || this.activeTask.get(task.assignee) === task.id) return;
 
+    if (opts?.skipDelegation) {
+      this.skipDelegation.add(task.id);
+    }
+
     queue.push(task.id);
     this.persistQueue();
-    console.log(`[AgentWorker] Queued ${task.id} for ${task.assignee} (queue: ${queue.length})`);
+    console.log(`[AgentWorker] Queued ${task.id} for ${task.assignee} (queue: ${queue.length}${opts?.skipDelegation ? ', no-delegate' : ''})`);
 
     this.emitActivity(task.assignee, 'spawned', `Task queued: ${task.title}`);
     this.processNext(task.assignee);
@@ -381,16 +388,14 @@ export class AgentWorkerService {
       });
 
       // ── Lead delegation: break down task and assign to team ──
-      // Only delegate if this wasn't manually assigned by a human.
-      // Manual assignment = user explicitly chose this agent → execute directly.
-      // YOLO/auto assignment = labels contain 'yolo' → allow delegation.
+      // Skip delegation if this task was manually enqueued by a human.
       const isLead =
         agent.role.toLowerCase().includes('lead') || agent.role.toLowerCase().includes('architect');
       const isComplex = (task.description?.length ?? 0) > 200 || task.priority === 'P0';
-      const isManualAssignment = !task.labels?.some(
-        (l) => l === 'yolo' || l.startsWith('parent:'),
-      );
-      if (isLead && isComplex && !isManualAssignment) {
+      const shouldSkipDelegation = this.skipDelegation.has(taskId);
+      if (shouldSkipDelegation) this.skipDelegation.delete(taskId);
+
+      if (isLead && isComplex && !shouldSkipDelegation) {
         await this.handleLeadDelegation(agent, task, taskId, tier);
         return;
       }
