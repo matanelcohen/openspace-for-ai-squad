@@ -107,9 +107,35 @@ const githubRoute: FastifyPluginAsync = async (app) => {
 
     try {
       const task = await getTask(tasksDir(), taskId);
-      const pr = await gh().createPR({
+      const ghService = gh();
+
+      // Get the diff for LLM summary
+      let diffStat = '';
+      try {
+        const baseBranch = base ?? 'main';
+        diffStat = ghService.getDiffStat(head, baseBranch);
+      } catch {
+        // Branch may not have diffs yet
+      }
+
+      // Generate PR description via LLM
+      let prBody = `**Task:** ${taskId}\n**Agent:** ${task.assignee ?? 'unassigned'}\n**Priority:** ${task.priority}`;
+      try {
+        const desc = (task.description ?? '').split('\n---\n')[0]?.substring(0, 500) ?? '';
+        const summary = await app.chatService.sendRaw({
+          systemPrompt: 'You are a senior engineer writing a pull request description. Be concise, clear, and professional. Output markdown. No pleasantries.',
+          message: `Write a PR description for this change:\n\n**Task:** ${task.title}\n**Description:** ${desc}\n\n**Files changed:**\n${diffStat || '(no diff available)'}`,
+        });
+        if (summary) {
+          prBody = `## Summary\n\n${summary}\n\n---\n\n**Task:** \`${taskId}\`\n**Agent:** ${task.assignee ?? 'unassigned'}\n**Priority:** ${task.priority}`;
+        }
+      } catch {
+        // LLM unavailable — use static body
+      }
+
+      const pr = await ghService.createPR({
         title: `${task.title} (${taskId})`,
-        body: `**Task:** ${taskId}\n**Agent:** ${task.assignee ?? 'unassigned'}\n**Priority:** ${task.priority}`,
+        body: prBody,
         head,
         base,
       });

@@ -54,6 +54,15 @@ export class GitHubService {
     return this.exec('git rev-parse --abbrev-ref HEAD').trim();
   }
 
+  /**
+   * Get a summary of changed files between two branches.
+   */
+  getDiffStat(head: string, base: string): string {
+    return this.exec(
+      `git diff --stat ${this.shellEscape(base)}...${this.shellEscape(head)}`,
+    ).trim();
+  }
+
   // ---------------------------------------------------------------------------
   // Pull Requests
   // ---------------------------------------------------------------------------

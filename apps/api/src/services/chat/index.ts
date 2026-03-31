@@ -193,6 +193,20 @@ export class ChatService {
     this.routingRules = rules;
   }
 
+  /**
+   * One-shot LLM call without saving to chat history.
+   * Used for utility tasks like PR description generation.
+   */
+  async sendRaw(opts: { systemPrompt: string; message: string; model?: string }): Promise<string | null> {
+    if (!this.aiProvider) return null;
+    const result = await this.aiProvider.chatCompletion({
+      systemPrompt: opts.systemPrompt,
+      messages: [{ role: 'user', content: opts.message }],
+      model: opts.model,
+    });
+    return result.content;
+  }
+
   // ── Task intent detection (H4) ──────────────────────────────
 
   private static readonly TASK_VERBS = [
