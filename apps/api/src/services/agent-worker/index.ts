@@ -381,10 +381,16 @@ export class AgentWorkerService {
       });
 
       // ── Lead delegation: break down task and assign to team ──
+      // Only delegate if this wasn't manually assigned by a human.
+      // Manual assignment = user explicitly chose this agent → execute directly.
+      // YOLO/auto assignment = labels contain 'yolo' → allow delegation.
       const isLead =
         agent.role.toLowerCase().includes('lead') || agent.role.toLowerCase().includes('architect');
       const isComplex = (task.description?.length ?? 0) > 200 || task.priority === 'P0';
-      if (isLead && isComplex) {
+      const isManualAssignment = !task.labels?.some(
+        (l) => l === 'yolo' || l.startsWith('parent:'),
+      );
+      if (isLead && isComplex && !isManualAssignment) {
         await this.handleLeadDelegation(agent, task, taskId, tier);
         return;
       }
