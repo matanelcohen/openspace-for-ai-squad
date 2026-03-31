@@ -1,17 +1,28 @@
 import type { Task } from '@openspace/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { KanbanBoard } from '@/components/tasks/kanban-board';
 
 vi.mock('@/hooks/use-tasks');
+vi.mock('@/hooks/use-agents');
 
-import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
+import { useAgents } from '@/hooks/use-agents';
+import {
+  useApproveTask,
+  useRejectTask,
+  useTasks,
+  useUpdateTaskPriority,
+  useUpdateTaskStatus,
+} from '@/hooks/use-tasks';
 
 const mockedUseTasks = vi.mocked(useTasks);
 const mockedUseUpdateTaskStatus = vi.mocked(useUpdateTaskStatus);
 const mockedUseUpdateTaskPriority = vi.mocked(useUpdateTaskPriority);
+const mockedUseAgents = vi.mocked(useAgents);
+const mockedUseApproveTask = vi.mocked(useApproveTask);
+const mockedUseRejectTask = vi.mocked(useRejectTask);
 
 function wrapper({ children }: { children: React.ReactNode }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -23,7 +34,7 @@ const mockTasks: Task[] = [
     id: 'task-1',
     title: 'Build login page',
     description: '',
-    status: 'backlog',
+    status: 'pending',
     priority: 'P1',
     assignee: 'fry',
     labels: ['frontend'],
@@ -57,18 +68,29 @@ const mockTasks: Task[] = [
   },
 ];
 
+const mutationStub = {
+  mutate: vi.fn(),
+  mutateAsync: vi.fn(),
+  isPending: false,
+} as unknown;
+
 beforeEach(() => {
   vi.clearAllMocks();
-  mockedUseUpdateTaskStatus.mockReturnValue({
-    mutate: vi.fn(),
-    mutateAsync: vi.fn(),
-    isPending: false,
-  } as unknown as ReturnType<typeof useUpdateTaskStatus>);
-  mockedUseUpdateTaskPriority.mockReturnValue({
-    mutate: vi.fn(),
-    mutateAsync: vi.fn(),
-    isPending: false,
-  } as unknown as ReturnType<typeof useUpdateTaskPriority>);
+  mockedUseUpdateTaskStatus.mockReturnValue(mutationStub as ReturnType<typeof useUpdateTaskStatus>);
+  mockedUseUpdateTaskPriority.mockReturnValue(
+    mutationStub as ReturnType<typeof useUpdateTaskPriority>,
+  );
+  mockedUseApproveTask.mockReturnValue(mutationStub as ReturnType<typeof useApproveTask>);
+  mockedUseRejectTask.mockReturnValue(mutationStub as ReturnType<typeof useRejectTask>);
+  mockedUseAgents.mockReturnValue({
+    data: [
+      { id: 'fry', name: 'Fry', role: 'Frontend Dev', status: 'idle' },
+      { id: 'bender', name: 'Bender', role: 'Backend Dev', status: 'idle' },
+      { id: 'zoidberg', name: 'Zoidberg', role: 'Tester', status: 'idle' },
+    ],
+    isLoading: false,
+    error: null,
+  } as ReturnType<typeof useAgents>);
 });
 
 afterEach(() => {
@@ -108,11 +130,11 @@ describe('KanbanBoard', () => {
 
     render(<KanbanBoard />, { wrapper });
     expect(screen.getByTestId('kanban-board')).toBeInTheDocument();
-    expect(screen.getByTestId('kanban-column-backlog')).toBeInTheDocument();
+    expect(screen.getByTestId('kanban-column-pending')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-in-progress')).toBeInTheDocument();
-    expect(screen.getByTestId('kanban-column-in-review')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-done')).toBeInTheDocument();
     expect(screen.getByTestId('kanban-column-blocked')).toBeInTheDocument();
+    expect(screen.getByTestId('kanban-column-delegated')).toBeInTheDocument();
   });
 
   it('renders tasks in correct columns', () => {
@@ -123,9 +145,9 @@ describe('KanbanBoard', () => {
     } as ReturnType<typeof useTasks>);
 
     render(<KanbanBoard />, { wrapper });
-    // task-1 in backlog
-    const backlogCol = screen.getByTestId('kanban-column-backlog');
-    expect(backlogCol).toHaveTextContent('Build login page');
+    // task-1 in pending
+    const pendingCol = screen.getByTestId('kanban-column-pending');
+    expect(pendingCol).toHaveTextContent('Build login page');
 
     // task-2 in in-progress
     const inProgressCol = screen.getByTestId('kanban-column-in-progress');
@@ -144,9 +166,9 @@ describe('KanbanBoard', () => {
     } as ReturnType<typeof useTasks>);
 
     render(<KanbanBoard />, { wrapper });
-    // Backlog should have 1, in-progress 1, done 1, others 0
-    const backlogCol = screen.getByTestId('kanban-column-backlog');
-    expect(backlogCol).toHaveTextContent('1');
+    // Pending should have 1, in-progress 1, done 1, others 0
+    const pendingCol = screen.getByTestId('kanban-column-pending');
+    expect(pendingCol).toHaveTextContent('1');
   });
 
   it('renders empty columns with placeholder', () => {
@@ -157,8 +179,89 @@ describe('KanbanBoard', () => {
     } as ReturnType<typeof useTasks>);
 
     render(<KanbanBoard />, { wrapper });
-    // in-review and blocked columns should be empty
-    const reviewCol = screen.getByTestId('kanban-column-in-review');
-    expect(reviewCol).toHaveTextContent('Drop tasks here');
+    // blocked and delegated columns should be empty
+    const blockedCol = screen.getByTestId('kanban-column-blocked');
+    expect(blockedCol).toHaveTextContent('Drop tasks here');
+  });
+
+  it('renders the filters toolbar', () => {
+    mockedUseTasks.mockReturnValue({
+      data: mockTasks,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTasks>);
+
+    render(<KanbanBoard />, { wrapper });
+    expect(screen.getByTestId('task-filters-toolbar')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-search')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-priority')).toBeInTheDocument();
+    expect(screen.getByTestId('filter-assignee')).toBeInTheDocument();
+  });
+
+  it('filters cards by search text', () => {
+    mockedUseTasks.mockReturnValue({
+      data: mockTasks,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTasks>);
+
+    render(<KanbanBoard />, { wrapper });
+
+    const searchInput = screen.getByTestId('filter-search');
+    fireEvent.change(searchInput, { target: { value: 'login' } });
+
+    // Only task-1 matches "login"
+    expect(screen.getByText('Build login page')).toBeInTheDocument();
+    expect(screen.queryByText('Create API endpoints')).not.toBeInTheDocument();
+    expect(screen.queryByText('Write tests')).not.toBeInTheDocument();
+
+    // Filtered count should appear
+    expect(screen.getByTestId('kanban-filter-count')).toHaveTextContent('1 of 3');
+  });
+
+  it('filters cards by label text in search', () => {
+    mockedUseTasks.mockReturnValue({
+      data: mockTasks,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTasks>);
+
+    render(<KanbanBoard />, { wrapper });
+
+    const searchInput = screen.getByTestId('filter-search');
+    fireEvent.change(searchInput, { target: { value: 'backend' } });
+
+    expect(screen.queryByText('Build login page')).not.toBeInTheDocument();
+    expect(screen.getByText('Create API endpoints')).toBeInTheDocument();
+    expect(screen.queryByText('Write tests')).not.toBeInTheDocument();
+  });
+
+  it('does not show filter count when no filters are active', () => {
+    mockedUseTasks.mockReturnValue({
+      data: mockTasks,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTasks>);
+
+    render(<KanbanBoard />, { wrapper });
+    expect(screen.queryByTestId('kanban-filter-count')).not.toBeInTheDocument();
+  });
+
+  it('shows all columns when search matches nothing', () => {
+    mockedUseTasks.mockReturnValue({
+      data: mockTasks,
+      isLoading: false,
+      error: null,
+    } as ReturnType<typeof useTasks>);
+
+    render(<KanbanBoard />, { wrapper });
+
+    const searchInput = screen.getByTestId('filter-search');
+    fireEvent.change(searchInput, { target: { value: 'zzz-no-match' } });
+
+    // All columns should still be visible (with "Drop tasks here" placeholders)
+    expect(screen.getByTestId('kanban-column-pending')).toBeInTheDocument();
+    expect(screen.getByTestId('kanban-column-in-progress')).toBeInTheDocument();
+    expect(screen.getByTestId('kanban-filter-count')).toHaveTextContent('0 of 3');
   });
 });
