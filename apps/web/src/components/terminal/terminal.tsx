@@ -307,10 +307,7 @@ export function Terminal() {
               clipRule="evenodd"
             />
           </svg>
-          <span>
-            Failed to connect after {MAX_RECONNECT_ATTEMPTS} attempts. Check that the API server is
-            running and accessible.
-          </span>
+          <span>Unable to reach the backend — is the API server running?</span>
         </div>
       )}
 
