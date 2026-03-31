@@ -7,8 +7,9 @@ import {
   TASK_STATUS_LABELS,
   TASK_STATUSES,
 } from '@matanelcohen/openspace-shared';
-import { Search } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -18,13 +19,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useAgents } from '@/hooks/use-agents';
+import { activeFilterCount, DEFAULT_FILTERS, type TaskFilters } from '@/lib/task-filters';
 
-export interface TaskFilters {
-  status: TaskStatus | 'all';
-  assignee: string | 'all';
-  priority: TaskPriority | 'all';
-  search: string;
-}
+export type { TaskFilters } from '@/lib/task-filters';
 
 interface TaskFiltersToolbarProps {
   filters: TaskFilters;
@@ -33,6 +30,7 @@ interface TaskFiltersToolbarProps {
 
 export function TaskFiltersToolbar({ filters, onFiltersChange }: TaskFiltersToolbarProps) {
   const { data: agents } = useAgents();
+  const count = activeFilterCount(filters);
 
   return (
     <div className="flex flex-wrap items-center gap-3" data-testid="task-filters-toolbar">
@@ -100,6 +98,19 @@ export function TaskFiltersToolbar({ filters, onFiltersChange }: TaskFiltersTool
           ))}
         </SelectContent>
       </Select>
+
+      {count > 0 && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => onFiltersChange({ ...DEFAULT_FILTERS })}
+          className="h-9 px-2 text-muted-foreground"
+          data-testid="filter-clear"
+        >
+          <X className="mr-1 h-3.5 w-3.5" />
+          Clear ({count})
+        </Button>
+      )}
     </div>
   );
 }

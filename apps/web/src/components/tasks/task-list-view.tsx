@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 
 import { AgentAvatar } from '@/components/agent-avatar';
 import { PriorityBadge } from '@/components/priority-badge';
-import { type TaskFilters, TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
+import { TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -20,6 +20,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useTasks } from '@/hooks/use-tasks';
+import { applyFilters, DEFAULT_FILTERS, type TaskFilters } from '@/lib/task-filters';
 
 type SortField = 'title' | 'status' | 'assignee' | 'priority' | 'updatedAt';
 type SortDir = 'asc' | 'desc';
@@ -32,25 +33,6 @@ const statusOrder: Record<TaskStatus, number> = {
   blocked: 3,
   delegated: 4,
 };
-
-function applyFilters(tasks: Task[], filters: TaskFilters): Task[] {
-  return tasks.filter((t) => {
-    if (filters.status !== 'all' && t.status !== filters.status) return false;
-    if (filters.priority !== 'all' && t.priority !== filters.priority) return false;
-    if (filters.assignee !== 'all') {
-      if (filters.assignee === 'unassigned' && t.assignee !== null) return false;
-      if (filters.assignee !== 'unassigned' && t.assignee !== filters.assignee) return false;
-    }
-    if (filters.search) {
-      const q = filters.search.toLowerCase();
-      const matchTitle = t.title.toLowerCase().includes(q);
-      const matchDesc = t.description.toLowerCase().includes(q);
-      const matchLabels = t.labels.some((l) => l.toLowerCase().includes(q));
-      if (!matchTitle && !matchDesc && !matchLabels) return false;
-    }
-    return true;
-  });
-}
 
 function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
   const sorted = [...tasks].sort((a, b) => {
@@ -95,14 +77,21 @@ function SortIcon({
   );
 }
 
-export function TaskListView() {
+interface TaskListViewProps {
+  filters?: TaskFilters;
+  onFiltersChange?: (filters: TaskFilters) => void;
+}
+
+export function TaskListView({
+  filters: externalFilters,
+  onFiltersChange: externalOnFiltersChange,
+}: TaskListViewProps) {
   const { data: tasks, isLoading, error } = useTasks();
-  const [filters, setFilters] = useState<TaskFilters>({
-    status: 'all',
-    assignee: 'all',
-    priority: 'all',
-    search: '',
-  });
+  const [internalFilters, setInternalFilters] = useState<TaskFilters>({ ...DEFAULT_FILTERS });
+
+  const filters = externalFilters ?? internalFilters;
+  const onFiltersChange = externalOnFiltersChange ?? setInternalFilters;
+
   const [sortField, setSortField] = useState<SortField>('priority');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
@@ -145,7 +134,9 @@ export function TaskListView() {
 
   return (
     <div className="space-y-4" data-testid="task-list-view">
-      <TaskFiltersToolbar filters={filters} onFiltersChange={setFilters} />
+      {!externalFilters && (
+        <TaskFiltersToolbar filters={filters} onFiltersChange={onFiltersChange} />
+      )}
 
       <div className="rounded-lg border">
         <Table>
