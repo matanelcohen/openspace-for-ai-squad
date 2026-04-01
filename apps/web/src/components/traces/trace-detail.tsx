@@ -15,9 +15,11 @@ import {
   Cpu,
   Download,
   FileText,
+  Hash,
   Loader2,
   Radio,
   Search as SearchIcon,
+  Timer,
   Wrench,
   Zap,
 } from 'lucide-react';
@@ -29,6 +31,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTrace } from '@/hooks/use-traces';
 import type { Span, SpanEvent, SpanKind, TraceStatus } from '@/lib/trace-types';
 import { cn } from '@/lib/utils';
@@ -51,36 +54,53 @@ const SPAN_ICONS: Record<string, React.ElementType> = {
   unspecified: Zap,
 };
 
+// Color scheme: tool=blue, llm=purple, agent=green, internal=gray
 const SPAN_COLORS: Record<string, string> = {
-  agent: 'bg-purple-500',
-  chain: 'bg-blue-500',
-  tool: 'bg-amber-500',
-  llm: 'bg-green-500',
+  agent: 'bg-emerald-500',
+  chain: 'bg-sky-500',
+  tool: 'bg-blue-500',
+  llm: 'bg-purple-500',
   retriever: 'bg-cyan-500',
   embedding: 'bg-pink-500',
-  internal: 'bg-slate-500',
+  internal: 'bg-gray-400 dark:bg-gray-500',
   reasoning: 'bg-violet-500',
-  server: 'bg-green-500',
-  client: 'bg-green-500',
-  producer: 'bg-blue-500',
-  consumer: 'bg-blue-500',
-  unspecified: 'bg-gray-500',
+  server: 'bg-teal-500',
+  client: 'bg-teal-500',
+  producer: 'bg-sky-500',
+  consumer: 'bg-sky-500',
+  unspecified: 'bg-gray-400 dark:bg-gray-500',
 };
 
 const SPAN_BG_COLORS: Record<string, string> = {
-  agent: 'bg-purple-500/20 border-purple-500/40',
-  chain: 'bg-blue-500/20 border-blue-500/40',
-  tool: 'bg-amber-500/20 border-amber-500/40',
-  llm: 'bg-green-500/20 border-green-500/40',
+  agent: 'bg-emerald-500/20 border-emerald-500/40',
+  chain: 'bg-sky-500/20 border-sky-500/40',
+  tool: 'bg-blue-500/20 border-blue-500/40',
+  llm: 'bg-purple-500/20 border-purple-500/40',
   retriever: 'bg-cyan-500/20 border-cyan-500/40',
   embedding: 'bg-pink-500/20 border-pink-500/40',
-  internal: 'bg-slate-500/20 border-slate-500/40',
+  internal: 'bg-gray-500/20 border-gray-500/40',
   reasoning: 'bg-violet-500/20 border-violet-500/40',
-  server: 'bg-green-500/20 border-green-500/40',
-  client: 'bg-green-500/20 border-green-500/40',
-  producer: 'bg-blue-500/20 border-blue-500/40',
-  consumer: 'bg-blue-500/20 border-blue-500/40',
+  server: 'bg-teal-500/20 border-teal-500/40',
+  client: 'bg-teal-500/20 border-teal-500/40',
+  producer: 'bg-sky-500/20 border-sky-500/40',
+  consumer: 'bg-sky-500/20 border-sky-500/40',
   unspecified: 'bg-gray-500/20 border-gray-500/40',
+};
+
+const SPAN_TEXT_COLORS: Record<string, string> = {
+  agent: 'text-emerald-700 dark:text-emerald-400',
+  chain: 'text-sky-700 dark:text-sky-400',
+  tool: 'text-blue-700 dark:text-blue-400',
+  llm: 'text-purple-700 dark:text-purple-400',
+  retriever: 'text-cyan-700 dark:text-cyan-400',
+  embedding: 'text-pink-700 dark:text-pink-400',
+  internal: 'text-gray-600 dark:text-gray-400',
+  reasoning: 'text-violet-700 dark:text-violet-400',
+  server: 'text-teal-700 dark:text-teal-400',
+  client: 'text-teal-700 dark:text-teal-400',
+  producer: 'text-sky-700 dark:text-sky-400',
+  consumer: 'text-sky-700 dark:text-sky-400',
+  unspecified: 'text-gray-600 dark:text-gray-400',
 };
 
 const STATUS_COLORS: Record<TraceStatus, string> = {
@@ -119,6 +139,12 @@ function formatBytes(bytes: number | null): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatCostUsd(cost: number | null): string {
+  if (cost == null) return '—';
+  if (cost < 0.01) return `$${cost.toFixed(4)}`;
+  return `$${cost.toFixed(2)}`;
+}
+
 /** Derive a rich display label: tool_name for tools, model_name for LLM spans */
 function getSpanDisplayName(span: Span): string {
   if (span.kind === 'tool') {
@@ -130,17 +156,30 @@ function getSpanDisplayName(span: Span): string {
   return span.name;
 }
 
-function StatusIcon({ status }: { status: TraceStatus }) {
+function StatusIcon({ status, className }: { status: TraceStatus; className?: string }) {
   switch (status) {
     case 'success':
-      return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
+      return <CheckCircle2 className={cn('h-3.5 w-3.5 text-green-500', className)} />;
     case 'error':
-      return <AlertTriangle className="h-3.5 w-3.5 text-red-500" />;
+      return <AlertTriangle className={cn('h-3.5 w-3.5 text-red-500', className)} />;
     case 'running':
-      return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />;
+      return <Loader2 className={cn('h-3.5 w-3.5 animate-spin text-blue-500', className)} />;
     default:
-      return <Clock className="h-3.5 w-3.5 text-yellow-500" />;
+      return <Clock className={cn('h-3.5 w-3.5 text-yellow-500', className)} />;
   }
+}
+
+// --- Count spans by kind recursively ---
+
+function countSpansByKind(span: Span): { toolCalls: number; llmCalls: number } {
+  let toolCalls = span.kind === 'tool' ? 1 : 0;
+  let llmCalls = span.kind === 'llm' ? 1 : 0;
+  for (const child of span.children) {
+    const childCounts = countSpansByKind(child);
+    toolCalls += childCounts.toolCalls;
+    llmCalls += childCounts.llmCalls;
+  }
+  return { toolCalls, llmCalls };
 }
 
 // --- Flatten span tree for waterfall ---
@@ -329,22 +368,65 @@ function CopyButton({ text, className }: { text: string; className?: string }) {
   }, [text]);
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      className={cn('h-6 w-6', className)}
-      onClick={(e) => {
-        e.stopPropagation();
-        handleCopy();
-      }}
-      title="Copy to clipboard"
-    >
-      {isCopied ? (
-        <Check className="h-3 w-3 text-green-500" />
-      ) : (
-        <Copy className="h-3 w-3 text-muted-foreground" />
-      )}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('h-6 w-6', className)}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleCopy();
+          }}
+        >
+          {isCopied ? (
+            <Check className="h-3 w-3 text-green-500" />
+          ) : (
+            <Copy className="h-3 w-3 text-muted-foreground" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{isCopied ? 'Copied!' : 'Copy to clipboard'}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+// --- Collapsible JSON Section ---
+
+function CollapsibleJsonSection({
+  label,
+  data,
+  defaultOpen = false,
+}: {
+  label: string;
+  data: unknown;
+  defaultOpen?: boolean;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const json = JSON.stringify(data, null, 2) ?? 'null';
+  const byteSize = new TextEncoder().encode(json).length;
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <button className="flex w-full items-center gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-left text-xs transition-colors hover:bg-muted/50">
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 flex-shrink-0 text-muted-foreground transition-transform',
+              !isOpen && '-rotate-90',
+            )}
+          />
+          <span className="font-medium text-foreground">{label}</span>
+          <span className="ml-auto font-mono text-muted-foreground">{formatBytes(byteSize)}</span>
+          <CopyButton text={json} />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1 max-h-64 overflow-auto rounded-md border border-border/40 bg-muted/10 p-3">
+          <SyntaxHighlightedJson data={data} />
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -375,7 +457,9 @@ function WaterfallRow({
 }: WaterfallRowProps) {
   const Icon = SPAN_ICONS[span.kind] ?? Zap;
   const barColor = SPAN_COLORS[span.kind] ?? 'bg-blue-500';
+  const textColor = SPAN_TEXT_COLORS[span.kind] ?? 'text-blue-700 dark:text-blue-400';
   const displayName = getSpanDisplayName(span);
+  const isError = span.status === 'error';
 
   const offsetPct = traceDuration > 0 ? ((span.startTime - traceStart) / traceDuration) * 100 : 0;
   const widthPct =
@@ -385,100 +469,177 @@ function WaterfallRow({
         ? 100 - offsetPct
         : 0.5;
 
-  return (
-    <div
-      className={cn(
-        'group flex cursor-pointer items-center border-b border-border/50 transition-colors hover:bg-muted/50',
-        isSelected && 'bg-accent/50',
-      )}
-      onClick={() => onSelect(span)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') onSelect(span);
-      }}
-    >
-      {/* Span label column */}
-      <div className="flex w-[400px] min-w-[400px] items-start gap-1 border-r border-border/50 px-2 py-2">
-        <div style={{ width: depth * 20 }} className="flex-shrink-0" />
-        {hasChildren ? (
-          <button
-            className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded hover:bg-muted"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggle(span.id);
-            }}
-          >
-            {isCollapsed ? (
-              <ChevronRight className="h-3.5 w-3.5" />
-            ) : (
-              <ChevronDown className="h-3.5 w-3.5" />
-            )}
-          </button>
-        ) : (
-          <div className="mt-0.5 w-5 flex-shrink-0" />
-        )}
-        <div className="mt-0.5 flex-shrink-0">
-          <StatusIcon status={span.status} />
-        </div>
-        <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <span className="truncate text-xs font-medium">{displayName}</span>
-            {/* Token & cost badges for LLM spans */}
-            {span.kind === 'llm' && span.tokens && (
-              <Badge
-                variant="outline"
-                className="ml-0.5 flex-shrink-0 gap-0.5 px-1 py-0 text-[9px] font-mono"
-              >
-                <Coins className="h-2.5 w-2.5" />
-                {formatTokenCount(span.tokens.total)}
-              </Badge>
-            )}
-            {span.kind === 'llm' && span.cost != null && (
-              <Badge
-                variant="outline"
-                className="flex-shrink-0 px-1 py-0 text-[9px] font-mono text-green-600 dark:text-green-400"
-              >
-                ${span.cost.toFixed(4)}
-              </Badge>
-            )}
-            <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-muted-foreground">
-              {formatDuration(span.duration)}
-            </span>
-          </div>
-          <SpanSubtitle span={span} />
-        </div>
-      </div>
+  // Build tooltip content
+  const tooltipLines: string[] = [
+    `${span.kind}: ${span.name}`,
+    `Status: ${span.status}`,
+    `Duration: ${formatDuration(span.duration)}`,
+  ];
+  if (span.toolName) tooltipLines.push(`Tool: ${span.toolName}`);
+  if (span.model) tooltipLines.push(`Model: ${span.model}`);
+  if (span.tokens) tooltipLines.push(`Tokens: ${span.tokens.total.toLocaleString()}`);
+  if (span.cost != null) tooltipLines.push(`Cost: ${formatCostUsd(span.cost)}`);
+  if (span.error) tooltipLines.push(`Error: ${span.error}`);
 
-      {/* Timing bar column */}
-      <div className="relative flex-1 py-1.5 px-2">
-        <div className="relative h-5 w-full">
-          <div
-            className={cn(
-              'absolute top-0 h-full rounded-sm',
-              barColor,
-              span.status === 'running' && 'animate-pulse',
-            )}
-            style={{
-              left: `${offsetPct}%`,
-              width: `${widthPct}%`,
-              minWidth: '2px',
-            }}
-          />
-          {span.status === 'error' && (
-            <div
-              className="absolute top-0 h-full rounded-sm bg-red-500/30 ring-1 ring-red-500"
-              style={{
-                left: `${offsetPct}%`,
-                width: `${widthPct}%`,
-                minWidth: '2px',
-              }}
-            />
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <div
+          className={cn(
+            'group flex cursor-pointer items-center border-b transition-colors hover:bg-muted/50',
+            isSelected && 'bg-accent/50',
+            isError
+              ? 'border-b-red-300 bg-red-50/50 dark:border-b-red-900 dark:bg-red-950/20'
+              : 'border-b-border/50',
           )}
+          onClick={() => onSelect(span)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') onSelect(span);
+          }}
+        >
+          {/* Span label column */}
+          <div className="flex w-[420px] min-w-[420px] items-start gap-1 border-r border-border/50 px-2 py-2">
+            <div style={{ width: depth * 20 }} className="flex-shrink-0" />
+            {hasChildren ? (
+              <button
+                className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded hover:bg-muted"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggle(span.id);
+                }}
+              >
+                {isCollapsed ? (
+                  <ChevronRight className="h-3.5 w-3.5" />
+                ) : (
+                  <ChevronDown className="h-3.5 w-3.5" />
+                )}
+              </button>
+            ) : (
+              <div className="mt-0.5 w-5 flex-shrink-0" />
+            )}
+            <div className="mt-0.5 flex-shrink-0">
+              <StatusIcon status={span.status} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1">
+                {/* Kind badge with icon for tool/llm spans */}
+                {span.kind === 'tool' && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'flex-shrink-0 gap-0.5 rounded-md px-1.5 py-0 text-[10px] font-semibold',
+                      'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-300',
+                    )}
+                  >
+                    <Wrench className="h-2.5 w-2.5" />
+                    {span.toolName ?? span.name}
+                  </Badge>
+                )}
+                {span.kind === 'llm' && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'flex-shrink-0 gap-0.5 rounded-md px-1.5 py-0 text-[10px] font-semibold',
+                      'border-purple-300 bg-purple-50 text-purple-700 dark:border-purple-700 dark:bg-purple-950/50 dark:text-purple-300',
+                    )}
+                  >
+                    <Cpu className="h-2.5 w-2.5" />
+                    {span.model ?? 'LLM'}
+                  </Badge>
+                )}
+                {span.kind !== 'tool' && span.kind !== 'llm' && (
+                  <>
+                    <Icon className={cn('h-3.5 w-3.5 flex-shrink-0', textColor)} />
+                    <span className="truncate text-xs font-medium">{displayName}</span>
+                  </>
+                )}
+
+                {/* LLM token/cost badges */}
+                {span.kind === 'llm' && span.tokens && (
+                  <Badge
+                    variant="outline"
+                    className="ml-0.5 flex-shrink-0 gap-0.5 px-1 py-0 text-[9px] font-mono"
+                  >
+                    <Coins className="h-2.5 w-2.5" />
+                    {formatTokenCount(span.tokens.prompt)}/
+                    {formatTokenCount(span.tokens.completion)}
+                  </Badge>
+                )}
+                {span.kind === 'llm' && span.cost != null && (
+                  <Badge
+                    variant="outline"
+                    className="flex-shrink-0 px-1 py-0 text-[9px] font-mono text-emerald-600 dark:text-emerald-400"
+                  >
+                    {formatCostUsd(span.cost)}
+                  </Badge>
+                )}
+
+                {/* Tool payload size */}
+                {span.kind === 'tool' && (span.inputBytes != null || span.outputBytes != null) && (
+                  <span className="flex-shrink-0 text-[9px] font-mono text-muted-foreground">
+                    {formatBytes(span.inputBytes ?? span.outputBytes)}
+                  </span>
+                )}
+
+                {/* Duration */}
+                <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-muted-foreground">
+                  {formatDuration(span.duration)}
+                </span>
+              </div>
+              <SpanSubtitle span={span} />
+              {/* Inline error message for error spans */}
+              {isError && span.error && (
+                <div className="mt-0.5 truncate text-[10px] font-medium text-red-500">
+                  ⚠ {span.error}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Timing bar column */}
+          <div className="relative flex-1 py-1.5 px-2">
+            <div className="relative h-5 w-full">
+              <div
+                className={cn(
+                  'absolute top-0 h-full rounded-sm transition-opacity',
+                  isError ? 'bg-red-500' : barColor,
+                  span.status === 'running' && 'animate-pulse',
+                )}
+                style={{
+                  left: `${offsetPct}%`,
+                  width: `${widthPct}%`,
+                  minWidth: '2px',
+                  opacity: isError ? 0.7 : 0.85,
+                }}
+              />
+              {isError && (
+                <div
+                  className="absolute top-0 h-full rounded-sm ring-1 ring-red-500"
+                  style={{
+                    left: `${offsetPct}%`,
+                    width: `${widthPct}%`,
+                    minWidth: '2px',
+                  }}
+                />
+              )}
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </TooltipTrigger>
+      <TooltipContent
+        side="bottom"
+        align="start"
+        className="max-w-xs whitespace-pre-line bg-popover text-popover-foreground"
+      >
+        {tooltipLines.map((line, i) => (
+          <div key={i} className={cn('text-xs', i === 0 && 'font-semibold')}>
+            {line}
+          </div>
+        ))}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -492,6 +653,7 @@ function SpanDetail({ span }: SpanDetailProps) {
   const Icon = SPAN_ICONS[span.kind] ?? Zap;
   const [activeTab, setActiveTab] = useState<'input' | 'output' | 'events' | 'metadata'>('input');
   const displayName = getSpanDisplayName(span);
+  const isError = span.status === 'error';
 
   const inputJson = JSON.stringify(span.input, null, 2) ?? 'null';
   const outputJson = span.output
@@ -507,15 +669,30 @@ function SpanDetail({ span }: SpanDetailProps) {
       <div
         className={cn(
           'border-b p-4',
-          SPAN_BG_COLORS[span.kind] ?? 'bg-blue-500/20 border-blue-500/40',
+          isError
+            ? 'border-red-500/40 bg-red-500/10'
+            : (SPAN_BG_COLORS[span.kind] ?? 'bg-blue-500/20 border-blue-500/40'),
         )}
       >
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" />
           <h3 className="font-semibold">{displayName}</h3>
           {span.kind === 'tool' && span.toolName && (
-            <Badge variant="secondary" className="text-xs">
+            <Badge
+              variant="secondary"
+              className="gap-0.5 border-blue-300 bg-blue-100 text-xs text-blue-800 dark:border-blue-700 dark:bg-blue-950 dark:text-blue-300"
+            >
+              <Wrench className="h-3 w-3" />
               {span.toolName}
+            </Badge>
+          )}
+          {span.kind === 'llm' && span.model && (
+            <Badge
+              variant="secondary"
+              className="gap-0.5 border-purple-300 bg-purple-100 text-xs text-purple-800 dark:border-purple-700 dark:bg-purple-950 dark:text-purple-300"
+            >
+              <Cpu className="h-3 w-3" />
+              {span.model}
             </Badge>
           )}
           {span.kind === 'llm' && span.provider && (
@@ -536,8 +713,8 @@ function SpanDetail({ span }: SpanDetailProps) {
       </div>
 
       {/* Error section — prominent expandable red-tinted block */}
-      {span.status === 'error' && span.error && (
-        <div className="border-b p-3">
+      {isError && span.error && (
+        <div className="border-b border-red-300 bg-red-50/30 p-3 dark:border-red-900 dark:bg-red-950/30">
           <ErrorDetail error={span.error} errorStack={span.errorStack} />
         </div>
       )}
@@ -569,6 +746,14 @@ function SpanDetail({ span }: SpanDetailProps) {
               <div>
                 <div className="text-xs text-muted-foreground">Provider</div>
                 <div className="text-sm font-medium capitalize">{span.provider}</div>
+              </div>
+            )}
+            {span.duration != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">Latency</div>
+                <div className="font-mono text-sm font-bold text-purple-600 dark:text-purple-400">
+                  {formatDuration(span.duration)}
+                </div>
               </div>
             )}
             {span.timeToFirstToken != null && (
@@ -606,16 +791,22 @@ function SpanDetail({ span }: SpanDetailProps) {
                 <div className="font-mono text-sm font-medium">{span.toolId}</div>
               </div>
             )}
-            {span.duration != null && (
-              <div className="col-span-2">
-                <div className="text-xs text-muted-foreground">Tool Duration</div>
-                <div className="font-mono text-lg font-bold">{formatDuration(span.duration)}</div>
+            {span.inputBytes != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">Input Payload</div>
+                <div className="font-mono text-sm font-medium">{formatBytes(span.inputBytes)}</div>
+              </div>
+            )}
+            {span.outputBytes != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">Output Payload</div>
+                <div className="font-mono text-sm font-medium">{formatBytes(span.outputBytes)}</div>
               </div>
             )}
           </>
         )}
 
-        {/* Tokens */}
+        {/* Tokens with prompt/completion/total */}
         {span.tokens && (
           <>
             <div>
@@ -642,8 +833,8 @@ function SpanDetail({ span }: SpanDetailProps) {
         {span.cost != null && (
           <div>
             <div className="text-xs text-muted-foreground">Cost</div>
-            <div className="font-mono text-sm font-medium text-green-600 dark:text-green-400">
-              ${span.cost.toFixed(4)}
+            <div className="font-mono text-sm font-medium text-emerald-600 dark:text-emerald-400">
+              {formatCostUsd(span.cost)}
             </div>
           </div>
         )}
@@ -655,20 +846,39 @@ function SpanDetail({ span }: SpanDetailProps) {
           </div>
         )}
 
-        {/* Input/output byte sizes */}
-        {span.inputBytes != null && (
+        {/* Input/output byte sizes for non-tool spans */}
+        {span.kind !== 'tool' && span.inputBytes != null && (
           <div>
             <div className="text-xs text-muted-foreground">Input Size</div>
             <div className="font-mono text-sm">{formatBytes(span.inputBytes)}</div>
           </div>
         )}
-        {span.outputBytes != null && (
+        {span.kind !== 'tool' && span.outputBytes != null && (
           <div>
             <div className="text-xs text-muted-foreground">Output Size</div>
             <div className="font-mono text-sm">{formatBytes(span.outputBytes)}</div>
           </div>
         )}
       </div>
+
+      {/* Collapsible Input/Output for tool & llm spans */}
+      {(span.kind === 'tool' || span.kind === 'llm') &&
+        (span.input != null || span.output != null) && (
+          <div className="space-y-2 border-b p-3">
+            {span.input != null && (
+              <CollapsibleJsonSection
+                label={span.kind === 'llm' ? 'Prompt / Input' : 'Input'}
+                data={span.input}
+              />
+            )}
+            {span.output != null && (
+              <CollapsibleJsonSection
+                label={span.kind === 'llm' ? 'Response / Output' : 'Output'}
+                data={span.output}
+              />
+            )}
+          </div>
+        )}
 
       {/* Tabs: input / output / events / metadata */}
       <div className="flex border-b">
@@ -734,6 +944,141 @@ function SpanDetail({ span }: SpanDetailProps) {
   );
 }
 
+// --- Trace Summary Header ---
+
+function TraceSummaryHeader({
+  trace,
+  toolCalls,
+  llmCalls,
+}: {
+  trace: {
+    name: string;
+    agentName: string;
+    status: TraceStatus;
+    duration: number | null;
+    totalTokens: number;
+    totalCost: number;
+    spanCount: number;
+    errorCount: number;
+  };
+  toolCalls: number;
+  llmCalls: number;
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+      <Card className="overflow-hidden">
+        <CardContent className="flex items-center gap-2 p-3">
+          <div
+            className={cn(
+              'flex h-8 w-8 items-center justify-center rounded-lg',
+              trace.status === 'error'
+                ? 'bg-red-100 dark:bg-red-950/50'
+                : 'bg-emerald-100 dark:bg-emerald-950/50',
+            )}
+          >
+            <StatusIcon status={trace.status} className="h-4 w-4" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Status</div>
+            <div className={cn('text-sm font-bold capitalize', STATUS_COLORS[trace.status])}>
+              {trace.status}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardContent className="flex items-center gap-2 p-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/50">
+            <Timer className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Duration
+            </div>
+            <div className="font-mono text-sm font-bold">{formatDuration(trace.duration)}</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardContent className="flex items-center gap-2 p-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-950/50">
+            <Coins className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Total Cost
+            </div>
+            <div className="font-mono text-sm font-bold text-emerald-600 dark:text-emerald-400">
+              {formatCostUsd(trace.totalCost)}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardContent className="flex items-center gap-2 p-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 dark:bg-amber-950/50">
+            <Hash className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Tokens</div>
+            <div className="font-mono text-sm font-bold">{trace.totalTokens.toLocaleString()}</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardContent className="flex items-center gap-2 p-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-950/50">
+            <Wrench className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              Tool Calls
+            </div>
+            <div className="font-mono text-sm font-bold">{toolCalls}</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardContent className="flex items-center gap-2 p-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-950/50">
+            <Cpu className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              LLM Calls
+            </div>
+            <div className="font-mono text-sm font-bold">{llmCalls}</div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <CardContent className="flex items-center gap-2 p-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-950/50">
+            <AlertTriangle className="h-4 w-4 text-orange-600 dark:text-orange-400" />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Errors</div>
+            <div
+              className={cn(
+                'font-mono text-sm font-bold',
+                trace.errorCount > 0 && 'text-red-600 dark:text-red-400',
+              )}
+            >
+              {trace.errorCount}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // --- Main Trace Detail Component ---
 
 interface TraceDetailProps {
@@ -770,6 +1115,11 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
     return flattenSpans(trace.rootSpan);
   }, [trace]);
 
+  const spanCounts = useMemo(() => {
+    if (!trace) return { toolCalls: 0, llmCalls: 0 };
+    return countSpansByKind(trace.rootSpan);
+  }, [trace]);
+
   const flatSpans = useMemo(() => {
     let spans = allFlatSpans;
 
@@ -779,12 +1129,17 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
       const matchingIds = new Set<string>();
 
       for (const { span } of spans) {
+        const inputStr = span.input != null ? JSON.stringify(span.input).toLowerCase() : '';
+        const outputStr = span.output != null ? JSON.stringify(span.output).toLowerCase() : '';
+
         if (
           span.name.toLowerCase().includes(query) ||
           span.toolName?.toLowerCase().includes(query) ||
           span.model?.toLowerCase().includes(query) ||
           span.inputPreview?.toLowerCase().includes(query) ||
-          span.outputPreview?.toLowerCase().includes(query)
+          span.outputPreview?.toLowerCase().includes(query) ||
+          inputStr.includes(query) ||
+          outputStr.includes(query)
         ) {
           matchingIds.add(span.id);
         }
@@ -856,6 +1211,11 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
           <div className="h-8 w-8 animate-pulse rounded bg-muted" />
           <div className="h-6 w-48 animate-pulse rounded bg-muted" />
         </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
+          ))}
+        </div>
         {Array.from({ length: 8 }).map((_, i) => (
           <div key={i} className="h-8 w-full animate-pulse rounded bg-muted" />
         ))}
@@ -875,7 +1235,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      {/* Header */}
+      {/* Header with back button and trace name */}
       <div className="flex flex-wrap items-center gap-3">
         <Link href="/traces">
           <Button variant="ghost" size="icon">
@@ -885,17 +1245,32 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h2 className="text-xl font-bold">{trace.name}</h2>
-            <Badge variant="outline" className="capitalize">
+            <Badge
+              variant="outline"
+              className={cn(
+                'capitalize',
+                trace.status === 'error' &&
+                  'border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-950/50 dark:text-red-400',
+                trace.status === 'success' &&
+                  'border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-950/50 dark:text-green-400',
+                trace.status === 'running' &&
+                  'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/50 dark:text-blue-400',
+              )}
+            >
+              <StatusIcon status={trace.status} className="mr-1 h-3 w-3" />
               {trace.status}
             </Badge>
+            {trace.agentName && (
+              <Badge variant="secondary" className="gap-1">
+                <Bot className="h-3 w-3" />
+                {trace.agentName}
+              </Badge>
+            )}
           </div>
-          <div className="mt-0.5 flex items-center gap-4 text-sm text-muted-foreground">
+          <div className="mt-0.5 flex items-center gap-3 text-xs text-muted-foreground font-mono">
             <span>{trace.id}</span>
+            <span>·</span>
             <span>{formatTimestamp(trace.startTime)}</span>
-            <span>{formatDuration(trace.duration)}</span>
-            <span>{trace.totalTokens.toLocaleString()} tokens</span>
-            <span>${trace.totalCost.toFixed(4)}</span>
-            <span>{trace.spanCount} spans</span>
           </div>
         </div>
         <Button
@@ -916,50 +1291,52 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
         </Button>
       </div>
 
-      {/* Kind filter/legend — toggleable badges */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        <span className="text-muted-foreground">Filter:</span>
-        {(Object.entries(SPAN_COLORS) as [SpanKind, string][]).map(([kind, color]) => {
-          const KindIcon = SPAN_ICONS[kind] ?? Zap;
-          const isActive = !enabledKinds || enabledKinds.has(kind);
-          const count = kindSummary[kind] ?? 0;
-          if (count === 0) return null;
-          return (
-            <button
-              key={kind}
-              onClick={() => toggleKind(kind)}
-              className={cn(
-                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all',
-                isActive
-                  ? 'border-border bg-card shadow-sm'
-                  : 'border-transparent bg-muted/50 opacity-50',
-              )}
-            >
-              <div className={cn('h-2.5 w-2.5 rounded-sm', color)} />
-              <KindIcon className="h-3 w-3 text-muted-foreground" />
-              <span className="capitalize text-muted-foreground">{kind}</span>
-              <Badge variant="secondary" className="h-4 min-w-[16px] px-1 text-[9px]">
-                {count}
-              </Badge>
-            </button>
-          );
-        })}
-        {trace.totalCost > 0 && (
-          <Badge variant="secondary" className="gap-1 text-xs">
-            <Coins className="h-3 w-3" />${trace.totalCost.toFixed(4)}
-          </Badge>
-        )}
-      </div>
+      {/* Trace Summary Header Cards */}
+      <TraceSummaryHeader
+        trace={trace}
+        toolCalls={spanCounts.toolCalls}
+        llmCalls={spanCounts.llmCalls}
+      />
 
-      {/* Search */}
-      <div className="relative">
-        <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          placeholder="Search spans by name, tool, model, input, output…"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="h-8 pl-8 text-xs"
-        />
+      {/* Kind filter/legend — toggleable badges + search */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-muted-foreground font-medium">Filter:</span>
+          {(Object.entries(SPAN_COLORS) as [SpanKind, string][]).map(([kind, color]) => {
+            const KindIcon = SPAN_ICONS[kind] ?? Zap;
+            const isActive = !enabledKinds || enabledKinds.has(kind);
+            const count = kindSummary[kind] ?? 0;
+            if (count === 0) return null;
+            return (
+              <button
+                key={kind}
+                onClick={() => toggleKind(kind)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all',
+                  isActive
+                    ? 'border-border bg-card shadow-sm'
+                    : 'border-transparent bg-muted/50 opacity-50',
+                )}
+              >
+                <div className={cn('h-2.5 w-2.5 rounded-sm', color)} />
+                <KindIcon className="h-3 w-3 text-muted-foreground" />
+                <span className="capitalize text-muted-foreground">{kind}</span>
+                <Badge variant="secondary" className="h-4 min-w-[16px] px-1 text-[9px]">
+                  {count}
+                </Badge>
+              </button>
+            );
+          })}
+        </div>
+        <div className="relative flex-1 sm:max-w-xs sm:ml-auto">
+          <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search spans…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-8 pl-8 text-xs"
+          />
+        </div>
       </div>
 
       {/* Main content: waterfall + detail panel */}
@@ -968,7 +1345,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Time scale header */}
           <div className="flex border-b bg-muted/30">
-            <div className="w-[400px] min-w-[400px] border-r border-border/50 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+            <div className="w-[420px] min-w-[420px] border-r border-border/50 px-2 py-1.5 text-xs font-medium text-muted-foreground">
               Span
             </div>
             <div className="relative flex-1 px-2 py-1.5">
@@ -988,7 +1365,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
           <div className="relative flex-1 overflow-auto">
             {/* Vertical grid lines */}
             <div className="pointer-events-none absolute inset-0 flex">
-              <div className="w-[400px] min-w-[400px]" />
+              <div className="w-[420px] min-w-[420px]" />
               <div className="relative flex-1">
                 {timeMarkers.map((m) => (
                   <div
@@ -1020,7 +1397,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
 
         {/* Detail panel */}
         {selectedSpan && (
-          <div className="w-[420px] min-w-[420px] border-l bg-card">
+          <div className="w-[440px] min-w-[440px] border-l bg-card">
             <SpanDetail span={selectedSpan} />
           </div>
         )}

@@ -9,6 +9,8 @@ import {
   CheckCircle2,
   Clock,
   Coins,
+  Hash,
+  Layers,
   Loader2,
   Search,
   Zap,
@@ -39,7 +41,14 @@ import { useTraces } from '@/hooks/use-traces';
 import type { TraceStatus } from '@/lib/trace-types';
 import { cn } from '@/lib/utils';
 
-type SortField = 'agentName' | 'status' | 'duration' | 'totalTokens' | 'totalCost' | 'startTime';
+type SortField =
+  | 'agentName'
+  | 'status'
+  | 'duration'
+  | 'totalTokens'
+  | 'totalCost'
+  | 'startTime'
+  | 'spanCount';
 type SortDir = 'asc' | 'desc';
 
 const STATUS_CONFIG: Record<
@@ -120,6 +129,20 @@ function SortIcon({ field, current, dir }: { field: SortField; current: SortFiel
   );
 }
 
+/** Mini bar showing relative duration compared to longest trace */
+function DurationBar({ ms, maxMs }: { ms: number | null; maxMs: number }) {
+  if (ms == null || maxMs <= 0) return null;
+  const pct = Math.max((ms / maxMs) * 100, 2);
+  return (
+    <div className="mt-1 h-1 w-full rounded-full bg-muted">
+      <div
+        className="h-full rounded-full bg-blue-500/60"
+        style={{ width: `${Math.min(pct, 100)}%` }}
+      />
+    </div>
+  );
+}
+
 export function TraceList() {
   const { data: traces, isLoading, isError } = useTraces();
   const [search, setSearch] = useState('');
@@ -170,6 +193,9 @@ export function TraceList() {
           case 'startTime':
             cmp = a.startTime - b.startTime;
             break;
+          case 'spanCount':
+            cmp = a.spanCount - b.spanCount;
+            break;
         }
         return sortDir === 'asc' ? cmp : -cmp;
       });
@@ -192,14 +218,21 @@ export function TraceList() {
     const avgDuration =
       traces.filter((t) => t.duration != null).reduce((s, t) => s + (t.duration ?? 0), 0) /
       (traces.filter((t) => t.duration != null).length || 1);
-    return { total, errors, running, avgDuration };
+    const totalCost = traces.reduce((s, t) => s + t.totalCost, 0);
+    const totalTokens = traces.reduce((s, t) => s + t.totalTokens, 0);
+    return { total, errors, running, avgDuration, totalCost, totalTokens };
   }, [traces]);
+
+  const maxDuration = useMemo(() => {
+    if (!filtered.length) return 0;
+    return Math.max(...filtered.map((t) => t.duration ?? 0));
+  }, [filtered]);
 
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
+          {Array.from({ length: 6 }).map((_, i) => (
             <Skeleton key={i} className="h-24 rounded-lg" />
           ))}
         </div>
@@ -222,7 +255,7 @@ export function TraceList() {
   return (
     <div className="space-y-4">
       {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Traces</CardTitle>
@@ -259,6 +292,26 @@ export function TraceList() {
             <div className="text-2xl font-bold">
               {formatDuration(summaryStats?.avgDuration ?? 0)}
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Cost</CardTitle>
+            <Coins className="h-4 w-4 text-emerald-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+              {formatCost(summaryStats?.totalCost ?? 0)}
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Tokens</CardTitle>
+            <Hash className="h-4 w-4 text-amber-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatTokens(summaryStats?.totalTokens ?? 0)}</div>
           </CardContent>
         </Card>
       </div>
@@ -337,6 +390,12 @@ export function TraceList() {
               </TableHead>
               <TableHead
                 className="cursor-pointer select-none"
+                onClick={() => toggleSort('spanCount')}
+              >
+                Steps <SortIcon field="spanCount" current={sortField} dir={sortDir} />
+              </TableHead>
+              <TableHead
+                className="cursor-pointer select-none"
                 onClick={() => toggleSort('startTime')}
               >
                 Time <SortIcon field="startTime" current={sortField} dir={sortDir} />
@@ -346,27 +405,38 @@ export function TraceList() {
           <TableBody>
             {filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   No traces found.
                 </TableCell>
               </TableRow>
             ) : (
               filtered.map((trace) => (
-                <TableRow key={trace.id} className="cursor-pointer">
+                <TableRow
+                  key={trace.id}
+                  className={cn(
+                    'cursor-pointer',
+                    trace.status === 'error' && 'bg-red-50/30 dark:bg-red-950/10',
+                  )}
+                >
                   <TableCell>
                     <Link
                       href={`/traces/${trace.id}`}
                       className="flex flex-col gap-0.5 hover:underline"
                     >
                       <span className="font-medium">{trace.agentName}</span>
-                      <span className="text-xs text-muted-foreground">{trace.id}</span>
+                      <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                        {trace.name}
+                      </span>
                     </Link>
                   </TableCell>
                   <TableCell>
                     <StatusBadge status={trace.status} />
                   </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {formatDuration(trace.duration)}
+                  <TableCell>
+                    <div>
+                      <span className="font-mono text-sm">{formatDuration(trace.duration)}</span>
+                      <DurationBar ms={trace.duration} maxMs={maxDuration} />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
@@ -374,7 +444,17 @@ export function TraceList() {
                       <span className="font-mono text-sm">{formatTokens(trace.totalTokens)}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="font-mono text-sm">{formatCost(trace.totalCost)}</TableCell>
+                  <TableCell>
+                    <span className="font-mono text-sm text-emerald-600 dark:text-emerald-400">
+                      {formatCost(trace.totalCost)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      <Layers className="h-3 w-3 text-muted-foreground" />
+                      <span className="font-mono text-sm">{trace.spanCount}</span>
+                    </div>
+                  </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {formatTime(trace.startTime)}
                   </TableCell>
