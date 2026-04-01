@@ -25,7 +25,7 @@ import {
   matchSkillsForTask,
   type ParsedSkill,
 } from '../seed-skills.js';
-import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
+import { getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
 import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
 import { MetricsCollector } from './metrics.js';
@@ -43,6 +43,8 @@ interface AgentProfile {
 interface AgentWorkerConfig {
   tasksDir: string;
   squadDir: string;
+  /** Base URL for internal API calls (e.g. http://localhost:3001). */
+  apiBaseUrl?: string;
   /** Path to persist queue state. Default: <tasksDir>/../.cache/agent-queue.json */
   queueFilePath?: string;
   aiProvider: AIProvider;
@@ -148,6 +150,41 @@ export class AgentWorkerService {
   /** Tasks that should skip delegation (manually assigned). */
   private readonly skipDelegation = new Set<string>();
 
+  // ── Internal API client (replaces direct file I/O) ────────────
+
+  private get apiUrl(): string {
+    return this.config.apiBaseUrl ?? this.config.a2aBaseUrl ?? 'http://localhost:3001';
+  }
+
+  /** Fetch a task via the API instead of reading files directly. */
+  private async fetchTask(taskId: string): Promise<Task> {
+    const res = await fetch(`${this.apiUrl}/api/tasks/${taskId}`);
+    if (!res.ok) throw new Error(`Task not found: ${taskId} (${res.status})`);
+    return res.json() as Promise<Task>;
+  }
+
+  /** Update a task via the API instead of writing files directly. */
+  private async patchTask(taskId: string, updates: Record<string, unknown>): Promise<Task> {
+    const res = await fetch(`${this.apiUrl}/api/tasks/${taskId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+    if (!res.ok) throw new Error(`Failed to update task ${taskId}: ${res.status}`);
+    return res.json() as Promise<Task>;
+  }
+
+  /** Create a task via the API. */
+  private async createTaskViaAPI(input: Record<string, unknown>): Promise<Task> {
+    const res = await fetch(`${this.apiUrl}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
+    return res.json() as Promise<Task>;
+  }
+
   enqueue(task: Task, opts?: { skipDelegation?: boolean }): void {
     if (!task.assignee) return;
     const queue = this.queues.get(task.assignee);
@@ -188,9 +225,9 @@ export class AgentWorkerService {
         for (const file of files) {
           if (!file.endsWith('.md')) continue;
           try {
-            const t = await getTask(this.config.tasksDir, file.replace('.md', ''));
+            const t = await this.fetchTask(file.replace('.md', ''));
             if (t.expiresAt && new Date(t.expiresAt) < new Date() && t.status === 'pending') {
-              await updateTask(this.config.tasksDir, t.id, { status: 'blocked' });
+              await this.patchTask(t.id, { status: 'blocked' });
               console.log(`[AgentWorker] TTL expired: ${t.id}`);
             }
           } catch { /* skip */ }
@@ -319,9 +356,9 @@ export class AgentWorkerService {
     if (idx < 0) return false;
     this.deadLetterQueue.splice(idx, 1);
     this.clearAttempts(taskId);
-    const task = await getTask(this.config.tasksDir, taskId).catch(() => null);
+    const task = await this.fetchTask(taskId).catch(() => null);
     if (!task) return false;
-    await updateTask(this.config.tasksDir, taskId, { status: 'pending' });
+    await this.patchTask(taskId, { status: 'pending' });
     if (task.assignee) this.enqueue({ ...task, status: 'pending' });
     return true;
   }
@@ -378,7 +415,7 @@ export class AgentWorkerService {
                   task.description +
                   `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Blocked after ${attempts} failed execution attempts.\n\n**Last error:** ${lastError}`,
               });
-              this.deadLetterQueue.push({ taskId, agentId: task.assignee, error: lastError, failedAt: new Date().toISOString() });
+              this.deadLetterQueue.push({ taskId, agentId: task.assignee!, error: lastError, failedAt: new Date().toISOString() });
               if (queue) {
                 const idx = queue.indexOf(task.id);
                 if (idx >= 0) queue.splice(idx, 1);
@@ -482,7 +519,7 @@ export class AgentWorkerService {
 
     for (let i = 0; i < queue.length; i++) {
       try {
-        const task = await getTask(this.config.tasksDir, queue[i]!);
+        const task = await this.fetchTask(queue[i]!);
         const score = PRIORITY_SCORE[task.priority] ?? 3;
         if (score < bestScore) {
           bestScore = score;
@@ -568,12 +605,12 @@ export class AgentWorkerService {
 
     let taskFailed = false;
     try {
-      const task = await getTask(this.config.tasksDir, taskId);
+      const task = await this.fetchTask(taskId);
 
       // TTL check — skip expired tasks
       if (task.expiresAt && new Date(task.expiresAt) < new Date()) {
         console.log(`[AgentWorker] Task ${taskId} expired — skipping`);
-        await updateTask(this.config.tasksDir, taskId, { status: 'blocked' });
+        await this.patchTask(taskId, { status: 'blocked' });
         this.activeTask.delete(agentId);
         this.persistQueue();
         setTimeout(() => this.processNext(agentId), 1000);
@@ -595,7 +632,7 @@ export class AgentWorkerService {
       if (attempts >= MAX_ATTEMPTS) {
         const lastError = this.taskAttempts.get(taskId)?.lastError ?? 'Max attempts reached';
         console.log(`[AgentWorker] Task ${taskId} has ${attempts} attempts — marking blocked`);
-        await updateTask(this.config.tasksDir, taskId, {
+        await this.patchTask(taskId, {
           status: 'blocked',
           description:
             task.description +
@@ -611,7 +648,7 @@ export class AgentWorkerService {
       // Check dependencies — skip if any are not done
       if (task.dependsOn?.length) {
         const allDone = await Promise.all(
-          task.dependsOn.map(depId => getTask(this.config.tasksDir, depId).catch(() => null))
+          task.dependsOn.map(depId => this.fetchTask(depId).catch(() => null))
         );
         const pending = allDone.filter(t => t && t.status !== 'done');
         if (pending.length > 0) {
@@ -638,7 +675,7 @@ export class AgentWorkerService {
 
       const now = () => new Date().toISOString().replace('T', ' ').substring(0, 19);
 
-      await updateTask(this.config.tasksDir, taskId, {
+      await this.patchTask(taskId, {
         status: 'in-progress',
         description:
           task.description +
@@ -663,7 +700,7 @@ export class AgentWorkerService {
       );
 
       // Log tier in task description for traceability
-      await updateTask(this.config.tasksDir, taskId, {
+      await this.patchTask(taskId, {
         description:
           task.description +
           `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.\n**[${now()}]** 🎚️ Response tier: **${tier}** — ${tierDef.description} (maxAgents: ${tierDef.maxAgents})`,
@@ -1011,7 +1048,7 @@ export class AgentWorkerService {
           (prInfo ? ` | **PR:** [#${prInfo.number}](${prInfo.url})` : '')
         : '';
 
-      await updateTask(this.config.tasksDir, taskId, {
+      await this.patchTask(taskId, {
         status: prInfo ? 'in-progress' : 'done',
         labels: prInfo
           ? [...(task.labels ?? []), `pr:${prInfo.number}`, 'merge:auto']
@@ -1130,9 +1167,9 @@ export class AgentWorkerService {
       }
 
       try {
-        const currentTask = await getTask(this.config.tasksDir, taskId).catch(() => null);
+        const currentTask = await this.fetchTask(taskId).catch(() => null);
         const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
-        await updateTask(this.config.tasksDir, taskId, {
+        await this.patchTask(taskId, {
           status: 'blocked',
           description:
             (currentTask?.description ?? '') +
@@ -1331,7 +1368,7 @@ export class AgentWorkerService {
 
       if (subTasks.length === 0) {
         // Fallback: couldn't break down, mark done with the AI's response
-        await updateTask(this.config.tasksDir, taskId, {
+        await this.patchTask(taskId, {
           status: 'done',
           description:
             task.description +
@@ -1358,7 +1395,7 @@ export class AgentWorkerService {
         const validAssignee = otherAgents.find((a) => a.id === sub.assignee);
         if (!validAssignee) continue;
 
-        const subTask = await createTask(this.config.tasksDir, {
+        const subTask = await this.createTaskViaAPI({
           title: sub.title,
           description: sub.description,
           priority: task.priority,
@@ -1387,12 +1424,12 @@ export class AgentWorkerService {
             .map(dep => titleToId.get(dep) ?? dep) // resolve title→id, keep raw IDs
             .filter(depId => subtaskIds.includes(depId)); // only valid subtask IDs
           if (resolvedDeps.length > 0) {
-            await updateTask(this.config.tasksDir, subTaskId, { dependsOn: resolvedDeps });
+            await this.patchTask(subTaskId, { dependsOn: resolvedDeps });
           }
         }
 
         // Enqueue the subtask (read the latest version which may have dependsOn)
-        const latestSubTask = await getTask(this.config.tasksDir, subTaskId);
+        const latestSubTask = await this.fetchTask(subTaskId);
         this.enqueue(latestSubTask);
 
         // Broadcast subtask created event
@@ -1412,7 +1449,7 @@ export class AgentWorkerService {
       // Mark parent task as "delegated" with delegation summary
       const summary = createdSubTasks.join('\n');
       const branchInfo = featureBranch ? `\n**Feature Branch:** \`${featureBranch}\`\n` : '';
-      await updateTask(this.config.tasksDir, taskId, {
+      await this.patchTask(taskId, {
         status: 'delegated',
         description:
           task.description +
@@ -1451,7 +1488,7 @@ export class AgentWorkerService {
       console.error(`[AgentWorker] ${agent.name} delegation failed:`, message);
       this.recordAttempt(taskId, message);
 
-      await updateTask(this.config.tasksDir, taskId, {
+      await this.patchTask(taskId, {
         status: 'blocked',
         description:
           task.description +
@@ -1486,7 +1523,7 @@ export class AgentWorkerService {
     const checkInterval = setInterval(async () => {
       try {
         const subtasks = await Promise.all(
-          subtaskIds.map((id) => getTask(this.config.tasksDir, id).catch(() => null)),
+          subtaskIds.map((id) => this.fetchTask(id).catch(() => null)),
         );
         const resolved = subtasks.filter((t): t is Task => t !== null);
         const allDone =
@@ -1500,7 +1537,7 @@ export class AgentWorkerService {
             .map((t) => `- **${t.title}** (${t.assignee ?? 'unassigned'}): ✅ Done`)
             .join('\n');
 
-          const parentTask = await getTask(this.config.tasksDir, parentTaskId).catch(() => null);
+          const parentTask = await this.fetchTask(parentTaskId).catch(() => null);
           if (!parentTask) return;
 
           // Create consolidated PR from feature branch → main
@@ -1523,7 +1560,7 @@ export class AgentWorkerService {
             ? `\n**PR:** [#${featurePrInfo.number}](${featurePrInfo.url})`
             : '';
 
-          await updateTask(this.config.tasksDir, parentTaskId, {
+          await this.patchTask(parentTaskId, {
             status: 'done',
             labels: featurePrInfo
               ? [...(parentTask.labels ?? []), `pr:${featurePrInfo.number}`]

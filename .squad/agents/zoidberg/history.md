@@ -61,7 +61,25 @@
 1. **`apps/api/src/services/team-status/index.ts`** — `TeamStatusService` that tracks active agents via `recordWorkingEvent()`/`clearWorkingEvent()` and formats markdown via `getFormattedStatus(excludeAgentId?)`. Excludes stale events (>30 min) automatically.
 
 2. **`apps/api/src/services/team-status/__tests__/team-status.test.ts`** — 17 tests across 5 groups:
-   - **Active agents (4)**: Markdown format, `excludeAgentId` filtering, task 
+   - **Active agents (4)**: Markdown format, `excludeAgentId` filtering, task
+- To test internal functions from route files, they need to be explicitly exported. The `buildSpanTree` function in `traces.ts` was exported specifically to enable unit testing.
+- The project uses git worktrees (`.git-worktrees/task-*`) for parallel task development, allowing multiple branches to be worked on simultaneously.
+- Backend tests for API routes live alongside the route files (e.g., `apps/api/src/routes/traces.test.ts`) and frontend component tests use a `__tests__` subdirectory (e.g., `apps/web/src/components/traces/__tests__/trace-detail.test.tsx`).
+- The project uses vitest for unit/component tests and Playwright for e2e tests. Run backend tests with `npx vitest run <path>` from repo root, and frontend tests with `npx vitest run <path>` from `apps/web`.
+- Completed "Test enriched trace visibility end-to-end": All **87 tests** pass cleanly. Here's a summary:
+
+## Done ✅
+
+Created comprehensive end-to-end tests for enriched trace visibility:
+
+### Files created/modified:
+- **`apps/api/src/routes/traces.test.ts`** — 58 backend unit tests
+- **`apps/web/src/components/traces/__tests__/trace-detail.test.tsx`** — 29 frontend component tests  
+- **`e2e/trace-viewer.spec.ts`** — 7 new e2e tests added
+- **`apps/api/src/routes/traces.ts`** — exported `buildSpanTree` + helpers for testability
+
+### Coverage:
+| Area 
 
 ## ✅ Task Complete — Chat Input Responsiveness & Accessibility
 
