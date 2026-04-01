@@ -197,6 +197,19 @@ Here's what I did:
 - The web app uses shadcn/ui components stored in apps/web/src/components/ui/ (tooltip, collapsible, etc).
 - Completed "Upgrade trace viewer UI for rich visibility": 
 - Project uses pnpm workspaces with frozen lockfile for installs.
+- Trace viewer components live in apps/web/src/components/traces/. The trace detail page route is /apps/web/app/traces/[traceId]/.
+- The project uses git worktrees (in .git-worktrees/) for task branches, running builds/tests/linting inside the worktree directory.
+- Uses npx eslint for linting individual files and npx vitest run for running scoped tests in the apps/web package.
+- Span kinds in the tracing system use emoji indicators: 🔧 tool, 🤖 llm, 🧠 agent, ⚙️ workflow/internal, 💭 reasoning. Spans have attributes for tool.name, tool.input, tool.output, model, tokens, cost, TTFT, queue wait time.
+- Completed "Enhance trace viewer UI to display tool inputs/outputs, span tree, and rich attributes": Committed successfully. Here's a summary of what I built:
+
+## ✅ Trace Viewer UI Enhancements — Complete
+
+**4 files changed, 966 insertions, 201 deletions**
+
+### New Components Created:
+1. **`trace-summary-bar.tsx`** — Cost & token summary bar at top with stat cards (duration, tokens, cost, spans, errors, TTFT, queue wait) + kind breakdown pills showing count/tokens/cost/avg duration per span kind
+2. **`tool-call-table.tsx`** — Sortable table of all tool calls with columns: tool name, input previ
 
 ## ✨ Rich Trace Detail UI — Complete
 

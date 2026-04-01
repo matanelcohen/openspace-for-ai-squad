@@ -189,6 +189,22 @@ This task is already done. Nothing to implement.
 **`packages/tracing/src/tracer.ts`** — `startSpan()` now looks up the parent span name and sets `span.parent_name` attribute automatically.
 
 **`packages/tracing/src/types.ts`** — Extended `Tool
+- DAG engine is in packages/shared/src/workflow/dag-engine.ts and tool invocation happens via ctx.toolRegistry.invoke(). Agent worker service is in apps/api/src/services/agent-worker/index.ts.
+- This monorepo uses pnpm workspaces with --filter flag for per-package commands (e.g., pnpm --filter @matanelcohen/openspace-tracing test). Tests use vitest.
+- The project uses git worktrees under .git-worktrees/ for parallel task branches, with --no-verify flag on commits to skip hooks in worktree contexts.
+- The tracing package (@matanelcohen/openspace-tracing) provides instrumentToolCall() and instrumentLLMCall() helpers plus a withSpan() wrapper with error handling. All instrumentation is opt-in via an optional tracer field on config objects.
+- Completed "Instrument DAG engine, agent worker, and tool calls with rich tracing spans": All tests pass: **122 tracing + 720 shared + 17 agent-worker = 859 tests passing**.
+
+Here's what I did:
+
+## Summary
+
+Instrumented the DAG engine, agent worker, and tool calls with rich tracing spans across 7 files:
+
+### Tracer enhancements (`packages/tracing/src/tracer.ts`)
+- `withSpan()` now captures **full stack traces** (not just message), detects **timeout-specific exceptions** (`TimeoutError`), and records `exception.type` classification
+
+### DAG Engine (`packages/shared/src/workflow/dag-en
 
 ## Summary
 

@@ -688,12 +688,12 @@ export class AgentWorkerService {
         return;
       }
 
-      // Check dependencies — skip if any are not done
+      // Check dependencies — skip if any are not done/in-review/merged
       if (task.dependsOn?.length) {
         const allDone = await Promise.all(
           task.dependsOn.map(depId => this.fetchTask(depId).catch(() => null))
         );
-        const pending = allDone.filter(t => t && t.status !== 'done');
+        const pending = allDone.filter(t => t && !['done', 'in-review', 'merged'].includes(t.status));
         if (pending.length > 0) {
           console.log(`[AgentWorker] Task ${taskId} has ${pending.length} pending dependencies — re-queuing`);
           // Put it back at the END of the queue
