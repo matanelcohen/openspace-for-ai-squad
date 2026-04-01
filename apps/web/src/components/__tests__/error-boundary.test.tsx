@@ -1,7 +1,7 @@
 'use client';
 
-import { fireEvent,render, screen } from '@testing-library/react';
-import { afterEach,beforeEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorBoundary, withErrorBoundary } from '@/components/error-boundary';
 
@@ -13,11 +13,6 @@ beforeEach(() => {
 afterEach(() => {
   console.error = originalConsoleError;
 });
-
-function ThrowingComponent({ error }: { error?: Error }) {
-  if (error) throw error;
-  return <div data-testid="child">OK</div>;
-}
 
 function BombComponent(): JSX.Element {
   throw new Error('💣 Boom!');
@@ -129,6 +124,85 @@ describe('ErrorBoundary', () => {
     );
 
     expect(console.error).toHaveBeenCalled();
+  });
+
+  it('calls onError callback when an error is caught', () => {
+    const onError = vi.fn();
+
+    render(
+      <ErrorBoundary onError={onError}>
+        <BombComponent />
+      </ErrorBoundary>,
+    );
+
+    expect(onError).toHaveBeenCalledOnce();
+    expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect(onError.mock.calls[0][0].message).toBe('💣 Boom!');
+    // Second argument is ErrorInfo with componentStack
+    expect(onError.mock.calls[0][1]).toHaveProperty('componentStack');
+  });
+
+  it('does not call onError when no error occurs', () => {
+    const onError = vi.fn();
+
+    render(
+      <ErrorBoundary onError={onError}>
+        <div>All good</div>
+      </ErrorBoundary>,
+    );
+
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('auto-resets when resetKeys change', () => {
+    let shouldThrow = true;
+
+    function ConditionalBomb() {
+      if (shouldThrow) throw new Error('Reset key error');
+      return <div data-testid="reset-recovered">Back to normal</div>;
+    }
+
+    const { rerender } = render(
+      <ErrorBoundary resetKeys={['key-a']}>
+        <ConditionalBomb />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByTestId('error-boundary-fallback')).toBeInTheDocument();
+
+    // Fix the error and change resetKeys to trigger auto-reset
+    shouldThrow = false;
+    rerender(
+      <ErrorBoundary resetKeys={['key-b']}>
+        <ConditionalBomb />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByTestId('reset-recovered')).toHaveTextContent('Back to normal');
+    expect(screen.queryByTestId('error-boundary-fallback')).not.toBeInTheDocument();
+  });
+
+  it('does not reset when resetKeys stay the same', () => {
+    function AlwaysBomb(): JSX.Element {
+      throw new Error('Persistent error');
+    }
+
+    const { rerender } = render(
+      <ErrorBoundary resetKeys={['same']}>
+        <AlwaysBomb />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByTestId('error-boundary-fallback')).toBeInTheDocument();
+
+    // Re-render with same keys — should stay in error state
+    rerender(
+      <ErrorBoundary resetKeys={['same']}>
+        <AlwaysBomb />
+      </ErrorBoundary>,
+    );
+
+    expect(screen.getByTestId('error-boundary-fallback')).toBeInTheDocument();
   });
 });
 
