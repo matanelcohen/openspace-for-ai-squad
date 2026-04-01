@@ -2,7 +2,17 @@
  * Mock trace data generator for development.
  * Produces realistic trace hierarchies with agent → chain → tool/LLM spans.
  */
-import type { Span, SpanKind, Trace, TraceStats, TraceStatus, TraceSummary } from './trace-types';
+import type {
+  LlmInfo,
+  Span,
+  SpanEvent,
+  SpanKind,
+  ToolInfo,
+  Trace,
+  TraceStats,
+  TraceStatus,
+  TraceSummary,
+} from './trace-types';
 
 let nextId = 1;
 const id = () => `span-${nextId++}`;
@@ -54,6 +64,52 @@ function makeSpan(
       ? 0.00000025
       : 0.0000025;
 
+  const isTool = kind === 'tool';
+  const toolNameValue = isTool ? name : null;
+  const toolIdValue = isTool ? `tool-${name.replace(/\s+/g, '-').toLowerCase()}` : null;
+
+  const events: SpanEvent[] = [];
+  if (isTool) {
+    events.push({
+      name: 'tool.start',
+      timestamp: startTime,
+      attributes: { toolName: name },
+    });
+    events.push({
+      name: 'tool.end',
+      timestamp: startTime + duration,
+    });
+  }
+  if (isLlm) {
+    events.push({
+      name: 'llm.request',
+      timestamp: startTime,
+      attributes: { model: model ?? 'unknown' },
+    });
+  }
+
+  const toolInfo: ToolInfo | null = isTool
+    ? {
+        durationMs: duration,
+        parameterCount: 1,
+        inputBytes: JSON.stringify({ query: `Input for ${name}` }).length,
+        outputBytes:
+          status === 'error' ? null : JSON.stringify({ result: `Output from ${name}` }).length,
+        customAttributes: { toolVersion: '1.2.0' },
+      }
+    : null;
+
+  const llmInfo: LlmInfo | null = isLlm
+    ? {
+        messageCount: 1,
+        responseLength: status === 'error' ? null : 'Generated response text...'.length,
+        tokensPerSecond:
+          completionTokens > 0 && duration > 0
+            ? Math.round((completionTokens / (duration / 1000)) * 100) / 100
+            : null,
+      }
+    : null;
+
   return {
     id: id(),
     traceId,
@@ -82,6 +138,11 @@ function makeSpan(
     model,
     metadata: kind === 'tool' ? { toolVersion: '1.2.0' } : {},
     children,
+    toolName: toolNameValue,
+    toolId: toolIdValue,
+    events,
+    toolInfo,
+    llmInfo,
   };
 }
 
@@ -190,6 +251,11 @@ function generateTrace(index: number): Trace {
     model: null,
     metadata: { agentVersion: '2.1.0' },
     children: chains,
+    toolName: null,
+    toolId: null,
+    events: [{ name: 'agent.start', timestamp: startTime }],
+    toolInfo: null,
+    llmInfo: null,
   };
 
   // Collect all spans for counting
