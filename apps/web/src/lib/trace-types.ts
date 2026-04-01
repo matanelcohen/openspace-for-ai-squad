@@ -3,6 +3,12 @@
 export type SpanKind = 'agent' | 'chain' | 'tool' | 'llm' | 'retriever' | 'embedding';
 export type TraceStatus = 'success' | 'error' | 'running' | 'pending';
 
+export interface SpanEvent {
+  name: string;
+  timestamp: number;
+  attributes: Record<string, unknown>;
+}
+
 export interface Span {
   id: string;
   traceId: string;
@@ -16,9 +22,18 @@ export interface Span {
   input: unknown;
   output: unknown;
   error: string | null;
+  inputPreview: string | null;
+  outputPreview: string | null;
+  inputSize: number | null;
+  outputSize: number | null;
   tokens: { prompt: number; completion: number; total: number } | null;
   cost: number | null; // USD
   model: string | null;
+  // LLM-specific fields
+  llmProvider: string | null;
+  llmStreaming: boolean | null;
+  llmTimeToFirstTokenMs: number | null;
+  events: SpanEvent[];
   metadata: Record<string, unknown>;
   children: Span[];
 }

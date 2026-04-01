@@ -55,6 +55,12 @@ function toTraceSummary(row: TraceRecord): TraceSummaryResponse {
   };
 }
 
+interface SpanEvent {
+  name: string;
+  timestamp: number;
+  attributes: Record<string, unknown>;
+}
+
 interface SpanResponse {
   id: string;
   traceId: string;
@@ -68,12 +74,70 @@ interface SpanResponse {
   input: unknown;
   output: unknown;
   error: string | null;
+  inputPreview: string | null;
+  outputPreview: string | null;
+  inputSize: number | null;
+  outputSize: number | null;
   tokens: { prompt: number; completion: number; total: number } | null;
   cost: number | null;
   model: string | null;
+  // LLM-specific fields
+  llmProvider: string | null;
+  llmStreaming: boolean | null;
+  llmTimeToFirstTokenMs: number | null;
+  events: SpanEvent[];
   metadata: Record<string, unknown>;
   children: SpanResponse[];
 }
+
+// ── Cost calculation (mirrors apps/api/src/services/cost/index.ts) ─
+
+const MODEL_PRICING: Record<string, { input: number; output: number }> = {
+  'claude-opus-4.6': { input: 15, output: 75 },
+  'claude-sonnet-4.6': { input: 3, output: 15 },
+  'claude-haiku-4.5': { input: 0.8, output: 4 },
+  'gpt-5.4': { input: 5, output: 15 },
+  'gpt-5.1': { input: 2, output: 8 },
+  'gpt-4.1': { input: 2, output: 8 },
+};
+
+const DEFAULT_PRICING = { input: 3, output: 15 };
+
+function calcSpanCost(
+  promptTokens: number,
+  completionTokens: number,
+  model: string | null,
+): number {
+  const p = (model && MODEL_PRICING[model]) || DEFAULT_PRICING;
+  return (promptTokens * p.input + completionTokens * p.output) / 1_000_000;
+}
+
+// ── Preview helpers ───────────────────────────────────────────────
+
+function truncate(value: unknown, maxLen: number): string | null {
+  if (value == null) return null;
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 3) + '...';
+}
+
+function byteSize(value: unknown): number | null {
+  if (value == null) return null;
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  return Buffer.byteLength(str, 'utf8');
+}
+
+function parseEvents(raw: string): SpanEvent[] {
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed as SpanEvent[];
+  } catch {
+    return [];
+  }
+}
+
+// ── Span tree builder ─────────────────────────────────────────────
 
 function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[] {
   const spanMap = new Map<string, SpanResponse>();
@@ -81,34 +145,104 @@ function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[
 
   for (const s of spans) {
     const attrs = JSON.parse(s.attributes) as Record<string, unknown>;
-    const prompt = attrs['ai.prompt'] as string | undefined;
-    const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
-    const response = attrs['ai.response'] as string | undefined;
-    const errorMsg = attrs['ai.error'] as string | undefined;
-    const model = attrs['ai.model'] as string | undefined;
+    const isTool = s.kind === 'tool' || s.name.startsWith('tool:');
+    const isLlm = s.kind === 'llm';
 
-    const input: Record<string, unknown> = {};
-    if (prompt) input.prompt = prompt;
-    if (systemPrompt) input.systemPrompt = systemPrompt;
+    // ── Name resolution ──────────────────────────────────────────
+    let name = s.name;
+    if (isTool) {
+      const toolName = attrs['tool.name'] as string | undefined;
+      if (toolName) name = toolName;
+      else if (s.name.startsWith('tool:')) name = s.name.slice(5);
+    }
 
-    const output = response ? { response } : null;
+    // ── Input / Output / Error extraction ────────────────────────
+    let input: unknown = null;
+    let output: unknown = null;
+    let errorMsg: string | null = null;
 
+    if (isTool) {
+      input = attrs['tool.input'] ?? null;
+      output = attrs['tool.output'] ?? null;
+      errorMsg = (attrs['tool.error'] as string) ?? null;
+    }
+
+    // Fall back to ai.* attributes (legacy / LLM spans)
+    if (input == null) {
+      const prompt = attrs['ai.prompt'] as string | undefined;
+      const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
+      if (prompt || systemPrompt) {
+        const inp: Record<string, unknown> = {};
+        if (prompt) inp.prompt = prompt;
+        if (systemPrompt) inp.systemPrompt = systemPrompt;
+        input = inp;
+      }
+    }
+
+    if (output == null) {
+      const response = attrs['ai.response'] as string | undefined;
+      if (response) output = { response };
+    }
+
+    if (!errorMsg) {
+      errorMsg = (attrs['ai.error'] as string) ?? null;
+    }
+
+    // ── Model ────────────────────────────────────────────────────
+    const model = (attrs['llm.model'] as string) ?? (attrs['ai.model'] as string) ?? null;
+
+    // ── LLM-specific fields ──────────────────────────────────────
+    const llmProvider = isLlm ? ((attrs['llm.provider'] as string) ?? null) : null;
+    const llmStreaming =
+      isLlm && attrs['llm.streaming'] != null ? Boolean(attrs['llm.streaming']) : null;
+    const llmTimeToFirstTokenMs = isLlm
+      ? ((attrs['llm.time_to_first_token_ms'] as number) ?? null)
+      : null;
+
+    // ── Per-span tokens & cost ───────────────────────────────────
+    const promptTokens =
+      (attrs['llm.prompt_tokens'] as number) ?? (attrs['ai.prompt_tokens_estimate'] as number) ?? 0;
+    const completionTokens =
+      (attrs['llm.completion_tokens'] as number) ??
+      (attrs['ai.completion_tokens_estimate'] as number) ??
+      0;
+    const totalTokens = promptTokens + completionTokens;
+    const hasTokens = promptTokens > 0 || completionTokens > 0;
+
+    const explicitCost = attrs['llm.cost_usd'] as number | undefined;
+    const cost =
+      explicitCost ?? (hasTokens ? calcSpanCost(promptTokens, completionTokens, model) : null);
+
+    // ── Events ───────────────────────────────────────────────────
+    const events = parseEvents(s.events);
+
+    // ── Build node ───────────────────────────────────────────────
     const node: SpanResponse = {
       id: s.id,
       traceId: s.trace_id,
       parentId: s.parent_span_id,
-      name: s.name,
+      name,
       kind: s.kind as SpanResponse['kind'],
       status: mapStatus(s.status),
       startTime: s.start_time,
       endTime: s.end_time,
       duration: s.duration_ms,
-      input: Object.keys(input).length > 0 ? input : null,
+      input,
       output,
-      error: errorMsg ?? null,
-      tokens: null,
-      cost: null,
-      model: model ?? null,
+      error: errorMsg,
+      inputPreview: truncate(input, 120),
+      outputPreview: truncate(output, 120),
+      inputSize: byteSize(input),
+      outputSize: byteSize(output),
+      tokens: hasTokens
+        ? { prompt: promptTokens, completion: completionTokens, total: totalTokens }
+        : null,
+      cost,
+      model,
+      llmProvider,
+      llmStreaming,
+      llmTimeToFirstTokenMs,
+      events,
       metadata: attrs,
       children: [],
     };
@@ -180,9 +314,17 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
       input: null,
       output: null,
       error: trace.error_message,
+      inputPreview: null,
+      outputPreview: null,
+      inputSize: null,
+      outputSize: null,
       tokens: null,
       cost: null,
       model: null,
+      llmProvider: null,
+      llmStreaming: null,
+      llmTimeToFirstTokenMs: null,
+      events: [],
       metadata: {},
       children: [],
     };

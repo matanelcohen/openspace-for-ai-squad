@@ -7,6 +7,19 @@ import type { Span, SpanKind, Trace, TraceStats, TraceStatus, TraceSummary } fro
 let nextId = 1;
 const id = () => `span-${nextId++}`;
 
+function truncatePreview(value: unknown, maxLen: number): string | null {
+  if (value == null) return null;
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  if (str.length <= maxLen) return str;
+  return str.slice(0, maxLen - 3) + '...';
+}
+
+function mockByteSize(value: unknown): number | null {
+  if (value == null) return null;
+  const str = typeof value === 'string' ? value : JSON.stringify(value);
+  return str.length; // approximate in browser context
+}
+
 const AGENT_NAMES = ['Fry', 'Leela', 'Bender', 'Professor', 'Zoidberg'];
 const TOOL_NAMES = [
   'web_search',
@@ -54,6 +67,17 @@ function makeSpan(
       ? 0.00000025
       : 0.0000025;
 
+  const inputData =
+    kind === 'llm'
+      ? { messages: [{ role: 'user', content: 'Sample prompt...' }] }
+      : { query: `Input for ${name}` };
+  const outputData =
+    status === 'error'
+      ? null
+      : kind === 'llm'
+        ? { content: 'Generated response text...' }
+        : { result: `Output from ${name}` };
+
   return {
     id: id(),
     traceId,
@@ -64,22 +88,22 @@ function makeSpan(
     startTime,
     endTime: startTime + duration,
     duration,
-    input:
-      kind === 'llm'
-        ? { messages: [{ role: 'user', content: 'Sample prompt...' }] }
-        : { query: `Input for ${name}` },
-    output:
-      status === 'error'
-        ? null
-        : kind === 'llm'
-          ? { content: 'Generated response text...' }
-          : { result: `Output from ${name}` },
+    input: inputData,
+    output: outputData,
     error: status === 'error' ? `${name} failed: timeout after ${duration}ms` : null,
+    inputPreview: truncatePreview(inputData, 120),
+    outputPreview: truncatePreview(outputData, 120),
+    inputSize: mockByteSize(inputData),
+    outputSize: mockByteSize(outputData),
     tokens: isLlm
       ? { prompt: promptTokens, completion: completionTokens, total: totalTokens }
       : null,
     cost: isLlm ? totalTokens * costPerToken : null,
     model,
+    llmProvider: isLlm ? (model?.includes('claude') ? 'anthropic' : 'openai') : null,
+    llmStreaming: isLlm ? true : null,
+    llmTimeToFirstTokenMs: isLlm ? randomInt(50, 400) : null,
+    events: [],
     metadata: kind === 'tool' ? { toolVersion: '1.2.0' } : {},
     children,
   };
@@ -172,6 +196,9 @@ function generateTrace(index: number): Trace {
   const endTime = isRunning ? null : startTime + (totalDuration ?? 0);
   const status: TraceStatus = isRunning ? 'running' : hasError ? 'error' : 'success';
 
+  const rootInput = { task: `Task #${1000 + index}: Process user request` };
+  const rootOutput = status === 'error' ? null : { result: 'Task completed successfully' };
+
   const rootSpan: Span = {
     id: agentSpanId,
     traceId,
@@ -182,12 +209,20 @@ function generateTrace(index: number): Trace {
     startTime,
     endTime,
     duration: totalDuration,
-    input: { task: `Task #${1000 + index}: Process user request` },
-    output: status === 'error' ? null : { result: 'Task completed successfully' },
+    input: rootInput,
+    output: rootOutput,
     error: null,
+    inputPreview: truncatePreview(rootInput, 120),
+    outputPreview: truncatePreview(rootOutput, 120),
+    inputSize: mockByteSize(rootInput),
+    outputSize: mockByteSize(rootOutput),
     tokens: null,
     cost: null,
     model: null,
+    llmProvider: null,
+    llmStreaming: null,
+    llmTimeToFirstTokenMs: null,
+    events: [],
     metadata: { agentVersion: '2.1.0' },
     children: chains,
   };
