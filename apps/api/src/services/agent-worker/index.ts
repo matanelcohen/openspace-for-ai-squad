@@ -974,33 +974,34 @@ export class AgentWorkerService {
 
       let result;
       let worktree: WorktreeInfo | null = null;
+      
+      // Always create sandbox for isolation
+      const wts = this.config.worktreeService;
+      let workDir = join(this.config.squadDir, '..');
+      if (wts) {
+        const parentId = task.labels
+          ?.find((l) => l.startsWith('parent:'))
+          ?.replace('parent:', '');
+        worktree = await wts.create(taskId, {
+          baseBranch: parentId ? `feature/${parentId}` : undefined,
+          parentTaskId: parentId ?? undefined,
+        });
+        workDir = worktree.path;
+        console.log(`[AgentWorker] ${agent.name} using sandbox: ${worktree.branch} → ${workDir}`);
+        // Update prompt file with worktree info
+        try {
+          const promptPath = join(this.config.squadDir, '.cache', 'prompts', `${taskId}.json`);
+          if (existsSync(promptPath)) {
+            const data = JSON.parse(readFileSync(promptPath, 'utf-8'));
+            data.workingDirectory = workDir;
+            data.branch = worktree.branch;
+            writeFileSync(promptPath, JSON.stringify(data, null, 2), 'utf-8');
+          }
+        } catch { /* non-critical */ }
+      }
+
       if (this.config.aiProvider.agenticCompletion) {
-        // Determine working directory: use worktree sandbox if available
-        let workDir: string;
-        const wts = this.config.worktreeService;
-        if (wts) {
-          const parentId = task.labels
-            ?.find((l) => l.startsWith('parent:'))
-            ?.replace('parent:', '');
-          worktree = await wts.create(taskId, {
-            baseBranch: parentId ? `feature/${parentId}` : undefined,
-            parentTaskId: parentId ?? undefined,
-          });
-          workDir = worktree.path;
-          console.log(`[AgentWorker] ${agent.name} using sandbox: ${worktree.branch} → ${workDir}`);
-          // Update prompt file with worktree info
-          try {
-            const promptPath = join(this.config.squadDir, '.cache', 'prompts', `${taskId}.json`);
-            if (existsSync(promptPath)) {
-              const data = JSON.parse(readFileSync(promptPath, 'utf-8'));
-              data.workingDirectory = workDir;
-              data.branch = worktree.branch;
-              writeFileSync(promptPath, JSON.stringify(data, null, 2), 'utf-8');
-            }
-          } catch { /* non-critical */ }
-        } else {
-          workDir = join(this.config.squadDir, '..');
-        }
+        console.log(`[AgentWorker] ${agent.name} using agentic mode in ${workDir}`);
 
         // Determine timeout based on priority
         const PRIORITY_TIMEOUTS: Record<string, number> = {
