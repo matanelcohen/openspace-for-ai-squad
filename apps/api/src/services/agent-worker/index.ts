@@ -1102,7 +1102,7 @@ export class AgentWorkerService {
         : '';
 
       await this.patchTask(taskId, {
-        status: prInfo ? 'in-review' : 'done',
+        status: worktree ? 'in-review' : 'done',
         labels: prInfo
           ? [...(task.labels ?? []), `pr:${prInfo.number}`, 'merge:auto']
           : task.labels,
