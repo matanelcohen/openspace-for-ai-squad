@@ -54,9 +54,9 @@ export class GitHubService {
 
   async createBranch(name: string, from?: string): Promise<void> {
     if (from) {
-      this.exec(`git checkout -b ${this.shellEscape(name)} ${this.shellEscape(from)}`);
+      this.exec(`git branch ${this.shellEscape(name)} ${this.shellEscape(from)}`);
     } else {
-      this.exec(`git checkout -b ${this.shellEscape(name)}`);
+      this.exec(`git branch ${this.shellEscape(name)}`);
     }
   }
 
