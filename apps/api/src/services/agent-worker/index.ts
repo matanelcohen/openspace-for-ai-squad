@@ -669,16 +669,11 @@ export class AgentWorkerService {
           `\n\n---\n**[${now()}]** 🚀 ${agent.name} started working on this task.\n**[${now()}]** 🎚️ Response tier: **${tier}** — ${tierDef.description} (maxAgents: ${tierDef.maxAgents})`,
       });
 
-      // ── Lead delegation: break down task and assign to team ──
-      // Lead agents always delegate complex tasks (even manual assignments).
-      // Non-lead agents always execute directly.
+      // ── Lead always delegates — lead is a manager, not a coder ──
       const isLead =
         agent.role.toLowerCase().includes('lead') || agent.role.toLowerCase().includes('architect');
-      const isComplex = (task.description?.length ?? 0) > 200;
-      const shouldSkipDelegation = this.skipDelegation.has(taskId);
-      if (shouldSkipDelegation) this.skipDelegation.delete(taskId);
 
-      if (isLead && isComplex) {
+      if (isLead) {
         await this.handleLeadDelegation(agent, task, taskId, tier);
         return;
       }

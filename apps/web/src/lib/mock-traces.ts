@@ -33,6 +33,24 @@ function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
+const TOOL_INPUTS: Record<string, unknown> = {
+  web_search: { query: 'latest AI agent frameworks 2025', max_results: 5 },
+  code_interpreter: { code: 'import pandas as pd\ndf = pd.read_csv("data.csv")\ndf.describe()' },
+  file_reader: { path: 'src/config.ts', encoding: 'utf-8' },
+  sql_query: { query: 'SELECT COUNT(*) FROM users WHERE active = true', database: 'production' },
+  api_call: { url: 'https://api.example.com/v1/data', method: 'GET', headers: { Authorization: 'Bearer ***' } },
+  image_gen: { prompt: 'A futuristic AI dashboard', size: '1024x1024' },
+};
+
+const TOOL_OUTPUTS: Record<string, unknown> = {
+  web_search: { results: [{ title: 'LangGraph vs CrewAI', url: 'https://...' }, { title: 'AutoGen 2.0', url: 'https://...' }], total: 5 },
+  code_interpreter: { stdout: '       col1      col2\ncount  1000.0  1000.0\nmean   45.2    89.7', exit_code: 0 },
+  file_reader: { content: 'export const config = { port: 3001, debug: true };', size_bytes: 52 },
+  sql_query: { rows: [{ count: 1847 }], duration_ms: 12 },
+  api_call: { status: 200, body: { items: ['...'], total: 42 } },
+  image_gen: { url: 'https://images.example.com/abc123.png', revised_prompt: 'A futuristic AI dashboard with holographic displays' },
+};
+
 function makeSpan(
   traceId: string,
   parentId: string | null,
@@ -44,6 +62,7 @@ function makeSpan(
   children: Span[] = [],
 ): Span {
   const isLlm = kind === 'llm';
+  const isTool = kind === 'tool';
   const promptTokens = isLlm ? randomInt(200, 4000) : 0;
   const completionTokens = isLlm ? randomInt(50, 2000) : 0;
   const totalTokens = promptTokens + completionTokens;
@@ -53,6 +72,10 @@ function makeSpan(
     : model?.includes('haiku')
       ? 0.00000025
       : 0.0000025;
+
+  // Build realistic tool input/output
+  const toolInput = isTool ? (TOOL_INPUTS[name] ?? { query: `Input for ${name}` }) : null;
+  const toolOutput = isTool && status !== 'error' ? (TOOL_OUTPUTS[name] ?? { result: `Output from ${name}` }) : null;
 
   return {
     id: id(),
@@ -65,22 +88,30 @@ function makeSpan(
     endTime: startTime + duration,
     duration,
     input:
-      kind === 'llm'
+      isLlm
         ? { messages: [{ role: 'user', content: 'Sample prompt...' }] }
-        : { query: `Input for ${name}` },
+        : isTool
+          ? toolInput
+          : { query: `Input for ${name}` },
     output:
       status === 'error'
         ? null
-        : kind === 'llm'
+        : isLlm
           ? { content: 'Generated response text...' }
-          : { result: `Output from ${name}` },
+          : isTool
+            ? toolOutput
+            : { result: `Output from ${name}` },
     error: status === 'error' ? `${name} failed: timeout after ${duration}ms` : null,
     tokens: isLlm
       ? { prompt: promptTokens, completion: completionTokens, total: totalTokens }
       : null,
     cost: isLlm ? totalTokens * costPerToken : null,
     model,
-    metadata: kind === 'tool' ? { toolVersion: '1.2.0' } : {},
+    metadata: isTool
+      ? { 'tool.name': name, 'tool.input': toolInput, 'tool.output': toolOutput, 'tool.duration_ms': duration }
+      : isLlm
+        ? { 'llm.model': model, 'llm.prompt_tokens': promptTokens, 'llm.completion_tokens': completionTokens }
+        : {},
     children,
   };
 }

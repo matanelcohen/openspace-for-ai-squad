@@ -81,17 +81,88 @@ function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[
 
   for (const s of spans) {
     const attrs = JSON.parse(s.attributes) as Record<string, unknown>;
-    const prompt = attrs['ai.prompt'] as string | undefined;
-    const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
-    const response = attrs['ai.response'] as string | undefined;
-    const errorMsg = attrs['ai.error'] as string | undefined;
-    const model = attrs['ai.model'] as string | undefined;
 
-    const input: Record<string, unknown> = {};
-    if (prompt) input.prompt = prompt;
-    if (systemPrompt) input.systemPrompt = systemPrompt;
+    // ── Extract kind-specific data ─────────────────────────────
+    let input: unknown = null;
+    let output: unknown = null;
+    let error: string | null = null;
+    let model: string | null = null;
+    let tokens: { prompt: number; completion: number; total: number } | null = null;
+    let cost: number | null = null;
 
-    const output = response ? { response } : null;
+    if (s.kind === 'tool') {
+      // Tool spans: extract tool.* attributes
+      const toolInput = attrs['tool.input'] ?? attrs['arguments'] ?? attrs['input'];
+      const toolOutput = attrs['tool.output'] ?? attrs['output'] ?? attrs['result'];
+      const toolError = attrs['tool.error'] as string | undefined;
+      const toolName = attrs['tool.name'] as string | undefined;
+      const toolDuration = attrs['tool.duration_ms'] as number | undefined;
+
+      if (toolInput != null || toolName) {
+        input = toolInput != null ? toolInput : { tool: toolName };
+      }
+      output = toolOutput ?? null;
+      error = toolError ?? null;
+
+      // Include duration in metadata if available
+      if (toolDuration != null) {
+        attrs['tool.duration_ms'] = toolDuration;
+      }
+    } else if (s.kind === 'llm') {
+      // LLM spans: extract llm.* and ai.* attributes
+      const prompt = attrs['ai.prompt'] as string | undefined;
+      const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
+      const response = attrs['ai.response'] as string | undefined;
+      const llmModel = (attrs['llm.model'] as string) ?? (attrs['ai.model'] as string) ?? null;
+
+      const inputObj: Record<string, unknown> = {};
+      if (prompt) inputObj.prompt = prompt;
+      if (systemPrompt) inputObj.systemPrompt = systemPrompt;
+      input = Object.keys(inputObj).length > 0 ? inputObj : null;
+      output = response ? { response } : null;
+      model = llmModel;
+
+      // Token usage
+      const promptTokens = attrs['llm.prompt_tokens'] as number | undefined;
+      const completionTokens = attrs['llm.completion_tokens'] as number | undefined;
+      if (promptTokens != null || completionTokens != null) {
+        const pt = promptTokens ?? 0;
+        const ct = completionTokens ?? 0;
+        tokens = { prompt: pt, completion: ct, total: pt + ct };
+      }
+
+      // Cost
+      const llmCost = attrs['llm.cost_usd'] as number | undefined;
+      if (llmCost != null) cost = llmCost;
+
+      // Error from exception events
+      error = (attrs['ai.error'] as string | undefined) ?? null;
+    } else {
+      // Other kinds (internal, agent, reasoning): fallback to ai.* attributes
+      const prompt = attrs['ai.prompt'] as string | undefined;
+      const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
+      const response = attrs['ai.response'] as string | undefined;
+      const errorMsg = attrs['ai.error'] as string | undefined;
+      model = (attrs['ai.model'] as string) ?? null;
+
+      const inputObj: Record<string, unknown> = {};
+      if (prompt) inputObj.prompt = prompt;
+      if (systemPrompt) inputObj.systemPrompt = systemPrompt;
+      input = Object.keys(inputObj).length > 0 ? inputObj : null;
+      output = response ? { response } : null;
+      error = errorMsg ?? null;
+    }
+
+    // Also check events for exception errors (all span kinds)
+    if (!error) {
+      try {
+        const events = JSON.parse(s.events) as Array<{ name: string; attributes?: Record<string, unknown> }>;
+        const exception = events.find((e) => e.name === 'exception');
+        if (exception?.attributes?.['exception.message']) {
+          error = exception.attributes['exception.message'] as string;
+        }
+      } catch { /* ignore parse errors */ }
+    }
 
     const node: SpanResponse = {
       id: s.id,
@@ -103,12 +174,12 @@ function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[
       startTime: s.start_time,
       endTime: s.end_time,
       duration: s.duration_ms,
-      input: Object.keys(input).length > 0 ? input : null,
+      input,
       output,
-      error: errorMsg ?? null,
-      tokens: null,
-      cost: null,
-      model: model ?? null,
+      error,
+      tokens,
+      cost,
+      model,
       metadata: attrs,
       children: [],
     };

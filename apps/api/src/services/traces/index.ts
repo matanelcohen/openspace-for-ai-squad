@@ -197,7 +197,29 @@ export class TraceService {
           WHEN (SELECT COUNT(*) FROM spans WHERE trace_id = @id AND (end_time IS NULL OR status = 'pending')) > 0
           THEN 'pending'
           ELSE 'completed'
-        END
+        END,
+        total_tokens = COALESCE(
+          (SELECT SUM(
+            COALESCE(json_extract(attributes, '$."llm.prompt_tokens"'), 0) +
+            COALESCE(json_extract(attributes, '$."llm.completion_tokens"'), 0)
+          ) FROM spans WHERE trace_id = @id AND kind = 'llm'),
+          traces.total_tokens
+        ),
+        prompt_tokens = COALESCE(
+          (SELECT SUM(COALESCE(json_extract(attributes, '$."llm.prompt_tokens"'), 0))
+           FROM spans WHERE trace_id = @id AND kind = 'llm'),
+          traces.prompt_tokens
+        ),
+        completion_tokens = COALESCE(
+          (SELECT SUM(COALESCE(json_extract(attributes, '$."llm.completion_tokens"'), 0))
+           FROM spans WHERE trace_id = @id AND kind = 'llm'),
+          traces.completion_tokens
+        ),
+        cost_usd = COALESCE(
+          (SELECT SUM(COALESCE(json_extract(attributes, '$."llm.cost_usd"'), 0))
+           FROM spans WHERE trace_id = @id AND kind = 'llm'),
+          traces.cost_usd
+        )
       WHERE id = @id
     `);
   }
@@ -373,7 +395,8 @@ export class TraceService {
     this.refreshTraceAggregatesStmt.run({ id: traceId });
   }
 
-  /** Add a sub-span to an existing trace (for thinking, tool calls, etc.) */
+  /** Add a sub-span to an existing trace (for thinking, tool calls, etc.).
+   *  Returns the generated spanId so callers can update it later. */
   addSubSpan(
     traceId: string,
     parentSpanId: string,
@@ -382,24 +405,74 @@ export class TraceService {
       kind: string;
       startTime: number;
       endTime?: number;
+      status?: string;
       attributes?: Record<string, unknown>;
     },
-  ): void {
+  ): string {
     const spanId = randomUUID();
     const now = Date.now();
+    const hasEnd = span.endTime != null;
     this.insertSpan.run({
       id: spanId,
       trace_id: traceId,
       parent_span_id: parentSpanId,
       name: span.name,
       kind: span.kind,
-      status: 'success',
+      status: span.status ?? (hasEnd ? 'completed' : 'pending'),
       start_time: span.startTime,
-      end_time: span.endTime ?? now,
-      duration_ms: (span.endTime ?? now) - span.startTime,
+      end_time: span.endTime ?? (hasEnd ? now : null),
+      duration_ms: hasEnd ? (span.endTime! - span.startTime) : null,
       attributes: JSON.stringify(span.attributes ?? {}),
       events: '[]',
     });
+    this.refreshTraceAggregatesStmt.run({ id: traceId });
+    return spanId;
+  }
+
+  /**
+   * Update an existing sub-span with completion data (output, end time, status).
+   * Used to record tool results when a tool_result event arrives after tool_start.
+   */
+  completeSubSpan(
+    traceId: string,
+    spanId: string,
+    update: {
+      status?: string;
+      endTime?: number;
+      attributes?: Record<string, unknown>;
+    },
+  ): void {
+    const now = update.endTime ?? Date.now();
+
+    // Merge new attributes with existing ones
+    const existingSpan = this.selectSpansByTrace
+      .all({ trace_id: traceId })
+      .find((s) => (s as SpanRecord).id === spanId) as SpanRecord | undefined;
+
+    const existingAttrs = existingSpan
+      ? (JSON.parse(existingSpan.attributes) as Record<string, unknown>)
+      : {};
+    const mergedAttrs = { ...existingAttrs, ...(update.attributes ?? {}) };
+
+    const startTime = existingSpan?.start_time ?? now;
+    const durationMs = now - startTime;
+
+    if (update.status === 'error') {
+      this.updateSpanError.run({
+        id: spanId,
+        end_time: now,
+        duration_ms: durationMs,
+        attributes: JSON.stringify(mergedAttrs),
+      });
+    } else {
+      this.updateSpanComplete.run({
+        id: spanId,
+        end_time: now,
+        duration_ms: durationMs,
+        attributes: JSON.stringify(mergedAttrs),
+      });
+    }
+
     this.refreshTraceAggregatesStmt.run({ id: traceId });
   }
 

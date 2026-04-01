@@ -36,10 +36,12 @@ const SPAN_ICONS: Record<string, React.ElementType> = {
   retriever: SearchIcon,
   embedding: Brain,
   internal: Zap,
+  reasoning: Brain,
   server: Cpu,
   client: Cpu,
   producer: Zap,
   consumer: Zap,
+  unspecified: Zap,
 };
 
 const SPAN_COLORS: Record<string, string> = {
@@ -49,11 +51,13 @@ const SPAN_COLORS: Record<string, string> = {
   llm: 'bg-green-500',
   retriever: 'bg-cyan-500',
   embedding: 'bg-pink-500',
-  internal: 'bg-blue-500',
+  internal: 'bg-slate-500',
+  reasoning: 'bg-violet-500',
   server: 'bg-green-500',
   client: 'bg-green-500',
   producer: 'bg-blue-500',
   consumer: 'bg-blue-500',
+  unspecified: 'bg-gray-500',
 };
 
 const SPAN_BG_COLORS: Record<string, string> = {
@@ -63,11 +67,13 @@ const SPAN_BG_COLORS: Record<string, string> = {
   llm: 'bg-green-500/20 border-green-500/40',
   retriever: 'bg-cyan-500/20 border-cyan-500/40',
   embedding: 'bg-pink-500/20 border-pink-500/40',
-  internal: 'bg-blue-500/20 border-blue-500/40',
+  internal: 'bg-slate-500/20 border-slate-500/40',
+  reasoning: 'bg-violet-500/20 border-violet-500/40',
   server: 'bg-green-500/20 border-green-500/40',
   client: 'bg-green-500/20 border-green-500/40',
   producer: 'bg-blue-500/20 border-blue-500/40',
   consumer: 'bg-blue-500/20 border-blue-500/40',
+  unspecified: 'bg-gray-500/20 border-gray-500/40',
 };
 
 const STATUS_COLORS: Record<TraceStatus, string> = {

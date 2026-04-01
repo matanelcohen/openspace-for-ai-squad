@@ -56,6 +56,16 @@ export interface TraceServiceLike {
       kind: string;
       startTime: number;
       endTime?: number;
+      status?: string;
+      attributes?: Record<string, unknown>;
+    },
+  ): string;
+  completeSubSpan?(
+    traceId: string,
+    spanId: string,
+    update: {
+      status?: string;
+      endTime?: number;
       attributes?: Record<string, unknown>;
     },
   ): void;
@@ -380,8 +390,11 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       // ── Trace sub-spans for AI events ──────────────────────
       if (this.traceService?.addSubSpan && traceIds) {
         const addSub = this.traceService.addSubSpan.bind(this.traceService);
+        const completeSub = this.traceService.completeSubSpan?.bind(this.traceService);
         const tId = traceIds.traceId;
         const sId = traceIds.spanId;
+        // Track active tool spans so we can complete them on tool_result
+        const activeToolSpans = new Map<string, { spanId: string; startTime: number }>();
 
         addSub(tId, sId, {
           name: '🔌 Agentic session created',
@@ -411,14 +424,62 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                   attributes: event.data,
                 });
                 break;
-              case 'tool_start':
-                addSub(tId, sId, {
-                  name: `🔧 ${event.data?.name ?? 'tool'}`,
+              case 'tool_start': {
+                const toolName = (event.data?.name as string) ?? 'tool';
+                const toolInput = event.data?.arguments ?? event.data?.input;
+                const spanId = addSub(tId, sId, {
+                  name: `🔧 ${toolName}`,
                   kind: 'tool',
                   startTime: now,
-                  attributes: event.data,
+                  status: 'pending',
+                  attributes: {
+                    'tool.name': toolName,
+                    'tool.input': toolInput,
+                    ...event.data,
+                  },
                 });
+                activeToolSpans.set(toolName, { spanId, startTime: now });
                 break;
+              }
+              case 'tool_result': {
+                const toolName = (event.data?.name as string) ?? '';
+                const toolOutput = event.data?.output ?? event.data?.result;
+                const toolError = event.data?.error as string | undefined;
+                // Find matching active span — try exact name, then most recent
+                let match = activeToolSpans.get(toolName);
+                if (!match && activeToolSpans.size > 0) {
+                  const last = [...activeToolSpans.entries()].pop();
+                  if (last) match = last[1];
+                }
+                if (match && completeSub) {
+                  const durationMs = Date.now() - match.startTime;
+                  completeSub(tId, match.spanId, {
+                    status: toolError ? 'error' : 'completed',
+                    endTime: Date.now(),
+                    attributes: {
+                      'tool.output': toolOutput,
+                      'tool.duration_ms': durationMs,
+                      ...(toolError && { 'tool.error': toolError }),
+                    },
+                  });
+                  activeToolSpans.delete(toolName);
+                } else {
+                  // No matching start span — create a standalone completed tool span
+                  addSub(tId, sId, {
+                    name: `🔧 ${toolName || 'tool'} (result)`,
+                    kind: 'tool',
+                    startTime: Date.now(),
+                    endTime: Date.now(),
+                    status: toolError ? 'error' : 'completed',
+                    attributes: {
+                      'tool.name': toolName,
+                      'tool.output': toolOutput,
+                      ...(toolError && { 'tool.error': toolError }),
+                    },
+                  });
+                }
+                break;
+              }
               case 'info':
                 addSub(tId, sId, {
                   name: `ℹ️ ${event.data?.message ?? ''}`,
@@ -635,8 +696,11 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       // Record sub-spans for AI events (thinking, tool calls, etc.)
       if (this.traceService?.addSubSpan && traceIds) {
         const addSub = this.traceService.addSubSpan.bind(this.traceService);
+        const completeSub = this.traceService.completeSubSpan?.bind(this.traceService);
         const tId = traceIds.traceId;
         const sId = traceIds.spanId;
+        // Track active tool spans so we can complete them on tool_result
+        const activeToolSpans = new Map<string, { spanId: string; startTime: number }>();
 
         // Always record session creation
         addSub(tId, sId, {
@@ -666,14 +730,60 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                   attributes: event.data,
                 });
                 break;
-              case 'tool_start':
-                addSub(tId, sId, {
-                  name: `🔧 ${event.data?.name ?? 'tool'}`,
+              case 'tool_start': {
+                const toolName = (event.data?.name as string) ?? 'tool';
+                const toolInput = event.data?.arguments ?? event.data?.input;
+                const spanId = addSub(tId, sId, {
+                  name: `🔧 ${toolName}`,
                   kind: 'tool',
                   startTime: now,
-                  attributes: event.data,
+                  status: 'pending',
+                  attributes: {
+                    'tool.name': toolName,
+                    'tool.input': toolInput,
+                    ...event.data,
+                  },
                 });
+                activeToolSpans.set(toolName, { spanId, startTime: now });
                 break;
+              }
+              case 'tool_result': {
+                const toolName = (event.data?.name as string) ?? '';
+                const toolOutput = event.data?.output ?? event.data?.result;
+                const toolError = event.data?.error as string | undefined;
+                let match = activeToolSpans.get(toolName);
+                if (!match && activeToolSpans.size > 0) {
+                  const last = [...activeToolSpans.entries()].pop();
+                  if (last) match = last[1];
+                }
+                if (match && completeSub) {
+                  const durationMs = Date.now() - match.startTime;
+                  completeSub(tId, match.spanId, {
+                    status: toolError ? 'error' : 'completed',
+                    endTime: Date.now(),
+                    attributes: {
+                      'tool.output': toolOutput,
+                      'tool.duration_ms': durationMs,
+                      ...(toolError && { 'tool.error': toolError }),
+                    },
+                  });
+                  activeToolSpans.delete(toolName);
+                } else {
+                  addSub(tId, sId, {
+                    name: `🔧 ${toolName || 'tool'} (result)`,
+                    kind: 'tool',
+                    startTime: Date.now(),
+                    endTime: Date.now(),
+                    status: toolError ? 'error' : 'completed',
+                    attributes: {
+                      'tool.name': toolName,
+                      'tool.output': toolOutput,
+                      ...(toolError && { 'tool.error': toolError }),
+                    },
+                  });
+                }
+                break;
+              }
               case 'info':
                 addSub(tId, sId, {
                   name: `ℹ️ ${event.data?.message ?? ''}`,
@@ -911,6 +1021,39 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       eventCallback({
         type: 'tool_start',
         data: { name: toolName, arguments: toolArgs },
+      });
+    });
+    // Listen for tool completion events to capture output
+    session.on('tool.result', (e: unknown) => {
+      const ev = e as Record<string, unknown>;
+      const data = (ev.data ?? ev) as Record<string, unknown>;
+      const toolName =
+        (data.name as string) ??
+        (data.toolName as string) ??
+        (data.tool_name as string) ??
+        ((data.tool as Record<string, unknown>)?.name as string) ??
+        undefined;
+      const output = data.output ?? data.result ?? data.content;
+      const error = data.error as string | undefined;
+      eventCallback({
+        type: 'tool_result',
+        data: { name: toolName, output, error },
+      });
+    });
+    session.on('tool.execution_complete', (e: unknown) => {
+      const ev = e as Record<string, unknown>;
+      const data = (ev.data ?? ev) as Record<string, unknown>;
+      const toolName =
+        (data.name as string) ??
+        (data.toolName as string) ??
+        (data.tool_name as string) ??
+        ((data.tool as Record<string, unknown>)?.name as string) ??
+        undefined;
+      const output = data.output ?? data.result ?? data.content;
+      const error = data.error as string | undefined;
+      eventCallback({
+        type: 'tool_result',
+        data: { name: toolName, output, error },
       });
     });
     session.on('session.info', (e: unknown) => {

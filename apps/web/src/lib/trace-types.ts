@@ -1,6 +1,6 @@
 /** Trace & Span types for the trace viewer */
 
-export type SpanKind = 'agent' | 'chain' | 'tool' | 'llm' | 'retriever' | 'embedding';
+export type SpanKind = 'agent' | 'chain' | 'tool' | 'llm' | 'retriever' | 'embedding' | 'internal' | 'reasoning' | 'server' | 'client' | 'unspecified';
 export type TraceStatus = 'success' | 'error' | 'running' | 'pending';
 
 export interface Span {
