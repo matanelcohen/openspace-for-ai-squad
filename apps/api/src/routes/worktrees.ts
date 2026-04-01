@@ -107,6 +107,22 @@ const worktreesRoute: FastifyPluginAsync = async (app) => {
       return reply.code(400).send({ error: message });
     }
   });
+
+  // Delete ALL worktrees
+  app.delete('/api/worktrees', async (_req, reply) => {
+    const wts = (app as any).worktreeService;
+    if (!wts) return reply.code(503).send({ error: 'WorktreeService not available' });
+
+    const all = wts.list();
+    let destroyed = 0;
+    for (const wt of all) {
+      try {
+        await wts.destroy(wt.taskId);
+        destroyed++;
+      } catch { /* best effort */ }
+    }
+    return { destroyed, total: all.length };
+  });
 };
 
 export default worktreesRoute;

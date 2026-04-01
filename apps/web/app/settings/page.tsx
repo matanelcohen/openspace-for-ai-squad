@@ -20,6 +20,7 @@ import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { useHealthCheck, usePruneMessages, useSystemConfig } from '@/hooks/use-settings';
 import { useSquad } from '@/hooks/use-squad';
 import { useActiveWorkspace, useDeleteSquad } from '@/hooks/use-workspaces';
+import { api } from '@/lib/api-client';
 
 function HealthCheckSection() {
   const { data: health, isLoading, refetch, isFetching } = useHealthCheck();
@@ -275,6 +276,8 @@ function DangerZoneSection() {
   const { data: workspace } = useActiveWorkspace();
   const deleteSquad = useDeleteSquad();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cleaningWorktrees, setCleaningWorktrees] = useState(false);
+  const [worktreeResult, setWorktreeResult] = useState<string | null>(null);
 
   const handleDelete = () => {
     if (!workspace?.id) return;
@@ -286,6 +289,18 @@ function DangerZoneSection() {
     });
   };
 
+  const handleCleanWorktrees = async () => {
+    setCleaningWorktrees(true);
+    setWorktreeResult(null);
+    try {
+      const result = await api.delete<{ destroyed: number; total: number }>('/api/worktrees');
+      setWorktreeResult(`✅ Cleaned ${result.destroyed}/${result.total} worktrees`);
+    } catch (err) {
+      setWorktreeResult(`❌ Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+    setCleaningWorktrees(false);
+  };
+
   return (
     <Card className="border-destructive/50">
       <CardHeader>
@@ -295,6 +310,27 @@ function DangerZoneSection() {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex items-center justify-between rounded-md border border-destructive/30 px-4 py-3">
+          <div>
+            <p className="text-sm font-medium">Clear All Sandboxes</p>
+            <p className="text-xs text-muted-foreground">
+              Remove all git worktrees and their branches. Frees disk space and resets sandbox state.
+            </p>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={handleCleanWorktrees}
+            disabled={cleaningWorktrees}
+          >
+            <Trash2 className="mr-1 h-4 w-4" />
+            {cleaningWorktrees ? 'Cleaning…' : 'Clear Worktrees'}
+          </Button>
+        </div>
+        {worktreeResult && (
+          <p className="text-sm text-muted-foreground">{worktreeResult}</p>
+        )}
+
         <div className="flex items-center justify-between rounded-md border border-destructive/30 px-4 py-3">
           <div>
             <p className="text-sm font-medium">Delete Squad</p>
