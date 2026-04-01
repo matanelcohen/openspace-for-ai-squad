@@ -373,9 +373,7 @@ export async function buildApp(opts: AppOptions = {}) {
         a2aBaseUrl,
         worktreeService,
         codeReviewService,
-        teamStatusService,
       });
-      teamStatusService.setAgentWorker(workerService);
       // Start worker in background — don't block onReady hook
       workerService.start().then(async () => {
         // After recovery, clean up worktrees for done/blocked tasks

@@ -29,7 +29,6 @@ import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js'
 import type { WebSocketManager } from '../websocket/index.js';
 import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
 import { MetricsCollector } from './metrics.js';
-import type { TeamStatusService } from '../team-status/index.js';
 import type { CodeReviewService } from '../code-review/index.js';
 
 // ── Types ────────────────────────────────────────────────────────
@@ -62,8 +61,8 @@ interface AgentWorkerConfig {
   worktreeService?: WorktreeService | null;
   /** CodeReviewService for automated review of agent-created PRs. */
   codeReviewService?: CodeReviewService;
-  /** TeamStatusService for inter-agent awareness. */
-  teamStatusService?: TeamStatusService | null;
+  /** TeamStatusService for inter-agent awareness (optional). */
+  teamStatusService?: { getFormattedStatus(agentId: string): Promise<string>; trackWorking(agentId: string, taskId: string, title: string): void; trackIdle(agentId: string): void } | null;
   /** Task timeout in ms. Default: 30 minutes. */
   taskTimeoutMs?: number;
   /** Per-priority timeout overrides in ms. */
