@@ -14,6 +14,12 @@ export type SpanKind =
   | 'unspecified';
 export type TraceStatus = 'success' | 'error' | 'running' | 'pending';
 
+export interface SpanEvent {
+  name: string;
+  timestamp: number;
+  attributes?: Record<string, unknown>;
+}
+
 export interface Span {
   id: string;
   traceId: string;
@@ -26,14 +32,21 @@ export interface Span {
   duration: number | null; // ms
   input: unknown;
   output: unknown;
+  inputPreview: string | null;
+  outputPreview: string | null;
   error: string | null;
+  errorStack: string | null;
   tokens: { prompt: number; completion: number; total: number } | null;
   cost: number | null; // USD
   model: string | null;
   toolName: string | null;
+  toolId: string | null;
   provider: string | null;
-  inputPreview: string | null;
-  outputPreview: string | null;
+  timeToFirstToken: number | null; // ms, for LLM streaming spans
+  streaming: boolean | null;
+  inputBytes: number | null;
+  outputBytes: number | null;
+  events: SpanEvent[];
   metadata: Record<string, unknown>;
   children: Span[];
 }

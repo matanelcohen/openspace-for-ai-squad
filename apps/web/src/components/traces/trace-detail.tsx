@@ -14,7 +14,9 @@ import {
   Copy,
   Cpu,
   Download,
+  FileText,
   Loader2,
+  Radio,
   Search as SearchIcon,
   Wrench,
   Zap,
@@ -25,9 +27,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { useTrace } from '@/hooks/use-traces';
-import type { Span, SpanKind, TraceStatus } from '@/lib/trace-types';
+import type { Span, SpanEvent, SpanKind, TraceStatus } from '@/lib/trace-types';
 import { cn } from '@/lib/utils';
 
 // --- Helpers ---
@@ -104,9 +107,27 @@ function formatTimestamp(ts: number): string {
   });
 }
 
-function formatTokenCount(count: number): string {
+export function formatTokenCount(count: number): string {
   if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
   return count.toString();
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes == null) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+/** Derive a rich display label: tool_name for tools, model_name for LLM spans */
+function getSpanDisplayName(span: Span): string {
+  if (span.kind === 'tool') {
+    return span.toolName ?? span.name;
+  }
+  if (span.kind === 'llm' && span.model) {
+    return span.model;
+  }
+  return span.name;
 }
 
 const KIND_EMOJI: Record<string, string> = {
@@ -157,7 +178,7 @@ function flattenSpans(span: Span, depth: number = 0): FlatSpan[] {
 
 // --- Span Subtitle ---
 
-function SpanSubtitle({ span }: { span: Span }) {
+export function SpanSubtitle({ span }: { span: Span }) {
   let content: React.ReactNode = null;
 
   switch (span.kind) {
@@ -203,6 +224,146 @@ function SpanSubtitle({ span }: { span: Span }) {
   return <div className="truncate text-[10px] font-mono text-muted-foreground">{content}</div>;
 }
 
+// --- JSON Syntax Highlighting ---
+
+function SyntaxHighlightedJson({ data }: { data: unknown }) {
+  const json = JSON.stringify(data, null, 2) ?? 'null';
+  const highlighted = json
+    .replace(/("(?:\\.|[^"\\])*")\s*:/g, '<span class="text-blue-400">$1</span>:')
+    .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span class="text-green-400">$1</span>')
+    .replace(/:\s*(\d+\.?\d*)/g, ': <span class="text-amber-400">$1</span>')
+    .replace(/:\s*(true|false)/g, ': <span class="text-purple-400">$1</span>')
+    .replace(/:\s*(null)/g, ': <span class="text-red-400">$1</span>');
+
+  return (
+    <pre
+      className="whitespace-pre-wrap break-words text-xs font-mono text-muted-foreground"
+      dangerouslySetInnerHTML={{ __html: highlighted }}
+    />
+  );
+}
+
+// --- Error Detail Section ---
+
+function ErrorDetail({ error, errorStack }: { error: string; errorStack: string | null }) {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <CollapsibleTrigger asChild>
+        <button className="flex w-full items-center gap-2 rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-left text-sm text-red-600 transition-colors hover:bg-red-500/20 dark:text-red-400">
+          <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+          <span className="flex-1 truncate font-medium">{error}</span>
+          <ChevronDown
+            className={cn('h-4 w-4 flex-shrink-0 transition-transform', isOpen && 'rotate-180')}
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-1 rounded-md border border-red-500/30 bg-red-950/20 p-3">
+          <p className="mb-2 text-sm font-medium text-red-500">{error}</p>
+          {errorStack && (
+            <pre className="whitespace-pre-wrap break-words text-xs font-mono text-red-400/80">
+              {errorStack}
+            </pre>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+// --- Span Events Tab ---
+
+function SpanEventsTab({ events }: { events: SpanEvent[] }) {
+  if (!events.length) {
+    return (
+      <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+        <FileText className="mb-2 h-8 w-8 opacity-50" />
+        <p className="text-xs">No events recorded</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {events.map((event, i) => {
+        const isException = event.name === 'exception' || event.name === 'error';
+        return (
+          <div
+            key={`${event.name}-${event.timestamp}-${i}`}
+            className={cn(
+              'rounded-md border p-3',
+              isException ? 'border-red-500/40 bg-red-500/5' : 'border-border/50 bg-muted/20',
+            )}
+          >
+            <div className="flex items-center gap-2">
+              {isException ? (
+                <AlertTriangle className="h-3.5 w-3.5 text-red-500" />
+              ) : (
+                <Radio className="h-3.5 w-3.5 text-muted-foreground" />
+              )}
+              <span
+                className={cn(
+                  'text-xs font-semibold',
+                  isException ? 'text-red-500' : 'text-foreground',
+                )}
+              >
+                {event.name}
+              </span>
+              <span className="ml-auto text-[10px] font-mono text-muted-foreground">
+                {formatTimestamp(event.timestamp)}
+              </span>
+            </div>
+            {event.attributes && Object.keys(event.attributes).length > 0 && (
+              <div className="mt-2">
+                {isException && event.attributes['exception.stacktrace'] ? (
+                  <pre className="whitespace-pre-wrap break-words text-xs font-mono text-red-400/80">
+                    {String(event.attributes['exception.stacktrace'])}
+                  </pre>
+                ) : (
+                  <SyntaxHighlightedJson data={event.attributes} />
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// --- Copy Button ---
+
+function CopyButton({ text, className }: { text: string; className?: string }) {
+  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(text);
+    setIsCopied(true);
+    setTimeout(() => setIsCopied(false), 2000);
+  }, [text]);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className={cn('h-6 w-6', className)}
+      onClick={(e) => {
+        e.stopPropagation();
+        handleCopy();
+      }}
+      title="Copy to clipboard"
+    >
+      {isCopied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 text-muted-foreground" />
+      )}
+    </Button>
+  );
+}
+
 // --- Waterfall Row ---
 
 interface WaterfallRowProps {
@@ -230,6 +391,7 @@ function WaterfallRow({
 }: WaterfallRowProps) {
   const Icon = SPAN_ICONS[span.kind] ?? Zap;
   const barColor = SPAN_COLORS[span.kind] ?? 'bg-blue-500';
+  const displayName = getSpanDisplayName(span);
 
   const offsetPct = traceDuration > 0 ? ((span.startTime - traceStart) / traceDuration) * 100 : 0;
   const widthPct =
@@ -278,7 +440,25 @@ function WaterfallRow({
         <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1">
-            <span className="truncate text-xs font-medium">{span.toolName ?? span.name}</span>
+            <span className="truncate text-xs font-medium">{displayName}</span>
+            {/* Token & cost badges for LLM spans */}
+            {span.kind === 'llm' && span.tokens && (
+              <Badge
+                variant="outline"
+                className="ml-0.5 flex-shrink-0 gap-0.5 px-1 py-0 text-[9px] font-mono"
+              >
+                <Coins className="h-2.5 w-2.5" />
+                {formatTokenCount(span.tokens.total)}
+              </Badge>
+            )}
+            {span.kind === 'llm' && span.cost != null && (
+              <Badge
+                variant="outline"
+                className="flex-shrink-0 px-1 py-0 text-[9px] font-mono text-green-600 dark:text-green-400"
+              >
+                ${span.cost.toFixed(4)}
+              </Badge>
+            )}
             <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-muted-foreground">
               {formatDuration(span.duration)}
             </span>
@@ -326,21 +506,16 @@ interface SpanDetailProps {
 
 function SpanDetail({ span }: SpanDetailProps) {
   const Icon = SPAN_ICONS[span.kind] ?? Zap;
-  const [activeTab, setActiveTab] = useState<'input' | 'output' | 'metadata'>('input');
-  const [copied, setCopied] = useState(false);
+  const [activeTab, setActiveTab] = useState<'input' | 'output' | 'events' | 'metadata'>('input');
+  const displayName = getSpanDisplayName(span);
 
-  const tabContent = useMemo(() => {
-    if (activeTab === 'input') return JSON.stringify(span.input, null, 2);
-    if (activeTab === 'output')
-      return span.output ? JSON.stringify(span.output, null, 2) : (span.error ?? 'No output');
-    return JSON.stringify(span.metadata, null, 2);
-  }, [activeTab, span]);
+  const inputJson = JSON.stringify(span.input, null, 2) ?? 'null';
+  const outputJson = span.output
+    ? JSON.stringify(span.output, null, 2)
+    : (span.error ?? 'No output');
 
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(tabContent ?? '');
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }, [tabContent]);
+  const tabs = ['input', 'output', 'events', 'metadata'] as const;
+  const eventCount = span.events?.length ?? 0;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -353,15 +528,10 @@ function SpanDetail({ span }: SpanDetailProps) {
       >
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" />
-          <h3 className="font-semibold">{span.name}</h3>
+          <h3 className="font-semibold">{displayName}</h3>
           {span.kind === 'tool' && span.toolName && (
             <Badge variant="secondary" className="text-xs">
               {span.toolName}
-            </Badge>
-          )}
-          {span.kind === 'llm' && span.model && (
-            <Badge variant="secondary" className="text-xs">
-              {span.model}
             </Badge>
           )}
           {span.kind === 'llm' && span.provider && (
@@ -378,11 +548,17 @@ function SpanDetail({ span }: SpanDetailProps) {
           <span className={cn('font-medium capitalize', STATUS_COLORS[span.status])}>
             {span.status}
           </span>
-          {span.error && <span className="text-xs text-red-500 truncate">{span.error}</span>}
         </div>
       </div>
 
-      {/* Metrics */}
+      {/* Error section — prominent expandable red-tinted block */}
+      {span.status === 'error' && span.error && (
+        <div className="border-b p-3">
+          <ErrorDetail error={span.error} errorStack={span.errorStack} />
+        </div>
+      )}
+
+      {/* Metrics grid */}
       <div className="grid grid-cols-2 gap-3 border-b p-4">
         <div>
           <div className="text-xs text-muted-foreground">Duration</div>
@@ -395,6 +571,67 @@ function SpanDetail({ span }: SpanDetailProps) {
           <div className="text-xs text-muted-foreground">Start Time</div>
           <div className="font-mono text-sm">{formatTimestamp(span.startTime)}</div>
         </div>
+
+        {/* LLM-specific metrics */}
+        {span.kind === 'llm' && (
+          <>
+            {span.model && (
+              <div>
+                <div className="text-xs text-muted-foreground">Model</div>
+                <div className="text-sm font-medium">{span.model}</div>
+              </div>
+            )}
+            {span.provider && (
+              <div>
+                <div className="text-xs text-muted-foreground">Provider</div>
+                <div className="text-sm font-medium capitalize">{span.provider}</div>
+              </div>
+            )}
+            {span.timeToFirstToken != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">Time to First Token</div>
+                <div className="font-mono text-sm font-medium">
+                  {formatDuration(span.timeToFirstToken)}
+                </div>
+              </div>
+            )}
+            {span.streaming != null && (
+              <div>
+                <div className="text-xs text-muted-foreground">Streaming</div>
+                <div className="flex items-center gap-1 text-sm font-medium">
+                  {span.streaming ? (
+                    <>
+                      <Radio className="h-3 w-3 text-green-500" />
+                      <span className="text-green-600 dark:text-green-400">Yes</span>
+                    </>
+                  ) : (
+                    <span className="text-muted-foreground">No</span>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Tool-specific metrics */}
+        {span.kind === 'tool' && (
+          <>
+            {span.toolId && (
+              <div className="col-span-2">
+                <div className="text-xs text-muted-foreground">Tool ID</div>
+                <div className="font-mono text-sm font-medium">{span.toolId}</div>
+              </div>
+            )}
+            {span.duration != null && (
+              <div className="col-span-2">
+                <div className="text-xs text-muted-foreground">Tool Duration</div>
+                <div className="font-mono text-lg font-bold">{formatDuration(span.duration)}</div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Tokens */}
         {span.tokens && (
           <>
             <div>
@@ -426,21 +663,36 @@ function SpanDetail({ span }: SpanDetailProps) {
             </div>
           </div>
         )}
-        {span.model && (
+        {/* Model for non-LLM spans */}
+        {span.kind !== 'llm' && span.model && (
           <div className="col-span-2">
             <div className="text-xs text-muted-foreground">Model</div>
             <div className="text-sm font-medium">{span.model}</div>
           </div>
         )}
+
+        {/* Input/output byte sizes */}
+        {span.inputBytes != null && (
+          <div>
+            <div className="text-xs text-muted-foreground">Input Size</div>
+            <div className="font-mono text-sm">{formatBytes(span.inputBytes)}</div>
+          </div>
+        )}
+        {span.outputBytes != null && (
+          <div>
+            <div className="text-xs text-muted-foreground">Output Size</div>
+            <div className="font-mono text-sm">{formatBytes(span.outputBytes)}</div>
+          </div>
+        )}
       </div>
 
-      {/* Tabs for input/output/metadata */}
+      {/* Tabs: input / output / events / metadata */}
       <div className="flex border-b">
-        {(['input', 'output', 'metadata'] as const).map((tab) => (
+        {tabs.map((tab) => (
           <button
             key={tab}
             className={cn(
-              'flex-1 px-3 py-2 text-xs font-medium capitalize transition-colors',
+              'flex flex-1 items-center justify-center gap-1 px-3 py-2 text-xs font-medium capitalize transition-colors',
               activeTab === tab
                 ? 'border-b-2 border-primary text-foreground'
                 : 'text-muted-foreground hover:text-foreground',
@@ -448,26 +700,51 @@ function SpanDetail({ span }: SpanDetailProps) {
             onClick={() => setActiveTab(tab)}
           >
             {tab}
+            {tab === 'events' && eventCount > 0 && (
+              <Badge variant="secondary" className="ml-0.5 h-4 min-w-[16px] px-1 text-[9px]">
+                {eventCount}
+              </Badge>
+            )}
           </button>
         ))}
       </div>
 
       {/* Tab content */}
-      <div className="relative flex-1 overflow-auto p-4">
-        <button
-          onClick={handleCopy}
-          className="absolute right-4 top-4 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          title="Copy to clipboard"
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 text-green-500" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
-        </button>
-        <pre className="whitespace-pre-wrap break-words text-xs font-mono text-muted-foreground">
-          {tabContent}
-        </pre>
+      <div className="flex-1 overflow-auto p-4">
+        {activeTab === 'input' && (
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Input JSON</span>
+              <CopyButton text={inputJson} />
+            </div>
+            <SyntaxHighlightedJson data={span.input} />
+          </div>
+        )}
+        {activeTab === 'output' && (
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Output JSON</span>
+              <CopyButton text={outputJson} />
+            </div>
+            {span.output ? (
+              <SyntaxHighlightedJson data={span.output} />
+            ) : (
+              <pre className="whitespace-pre-wrap break-words text-xs font-mono text-muted-foreground">
+                {span.error ?? 'No output'}
+              </pre>
+            )}
+          </div>
+        )}
+        {activeTab === 'events' && <SpanEventsTab events={span.events ?? []} />}
+        {activeTab === 'metadata' && (
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-xs font-medium text-muted-foreground">Metadata</span>
+              <CopyButton text={JSON.stringify(span.metadata, null, 2)} />
+            </div>
+            <SyntaxHighlightedJson data={span.metadata} />
+          </div>
+        )}
       </div>
     </div>
   );

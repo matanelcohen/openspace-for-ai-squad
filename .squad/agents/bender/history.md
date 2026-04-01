@@ -136,6 +136,18 @@ This task is already done. Nothing to implement.
 - Test content
 - Updated content
 - Updated content
+- The project uses git worktrees (.git-worktrees/task-*) for parallel task isolation, allowing concurrent work on different tasks in separate working directories.
+- Frontend API response types live in apps/web/src/lib/ (e.g., trace-types.ts) with corresponding mock data files (mock-traces.ts) that must be updated when API response shapes change.
+- There are pre-existing SQLITE_BUSY test failures in unrelated modules that should be ignored when validating changes to other areas of the codebase.
+- Trace span attributes follow OpenTelemetry-style conventions with tool.* (tool.name, tool.input, tool.output) and llm.* (llm.model, llm.provider, llm.prompt_tokens) prefixes in apps/api/src/routes/traces.ts.
+- Completed "Enhance trace API span data extraction": Done. Here's what I did:
+
+**Files changed:** `apps/api/src/routes/traces.ts`, `apps/web/src/lib/trace-types.ts`, `apps/web/src/lib/mock-traces.ts`
+
+**Changes:**
+1. **Tool name display** — Tool spans now show the actual `tool.name` attribute instead of generic names; `tool:X` prefixes are stripped
+2. **Enriched payload** — Tool spans populate `input`/`output`/`error` from `tool.*` attributes; LLM spans surface `llmProvider`, `llmStreaming`, `llmTimeToFirstTokenMs` as top-level fields
+3. **Compute
 
 ## Review Summary
 

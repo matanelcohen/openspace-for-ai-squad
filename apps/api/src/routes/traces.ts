@@ -79,13 +79,13 @@ interface SpanResponse {
   children: SpanResponse[];
 }
 
-function makePreview(data: unknown, maxLen = 120): string | null {
+export function makePreview(data: unknown, maxLen = 120): string | null {
   if (data == null) return null;
   const str = typeof data === 'string' ? data : JSON.stringify(data);
   return str.length > maxLen ? str.slice(0, maxLen) + '...' : str;
 }
 
-function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[] {
+export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[] {
   const spanMap = new Map<string, SpanResponse>();
   const roots: SpanResponse[] = [];
 
