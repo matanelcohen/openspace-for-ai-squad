@@ -128,6 +128,8 @@ export interface ToolSpanAttributes {
   readonly 'tool.output'?: unknown;
   readonly 'tool.error'?: string;
   readonly 'tool.duration_ms'?: number;
+  readonly 'tool.input_size_bytes'?: number;
+  readonly 'tool.output_size_bytes'?: number;
 }
 
 // ── LLM Span Attributes ──────────────────────────────────────────
@@ -142,6 +144,12 @@ export interface LLMSpanAttributes {
   readonly 'llm.streaming'?: boolean;
   readonly 'llm.time_to_first_token_ms'?: number;
   readonly 'llm.total_duration_ms'?: number;
+  readonly 'llm.input'?: unknown;
+  readonly 'llm.output'?: unknown;
+  readonly 'llm.messages_count'?: number;
+  readonly 'llm.stop_reason'?: string;
+  readonly 'llm.temperature'?: number;
+  readonly 'llm.max_tokens'?: number;
 }
 
 // ── Model Pricing ─────────────────────────────────────────────────
