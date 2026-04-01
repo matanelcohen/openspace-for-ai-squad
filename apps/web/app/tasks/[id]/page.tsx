@@ -549,7 +549,7 @@ export default function TaskDetailPage() {
               </Badge>
             )}
 
-            {task.status === 'done' && (
+            {(task.status === 'done' || task.status === 'in-review') && (
               <Button
                 variant="outline"
                 size="sm"

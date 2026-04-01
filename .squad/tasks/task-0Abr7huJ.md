@@ -6,7 +6,7 @@ priority: P0
 assignee: leela
 labels: []
 created: '2026-04-01T19:49:13.945Z'
-updated: '2026-04-01T20:16:22.260Z'
+updated: '2026-04-01T20:43:30.809Z'
 sortIndex: 376
 ---
 imrpove visability in the traces. i want to see input/output tool name and so on currently i just see tool no input/out... think what else we can add so the value will be amaizing!! with alot of impact.
