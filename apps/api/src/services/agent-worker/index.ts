@@ -158,12 +158,12 @@ export class AgentWorkerService {
 
   /** Fetch a task via the API instead of reading files directly. */
   private async fetchTask(taskId: string): Promise<Task> {
-    try {
-      const res = await fetch(`${this.apiUrl}/api/tasks/${taskId}`);
-      if (res.ok) return res.json() as Promise<Task>;
-    } catch { /* API unreachable */ }
-    // Fallback to direct file read
-    return getTask(this.config.tasksDir, taskId);
+    const res = await fetch(`${this.apiUrl}/api/tasks/${taskId}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`fetchTask ${taskId} failed (${res.status}): ${body.substring(0, 200)}`);
+    }
+    return res.json() as Promise<Task>;
   }
 
   /** Update a task via the API instead of writing files directly. */
@@ -175,28 +175,23 @@ export class AgentWorkerService {
     });
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      console.warn(`[AgentWorker] patchTask ${taskId} failed (${res.status}): ${body.substring(0, 200)}`);
-      // Fallback to direct file write if API fails
-      const task = await updateTask(this.config.tasksDir, taskId, updates as any);
-      return task;
+      throw new Error(`patchTask ${taskId} failed (${res.status}): ${body.substring(0, 200)}`);
     }
     return res.json() as Promise<Task>;
   }
 
   /** Create a task via the API. */
   private async createTaskViaAPI(input: Record<string, unknown>): Promise<Task> {
-    try {
-      const res = await fetch(`${this.apiUrl}/api/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(input),
-      });
-      if (res.ok) return res.json() as Promise<Task>;
-      console.warn(`[AgentWorker] createTaskViaAPI failed (${res.status}), using file fallback`);
-    } catch { /* API unreachable */ }
-    // Fallback to direct file write
-    const { createTask: createTaskDirect } = await import('../squad-writer/task-writer.js');
-    return createTaskDirect(this.config.tasksDir, input as any);
+    const res = await fetch(`${this.apiUrl}/api/tasks`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`createTaskViaAPI failed (${res.status}): ${body.substring(0, 200)}`);
+    }
+    return res.json() as Promise<Task>;
   }
 
   enqueue(task: Task, opts?: { skipDelegation?: boolean }): void {

@@ -165,8 +165,11 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
         }
 
         return reply.send(task);
-      } catch {
-        return reply.status(404).send({ error: `Task not found: ${request.params.id}` });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[Tasks] PUT ${request.params.id} failed:`, message);
+        const status = message.includes('not found') ? 404 : 500;
+        return reply.status(status).send({ error: message });
       }
     },
   );
