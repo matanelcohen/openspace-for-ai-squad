@@ -57,7 +57,6 @@ import { SkillGalleryService } from './services/skill-gallery/index.js';
 import { SquadParser } from './services/squad-parser/index.js';
 import { TraceService } from './services/traces/index.js';
 import { MemoryLifecycleService } from './services/memory/memory-lifecycle.js';
-import { TeamStatusService } from './services/team-status/index.js';
 import {
   ConversationContextManager,
   VoiceRouter,
@@ -360,12 +359,6 @@ export async function buildApp(opts: AppOptions = {}) {
       });
       worktreeService.init();
       app.decorate('worktreeService', worktreeService);
-
-      // Initialize team status service for inter-agent awareness
-      const teamStatusService = new TeamStatusService({
-        tasksDir: resolve(squadDir, 'tasks'),
-        worktreeService,
-      });
 
       // Start agent worker service with A2A delegation capability
       const codeReviewService = new CodeReviewService(provider, projectDir);
