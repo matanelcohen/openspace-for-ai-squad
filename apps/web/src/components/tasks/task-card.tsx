@@ -1,7 +1,7 @@
 'use client';
 
 import type { Task } from '@matanelcohen/openspace-shared';
-import { Check, X } from 'lucide-react';
+import { Check, GitPullRequest, X } from 'lucide-react';
 import Link from 'next/link';
 
 import { AgentAvatar } from '@/components/agent-avatar';
@@ -11,12 +11,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { useApproveTask, useRejectTask } from '@/hooks/use-tasks';
 
+function formatTimeAgo(dateStr: string): string {
+  const seconds = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 interface TaskCardProps {
   task: Task;
   isDragging?: boolean;
+  subtaskProgress?: { total: number; done: number };
 }
 
-export function TaskCard({ task, isDragging }: TaskCardProps) {
+export function TaskCard({ task, isDragging, subtaskProgress }: TaskCardProps) {
   const approveTask = useApproveTask();
   const rejectTask = useRejectTask();
   const isPending = task.status === 'pending';
@@ -57,6 +68,39 @@ export function TaskCard({ task, isDragging }: TaskCardProps) {
             ))}
           </div>
         )}
+        {task.parent && (
+          <span className="text-xs text-muted-foreground">↑ subtask</span>
+        )}
+        {subtaskProgress && subtaskProgress.total > 0 && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <span>{subtaskProgress.done}/{subtaskProgress.total} subtasks</span>
+            <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full rounded-full bg-green-500 transition-all"
+                style={{ width: `${(subtaskProgress.done / subtaskProgress.total) * 100}%` }}
+              />
+            </div>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+          {task.labels?.some((l: string) => l.startsWith('pr:')) && (
+            <Badge variant="outline" className="text-[10px] px-1 py-0 gap-0.5">
+              <GitPullRequest className="h-2.5 w-2.5" />
+              PR #{task.labels.find((l: string) => l.startsWith('pr:'))?.split(':')[1]}
+            </Badge>
+          )}
+          {task.dependsOn && task.dependsOn.length > 0 && (
+            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+              🔗 {task.dependsOn.length} dep{task.dependsOn.length > 1 ? 's' : ''}
+            </span>
+          )}
+          {task.status === 'delegated' && (
+            <Badge variant="secondary" className="text-[10px] px-1 py-0">delegated</Badge>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {formatTimeAgo(task.updatedAt)}
+          </span>
+        </div>
         {isPending && (
           <div className="flex items-center gap-1.5 pt-1">
             <Button

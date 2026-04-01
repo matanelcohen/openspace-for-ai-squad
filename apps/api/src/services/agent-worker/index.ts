@@ -63,6 +63,10 @@ interface AgentWorkerConfig {
   codeReviewService?: CodeReviewService;
   /** TeamStatusService for inter-agent awareness. */
   teamStatusService?: TeamStatusService | null;
+  /** Task timeout in ms. Default: 30 minutes. */
+  taskTimeoutMs?: number;
+  /** Per-priority timeout overrides in ms. */
+  priorityTimeouts?: Record<string, number>;
 }
 
 interface QueueState {
@@ -144,7 +148,7 @@ export class AgentWorkerService {
 
     queue.push(task.id);
     this.persistQueue();
-    console.log(`[AgentWorker] Queued ${task.id} for ${task.assignee} (queue: ${queue.length}${opts?.skipDelegation ? ', no-delegate' : ''})`);
+    console.log(`[AgentWorker] Queued ${task.id} (${task.priority}) for ${task.assignee} (queue: ${queue.length}${opts?.skipDelegation ? ', no-delegate' : ''})`);
 
     this.emitActivity(task.assignee, 'spawned', `Task queued: ${task.title}`);
     this.processNext(task.assignee);
@@ -388,13 +392,50 @@ export class AgentWorkerService {
 
   // ── Task Processing ────────────────────────────────────────────
 
+  /**
+   * Dequeue the highest-priority task from the queue.
+   * P0 > P1 > P2 > P3, FIFO within same priority.
+   */
+  private async dequeueByPriority(queue: string[]): Promise<string | null> {
+    if (queue.length === 0) return null;
+    if (queue.length === 1) return queue.shift()!;
+
+    // Score tasks by priority
+    const PRIORITY_SCORE: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
+    let bestIdx = 0;
+    let bestScore = 999;
+
+    for (let i = 0; i < queue.length; i++) {
+      try {
+        const task = await getTask(this.config.tasksDir, queue[i]!);
+        const score = PRIORITY_SCORE[task.priority] ?? 3;
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = i;
+          if (score === 0) break; // P0 found, can't do better
+        }
+      } catch {
+        // Task file missing — take it anyway to clear the queue
+        bestIdx = i;
+        break;
+      }
+    }
+
+    return queue.splice(bestIdx, 1)[0] ?? null;
+  }
+
   private async processNext(agentId: string): Promise<void> {
     if (this.activeTask.has(agentId)) return;
 
     const queue = this.queues.get(agentId);
     if (!queue || queue.length === 0) return;
 
-    const taskId = queue.shift()!;
+    // Priority-based dequeue: P0 first, then P1, P2, P3. FIFO within same priority.
+    const taskId = await this.dequeueByPriority(queue);
+    if (!taskId) {
+      this.activeTask.delete(agentId);
+      return;
+    }
     this.activeTask.set(agentId, taskId);
     this.persistQueue();
 
@@ -747,20 +788,58 @@ export class AgentWorkerService {
           workDir = join(this.config.squadDir, '..');
         }
 
+        // Determine timeout based on priority
+        const PRIORITY_TIMEOUTS: Record<string, number> = {
+          P0: 60 * 60 * 1000,  // 60 min
+          P1: 30 * 60 * 1000,  // 30 min
+          P2: 15 * 60 * 1000,  // 15 min
+          P3: 15 * 60 * 1000,  // 15 min
+          ...(this.config.priorityTimeouts ?? {}),
+        };
+        const timeoutMs = PRIORITY_TIMEOUTS[task.priority] ?? this.config.taskTimeoutMs ?? 30 * 60 * 1000;
+
+        console.log(`[AgentWorker] ${agent.name} timeout: ${Math.round(timeoutMs / 60000)}min (${task.priority})`);
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Task timed out after ${Math.round(timeoutMs / 60000)} minutes`)), timeoutMs),
+        );
+
         console.log(`[AgentWorker] ${agent.name} using agentic mode in ${workDir}`);
-        result = await this.config.aiProvider.agenticCompletion({
-          ...sharedOpts,
-          workingDirectory: workDir,
-          metadata: {
-            ...sharedOpts.metadata,
-            agentic: true,
-            branch: worktree?.branch,
-            sandbox: !!worktree,
-          },
-        } satisfies AgenticCompletionOptions);
+        result = await Promise.race([
+          this.config.aiProvider.agenticCompletion({
+            ...sharedOpts,
+            workingDirectory: workDir,
+            metadata: {
+              ...sharedOpts.metadata,
+              agentic: true,
+              branch: worktree?.branch,
+              sandbox: !!worktree,
+            },
+          } satisfies AgenticCompletionOptions),
+          timeoutPromise,
+        ]);
       } else {
+        // Determine timeout based on priority
+        const PRIORITY_TIMEOUTS: Record<string, number> = {
+          P0: 60 * 60 * 1000,  // 60 min
+          P1: 30 * 60 * 1000,  // 30 min
+          P2: 15 * 60 * 1000,  // 15 min
+          P3: 15 * 60 * 1000,  // 15 min
+          ...(this.config.priorityTimeouts ?? {}),
+        };
+        const timeoutMs = PRIORITY_TIMEOUTS[task.priority] ?? this.config.taskTimeoutMs ?? 30 * 60 * 1000;
+
+        console.log(`[AgentWorker] ${agent.name} timeout: ${Math.round(timeoutMs / 60000)}min (${task.priority})`);
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error(`Task timed out after ${Math.round(timeoutMs / 60000)} minutes`)), timeoutMs),
+        );
+
         // Fallback: single-shot chat completion (mock provider)
-        result = await this.config.aiProvider.chatCompletion(sharedOpts);
+        result = await Promise.race([
+          this.config.aiProvider.chatCompletion(sharedOpts),
+          timeoutPromise,
+        ]);
       }
 
       // Auto-commit + PR if worktree sandbox was used

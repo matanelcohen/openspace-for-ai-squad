@@ -42,6 +42,22 @@ export function KanbanBoard() {
     return applyFilters(tasks, filters);
   }, [tasks, filters]);
 
+  // Compute subtask counts per parent task
+  const subtaskCounts = useMemo(() => {
+    const counts = new Map<string, { total: number; done: number }>();
+    for (const t of tasks ?? []) {
+      const parentLabel = t.labels?.find((l: string) => l.startsWith('parent:'));
+      if (parentLabel) {
+        const parentId = parentLabel.replace('parent:', '');
+        const existing = counts.get(parentId) ?? { total: 0, done: 0 };
+        existing.total++;
+        if (t.status === 'done') existing.done++;
+        counts.set(parentId, existing);
+      }
+    }
+    return counts;
+  }, [tasks]);
+
   const hasActiveFilters =
     filters.status !== 'all' ||
     filters.assignee !== 'all' ||
@@ -154,10 +170,10 @@ export function KanbanBoard() {
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {TASK_STATUSES.map((status) => (
-            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} />
+            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} subtaskCounts={subtaskCounts} />
           ))}
         </div>
-        <DragOverlay>{activeTask ? <TaskCard task={activeTask} isDragging /> : null}</DragOverlay>
+        <DragOverlay>{activeTask ? <TaskCard task={activeTask} isDragging subtaskProgress={subtaskCounts.get(activeTask.id)} /> : null}</DragOverlay>
       </DndContext>
     </div>
   );

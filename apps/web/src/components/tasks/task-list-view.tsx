@@ -94,6 +94,22 @@ export function TaskListView() {
     return sortTasks(filtered, sortField, sortDir);
   }, [tasks, filters, sortField, sortDir]);
 
+  // Compute subtask counts per parent task
+  const subtaskCounts = useMemo(() => {
+    const counts = new Map<string, { total: number; done: number }>();
+    for (const t of tasks ?? []) {
+      const parentLabel = t.labels?.find((l: string) => l.startsWith('parent:'));
+      if (parentLabel) {
+        const parentId = parentLabel.replace('parent:', '');
+        const existing = counts.get(parentId) ?? { total: 0, done: 0 };
+        existing.total++;
+        if (t.status === 'done') existing.done++;
+        counts.set(parentId, existing);
+      }
+    }
+    return counts;
+  }, [tasks]);
+
   function handleSort(field: SortField) {
     if (field === sortField) {
       setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -155,6 +171,7 @@ export function TaskListView() {
                 Priority <SortIcon field="priority" sortField={sortField} sortDir={sortDir} />
               </TableHead>
               <TableHead className="w-40">Labels</TableHead>
+              <TableHead className="w-32">Subtasks</TableHead>
               <TableHead
                 className="cursor-pointer select-none w-36"
                 onClick={() => handleSort('updatedAt')}
@@ -166,7 +183,7 @@ export function TaskListView() {
           <TableBody>
             {filteredAndSorted.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                   No tasks match your filters.
                 </TableCell>
               </TableRow>
@@ -208,6 +225,23 @@ export function TaskListView() {
                         </Badge>
                       ))}
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const progress = subtaskCounts.get(task.id);
+                      if (!progress || progress.total === 0) return null;
+                      return (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <span>{progress.done}/{progress.total}</span>
+                          <div className="h-1.5 w-16 rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full bg-green-500 transition-all"
+                              style={{ width: `${(progress.done / progress.total) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {new Date(task.updatedAt).toLocaleDateString()}

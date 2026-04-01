@@ -8,9 +8,10 @@ import { TaskCard } from '@/components/tasks/task-card';
 
 interface SortableTaskCardProps {
   task: Task;
+  subtaskProgress?: { total: number; done: number };
 }
 
-export function SortableTaskCard({ task }: SortableTaskCardProps) {
+export function SortableTaskCard({ task, subtaskProgress }: SortableTaskCardProps) {
   const {
     attributes,
     listeners,
@@ -27,7 +28,7 @@ export function SortableTaskCard({ task }: SortableTaskCardProps) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <TaskCard task={task} isDragging={isDragging} />
+      <TaskCard task={task} isDragging={isDragging} subtaskProgress={subtaskProgress} />
     </div>
   );
 }
