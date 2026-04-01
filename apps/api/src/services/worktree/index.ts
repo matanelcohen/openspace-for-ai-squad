@@ -289,7 +289,7 @@ export class WorktreeService {
       ? opts.body.substring(0, 2000) + '\n\n_(truncated)_'
       : opts.body;
     const baseFlag = `--base ${this.shellEscape(base)}`;
-    const url = this.gitInDir(
+    const url = this.execInDir(
       info.path,
       `gh pr create --title ${this.shellEscape(opts.title)} --body ${this.shellEscape(truncatedBody)} --head ${this.shellEscape(info.branch)} ${baseFlag}`,
     ).trim();
@@ -499,6 +499,16 @@ export class WorktreeService {
       encoding: 'utf-8',
       env: { ...process.env },
       timeout: 30_000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  }
+
+  private execInDir(dir: string, command: string): string {
+    return execSync(command, {
+      cwd: dir,
+      encoding: 'utf-8',
+      env: { ...process.env },
+      timeout: 60_000,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
   }

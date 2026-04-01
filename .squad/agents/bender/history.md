@@ -162,6 +162,17 @@ This task is already done. Nothing to implement.
 | 1 | **Tool call OTel spans** — `tool.execution_start/end` events create child spans with `tool.name`, `tool.input`, `tool.output`, `tool.duration_ms`, `tool.error` | `copilot-provider.ts` |
 | 2 | **OTel span attributes** — `ai.prompt`, `ai.system_prompt`, `ai.response` confirmed on spans; added `metadata` to `TraceServiceLike` | `copilot-provider.ts` |
 |
+- The project uses pnpm workspace filters for per-package testing and linting (e.g., `pnpm --filter @matanelcohen/openspace-tracing test`). Tracing package is at packages/tracing/, API is at apps/api/.
+- Pre-existing API test failures exist in apps/api that are unrelated to tracing changes. The 105 tracing-specific tests in the tracing package are the reliable signal for tracing changes.
+- Tracing span attributes use fallback keys: tool.input may also be stored as 'arguments' or 'args', and tool.output as 'result'. buildSpanTree() in traces.ts needs fallback extraction logic for all variants.
+- Tracing instrumentation is split across instrument-tool.ts, instrument-llm.ts, and types.ts in packages/tracing/src/. The copilot-provider.ts in apps/api/ creates sub-spans that need to mirror these attribute conventions.
+- Completed "Enrich trace API and backend data pipeline": Commit successful — lint-staged passed (eslint + prettier). All done.
+
+**Summary of changes across 6 files:**
+
+1. **`apps/api/src/routes/traces.ts`** — Fixed `buildSpanTree()` to extract `tool.input`, `tool.output`, `tool.name` with fallback keys (`arguments`, `args`, `result`). Also extracts token counts and cost from span attributes. Added `GET /traces/tools`, `GET /traces/spans/search` endpoints and extended `/traces/stats` with tool breakdowns.
+
+2. **`apps/api/src/services/traces/index.ts`**
 
 ## Review Summary
 
