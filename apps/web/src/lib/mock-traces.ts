@@ -38,17 +38,33 @@ const TOOL_INPUTS: Record<string, unknown> = {
   code_interpreter: { code: 'import pandas as pd\ndf = pd.read_csv("data.csv")\ndf.describe()' },
   file_reader: { path: 'src/config.ts', encoding: 'utf-8' },
   sql_query: { query: 'SELECT COUNT(*) FROM users WHERE active = true', database: 'production' },
-  api_call: { url: 'https://api.example.com/v1/data', method: 'GET', headers: { Authorization: 'Bearer ***' } },
+  api_call: {
+    url: 'https://api.example.com/v1/data',
+    method: 'GET',
+    headers: { Authorization: 'Bearer ***' },
+  },
   image_gen: { prompt: 'A futuristic AI dashboard', size: '1024x1024' },
 };
 
 const TOOL_OUTPUTS: Record<string, unknown> = {
-  web_search: { results: [{ title: 'LangGraph vs CrewAI', url: 'https://...' }, { title: 'AutoGen 2.0', url: 'https://...' }], total: 5 },
-  code_interpreter: { stdout: '       col1      col2\ncount  1000.0  1000.0\nmean   45.2    89.7', exit_code: 0 },
+  web_search: {
+    results: [
+      { title: 'LangGraph vs CrewAI', url: 'https://...' },
+      { title: 'AutoGen 2.0', url: 'https://...' },
+    ],
+    total: 5,
+  },
+  code_interpreter: {
+    stdout: '       col1      col2\ncount  1000.0  1000.0\nmean   45.2    89.7',
+    exit_code: 0,
+  },
   file_reader: { content: 'export const config = { port: 3001, debug: true };', size_bytes: 52 },
   sql_query: { rows: [{ count: 1847 }], duration_ms: 12 },
   api_call: { status: 200, body: { items: ['...'], total: 42 } },
-  image_gen: { url: 'https://images.example.com/abc123.png', revised_prompt: 'A futuristic AI dashboard with holographic displays' },
+  image_gen: {
+    url: 'https://images.example.com/abc123.png',
+    revised_prompt: 'A futuristic AI dashboard with holographic displays',
+  },
 };
 
 function makeSpan(
@@ -75,7 +91,35 @@ function makeSpan(
 
   // Build realistic tool input/output
   const toolInput = isTool ? (TOOL_INPUTS[name] ?? { query: `Input for ${name}` }) : null;
-  const toolOutput = isTool && status !== 'error' ? (TOOL_OUTPUTS[name] ?? { result: `Output from ${name}` }) : null;
+  const toolOutput =
+    isTool && status !== 'error' ? (TOOL_OUTPUTS[name] ?? { result: `Output from ${name}` }) : null;
+
+  const inputData = isLlm
+    ? { messages: [{ role: 'user', content: 'Sample prompt...' }] }
+    : isTool
+      ? toolInput
+      : { query: `Input for ${name}` };
+  const outputData =
+    status === 'error'
+      ? null
+      : isLlm
+        ? { content: 'Generated response text...' }
+        : isTool
+          ? toolOutput
+          : { result: `Output from ${name}` };
+
+  const previewStr = (data: unknown, maxLen = 120): string | null => {
+    if (data == null) return null;
+    const str = typeof data === 'string' ? data : JSON.stringify(data);
+    return str.length > maxLen ? str.slice(0, maxLen) + '...' : str;
+  };
+
+  const deriveProvider = (m: string | null): string | null => {
+    if (!m) return null;
+    if (m.includes('gpt')) return 'openai';
+    if (m.includes('claude')) return 'anthropic';
+    return null;
+  };
 
   return {
     id: id(),
@@ -87,30 +131,31 @@ function makeSpan(
     startTime,
     endTime: startTime + duration,
     duration,
-    input:
-      isLlm
-        ? { messages: [{ role: 'user', content: 'Sample prompt...' }] }
-        : isTool
-          ? toolInput
-          : { query: `Input for ${name}` },
-    output:
-      status === 'error'
-        ? null
-        : isLlm
-          ? { content: 'Generated response text...' }
-          : isTool
-            ? toolOutput
-            : { result: `Output from ${name}` },
+    input: inputData,
+    output: outputData,
     error: status === 'error' ? `${name} failed: timeout after ${duration}ms` : null,
     tokens: isLlm
       ? { prompt: promptTokens, completion: completionTokens, total: totalTokens }
       : null,
     cost: isLlm ? totalTokens * costPerToken : null,
     model,
+    toolName: isTool ? name : null,
+    provider: isLlm ? deriveProvider(model) : null,
+    inputPreview: previewStr(inputData),
+    outputPreview: previewStr(outputData),
     metadata: isTool
-      ? { 'tool.name': name, 'tool.input': toolInput, 'tool.output': toolOutput, 'tool.duration_ms': duration }
+      ? {
+          'tool.name': name,
+          'tool.input': toolInput,
+          'tool.output': toolOutput,
+          'tool.duration_ms': duration,
+        }
       : isLlm
-        ? { 'llm.model': model, 'llm.prompt_tokens': promptTokens, 'llm.completion_tokens': completionTokens }
+        ? {
+            'llm.model': model,
+            'llm.prompt_tokens': promptTokens,
+            'llm.completion_tokens': completionTokens,
+          }
         : {},
     children,
   };
@@ -219,6 +264,10 @@ function generateTrace(index: number): Trace {
     tokens: null,
     cost: null,
     model: null,
+    toolName: null,
+    provider: null,
+    inputPreview: null,
+    outputPreview: null,
     metadata: { agentVersion: '2.1.0' },
     children: chains,
   };

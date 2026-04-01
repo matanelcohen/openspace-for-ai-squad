@@ -1,6 +1,17 @@
 /** Trace & Span types for the trace viewer */
 
-export type SpanKind = 'agent' | 'chain' | 'tool' | 'llm' | 'retriever' | 'embedding' | 'internal' | 'reasoning' | 'server' | 'client' | 'unspecified';
+export type SpanKind =
+  | 'agent'
+  | 'chain'
+  | 'tool'
+  | 'llm'
+  | 'retriever'
+  | 'embedding'
+  | 'internal'
+  | 'reasoning'
+  | 'server'
+  | 'client'
+  | 'unspecified';
 export type TraceStatus = 'success' | 'error' | 'running' | 'pending';
 
 export interface Span {
@@ -19,6 +30,10 @@ export interface Span {
   tokens: { prompt: number; completion: number; total: number } | null;
   cost: number | null; // USD
   model: string | null;
+  toolName: string | null;
+  provider: string | null;
+  inputPreview: string | null;
+  outputPreview: string | null;
   metadata: Record<string, unknown>;
   children: Span[];
 }

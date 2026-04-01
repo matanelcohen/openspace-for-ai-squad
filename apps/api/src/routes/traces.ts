@@ -71,8 +71,18 @@ interface SpanResponse {
   tokens: { prompt: number; completion: number; total: number } | null;
   cost: number | null;
   model: string | null;
+  toolName: string | null;
+  provider: string | null;
+  inputPreview: string | null;
+  outputPreview: string | null;
   metadata: Record<string, unknown>;
   children: SpanResponse[];
+}
+
+function makePreview(data: unknown, maxLen = 120): string | null {
+  if (data == null) return null;
+  const str = typeof data === 'string' ? data : JSON.stringify(data);
+  return str.length > maxLen ? str.slice(0, maxLen) + '...' : str;
 }
 
 function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[] {
@@ -156,19 +166,35 @@ function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[
     // Also check events for exception errors (all span kinds)
     if (!error) {
       try {
-        const events = JSON.parse(s.events) as Array<{ name: string; attributes?: Record<string, unknown> }>;
+        const events = JSON.parse(s.events) as Array<{
+          name: string;
+          attributes?: Record<string, unknown>;
+        }>;
         const exception = events.find((e) => e.name === 'exception');
         if (exception?.attributes?.['exception.message']) {
           error = exception.attributes['exception.message'] as string;
         }
-      } catch { /* ignore parse errors */ }
+      } catch {
+        /* ignore parse errors */
+      }
     }
+
+    // Extract toolName and override generic span names for tool spans
+    const toolName = s.kind === 'tool' ? ((attrs['tool.name'] as string) ?? null) : null;
+    const spanName =
+      s.kind === 'tool' && toolName && /^tool(-call)?$/i.test(s.name) ? toolName : s.name;
+
+    // Extract provider for LLM spans
+    const provider =
+      s.kind === 'llm'
+        ? ((attrs['llm.provider'] as string) ?? (attrs['ai.provider'] as string) ?? null)
+        : null;
 
     const node: SpanResponse = {
       id: s.id,
       traceId: s.trace_id,
       parentId: s.parent_span_id,
-      name: s.name,
+      name: spanName,
       kind: s.kind as SpanResponse['kind'],
       status: mapStatus(s.status),
       startTime: s.start_time,
@@ -180,6 +206,10 @@ function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[
       tokens,
       cost,
       model,
+      toolName,
+      provider,
+      inputPreview: makePreview(input),
+      outputPreview: makePreview(output),
       metadata: attrs,
       children: [],
     };
@@ -254,6 +284,10 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
       tokens: null,
       cost: null,
       model: null,
+      toolName: null,
+      provider: null,
+      inputPreview: null,
+      outputPreview: null,
       metadata: {},
       children: [],
     };
@@ -272,6 +306,32 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
       errorCount: trace.status === 'error' ? 1 : 0,
       rootSpan,
     });
+  });
+
+  // GET /api/traces/:id/export — download trace as JSON
+  app.get<{ Params: { id: string } }>('/traces/:id/export', async (request, reply) => {
+    const result = app.traceService.getTrace(request.params.id);
+    if (!result) {
+      return reply.status(404).send({ error: 'Trace not found' });
+    }
+    const { trace, spans } = result;
+    const spanTree = buildSpanTree(spans, trace.status);
+    const exported = {
+      id: trace.id,
+      name: trace.root_span_name,
+      agentName: trace.agent_name,
+      status: trace.status,
+      startTime: trace.start_time,
+      endTime: trace.end_time,
+      duration: trace.duration_ms,
+      totalTokens: trace.total_tokens,
+      cost: trace.cost_usd,
+      spans: spanTree,
+    };
+    return reply
+      .header('Content-Type', 'application/json')
+      .header('Content-Disposition', `attachment; filename="trace-${trace.id}.json"`)
+      .send(exported);
   });
 
   // DELETE /api/traces — clear all traces
