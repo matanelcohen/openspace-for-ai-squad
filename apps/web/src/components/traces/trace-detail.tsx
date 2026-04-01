@@ -130,22 +130,6 @@ function getSpanDisplayName(span: Span): string {
   return span.name;
 }
 
-const KIND_EMOJI: Record<string, string> = {
-  tool: '🔧',
-  llm: '🤖',
-  chain: '⛓',
-  agent: '🧠',
-  retriever: '🔍',
-  embedding: '📊',
-  reasoning: '💭',
-  internal: '⚙️',
-  server: '🖥️',
-  client: '📱',
-  producer: '📤',
-  consumer: '📥',
-  unspecified: '❓',
-};
-
 function StatusIcon({ status }: { status: TraceStatus }) {
   switch (status) {
     case 'success':
@@ -761,12 +745,22 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [enabledKinds, setEnabledKinds] = useState<Set<SpanKind> | null>(null);
 
   const toggleCollapsed = useCallback((spanId: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
       if (next.has(spanId)) next.delete(spanId);
       else next.add(spanId);
+      return next;
+    });
+  }, []);
+
+  const toggleKind = useCallback((kind: SpanKind) => {
+    setEnabledKinds((prev) => {
+      const next = new Set(prev ?? (Object.keys(SPAN_COLORS) as SpanKind[]));
+      if (next.has(kind)) next.delete(kind);
+      else next.add(kind);
       return next;
     });
   }, []);
@@ -813,6 +807,11 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
       spans = spans.filter(({ span }) => visibleIds.has(span.id));
     }
 
+    // Apply kind filter
+    if (enabledKinds) {
+      spans = spans.filter(({ span }) => enabledKinds.has(span.kind));
+    }
+
     // Filter out children of collapsed spans
     const visible: FlatSpan[] = [];
     const collapsedAncestors = new Set<string>();
@@ -827,7 +826,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
       visible.push(item);
     }
     return visible;
-  }, [allFlatSpans, collapsed, searchQuery]);
+  }, [allFlatSpans, collapsed, searchQuery, enabledKinds]);
 
   const kindSummary = useMemo(() => {
     const counts: Partial<Record<string, number>> = {};
@@ -917,34 +916,34 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
         </Button>
       </div>
 
-      {/* Legend */}
-      <div className="flex flex-wrap items-center gap-3 text-xs">
+      {/* Kind filter/legend — toggleable badges */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="text-muted-foreground">Filter:</span>
         {(Object.entries(SPAN_COLORS) as [SpanKind, string][]).map(([kind, color]) => {
-          const Icon = SPAN_ICONS[kind] ?? Zap;
+          const KindIcon = SPAN_ICONS[kind] ?? Zap;
+          const isActive = !enabledKinds || enabledKinds.has(kind);
+          const count = kindSummary[kind] ?? 0;
+          if (count === 0) return null;
           return (
-            <div key={kind} className="flex items-center gap-1.5">
+            <button
+              key={kind}
+              onClick={() => toggleKind(kind)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all',
+                isActive
+                  ? 'border-border bg-card shadow-sm'
+                  : 'border-transparent bg-muted/50 opacity-50',
+              )}
+            >
               <div className={cn('h-2.5 w-2.5 rounded-sm', color)} />
-              <Icon className="h-3 w-3 text-muted-foreground" />
+              <KindIcon className="h-3 w-3 text-muted-foreground" />
               <span className="capitalize text-muted-foreground">{kind}</span>
-            </div>
+              <Badge variant="secondary" className="h-4 min-w-[16px] px-1 text-[9px]">
+                {count}
+              </Badge>
+            </button>
           );
         })}
-      </div>
-
-      {/* Span kind summary */}
-      <div className="flex flex-wrap items-center gap-2 text-xs">
-        {Object.entries(kindSummary).map(([kind, count]) => (
-          <Badge
-            key={kind}
-            variant="secondary"
-            className={cn('gap-1 border text-xs', SPAN_BG_COLORS[kind])}
-          >
-            <span>{KIND_EMOJI[kind] ?? '❓'}</span>
-            <span>
-              {count} {kind}
-            </span>
-          </Badge>
-        ))}
         {trace.totalCost > 0 && (
           <Badge variant="secondary" className="gap-1 text-xs">
             <Coins className="h-3 w-3" />${trace.totalCost.toFixed(4)}
@@ -1021,7 +1020,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
 
         {/* Detail panel */}
         {selectedSpan && (
-          <div className="w-[380px] min-w-[380px] border-l bg-card">
+          <div className="w-[420px] min-w-[420px] border-l bg-card">
             <SpanDetail span={selectedSpan} />
           </div>
         )}

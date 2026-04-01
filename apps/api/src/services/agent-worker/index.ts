@@ -158,9 +158,12 @@ export class AgentWorkerService {
 
   /** Fetch a task via the API instead of reading files directly. */
   private async fetchTask(taskId: string): Promise<Task> {
-    const res = await fetch(`${this.apiUrl}/api/tasks/${taskId}`);
-    if (!res.ok) throw new Error(`Task not found: ${taskId} (${res.status})`);
-    return res.json() as Promise<Task>;
+    try {
+      const res = await fetch(`${this.apiUrl}/api/tasks/${taskId}`);
+      if (res.ok) return res.json() as Promise<Task>;
+    } catch { /* API unreachable */ }
+    // Fallback to direct file read
+    return getTask(this.config.tasksDir, taskId);
   }
 
   /** Update a task via the API instead of writing files directly. */
@@ -170,19 +173,30 @@ export class AgentWorkerService {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (!res.ok) throw new Error(`Failed to update task ${taskId}: ${res.status}`);
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.warn(`[AgentWorker] patchTask ${taskId} failed (${res.status}): ${body.substring(0, 200)}`);
+      // Fallback to direct file write if API fails
+      const task = await updateTask(this.config.tasksDir, taskId, updates as any);
+      return task;
+    }
     return res.json() as Promise<Task>;
   }
 
   /** Create a task via the API. */
   private async createTaskViaAPI(input: Record<string, unknown>): Promise<Task> {
-    const res = await fetch(`${this.apiUrl}/api/tasks`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-    });
-    if (!res.ok) throw new Error(`Failed to create task: ${res.status}`);
-    return res.json() as Promise<Task>;
+    try {
+      const res = await fetch(`${this.apiUrl}/api/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+      if (res.ok) return res.json() as Promise<Task>;
+      console.warn(`[AgentWorker] createTaskViaAPI failed (${res.status}), using file fallback`);
+    } catch { /* API unreachable */ }
+    // Fallback to direct file write
+    const { createTask: createTaskDirect } = await import('../squad-writer/task-writer.js');
+    return createTaskDirect(this.config.tasksDir, input as any);
   }
 
   enqueue(task: Task, opts?: { skipDelegation?: boolean }): void {
