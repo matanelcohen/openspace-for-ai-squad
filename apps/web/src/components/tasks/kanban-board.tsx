@@ -30,7 +30,13 @@ const DEFAULT_FILTERS: TaskFilters = {
   search: '',
 };
 
-export function KanbanBoard() {
+const DEFAULT_WIP_LIMITS: Record<string, number> = { 'in-progress': 5 };
+
+interface KanbanBoardProps {
+  wipLimits?: Record<string, number>;
+}
+
+export function KanbanBoard({ wipLimits = DEFAULT_WIP_LIMITS }: KanbanBoardProps) {
   const { data: tasks, isLoading, error } = useTasks();
   const updateStatus = useUpdateTaskStatus();
   const updatePriority = useUpdateTaskPriority();
@@ -130,6 +136,12 @@ export function KanbanBoard() {
 
     // Cross-column move: change status
     if (newStatus !== task.status) {
+      const targetTasks = tasksByStatus[newStatus] ?? [];
+      const limit = wipLimits[newStatus];
+      if (limit !== undefined && targetTasks.length >= limit) {
+        alert(`WIP limit reached: "${newStatus}" column is limited to ${limit} tasks.`);
+        return;
+      }
       updateStatus.mutate({ taskId, status: newStatus });
       return;
     }
@@ -170,7 +182,7 @@ export function KanbanBoard() {
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {TASK_STATUSES.map((status) => (
-            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} subtaskCounts={subtaskCounts} />
+            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} subtaskCounts={subtaskCounts} wipLimit={wipLimits[status]} />
           ))}
         </div>
         <DragOverlay>{activeTask ? <TaskCard task={activeTask} isDragging subtaskProgress={subtaskCounts.get(activeTask.id)} /> : null}</DragOverlay>

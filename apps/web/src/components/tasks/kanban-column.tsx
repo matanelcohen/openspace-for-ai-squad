@@ -12,6 +12,7 @@ interface KanbanColumnProps {
   status: TaskStatus;
   tasks: Task[];
   subtaskCounts?: Map<string, { total: number; done: number }>;
+  wipLimit?: number;
 }
 
 const columnColors: Record<TaskStatus, string> = {
@@ -22,9 +23,10 @@ const columnColors: Record<TaskStatus, string> = {
   delegated: 'border-t-purple-500',
 };
 
-export function KanbanColumn({ status, tasks, subtaskCounts }: KanbanColumnProps) {
+export function KanbanColumn({ status, tasks, subtaskCounts, wipLimit }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const taskIds = tasks.map((t) => t.id);
+  const isOverLimit = wipLimit !== undefined && tasks.length >= wipLimit;
 
   return (
     <div
@@ -33,13 +35,14 @@ export function KanbanColumn({ status, tasks, subtaskCounts }: KanbanColumnProps
         'flex min-h-[200px] w-72 flex-shrink-0 flex-col rounded-lg border border-t-4 bg-muted/30',
         columnColors[status],
         isOver && 'ring-2 ring-primary/30 bg-accent/20',
+        isOverLimit && 'border-red-400/60',
       )}
       data-testid={`kanban-column-${status}`}
     >
-      <div className="flex items-center justify-between p-3 pb-2">
+      <div className={cn('flex items-center justify-between p-3 pb-2', isOverLimit && 'bg-red-500/10 rounded-t-lg')}>
         <h3 className="text-sm font-semibold">{TASK_STATUS_LABELS[status]}</h3>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-          {tasks.length}
+        <span className={cn('rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground', isOverLimit && 'text-red-500 font-bold')}>
+          {tasks.length}{wipLimit !== undefined ? `/${wipLimit}` : ''}
         </span>
       </div>
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>

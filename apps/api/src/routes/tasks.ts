@@ -330,6 +330,12 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       return reply.status(500).send({ error: 'Failed to read prompt data' });
     }
   });
+
+  // GET /api/queue/metrics
+  app.get('/queue/metrics', async (_req, reply) => {
+    if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
+    return app.agentWorker.getMetrics();
+  });
 };
 
 export default tasksRoute;

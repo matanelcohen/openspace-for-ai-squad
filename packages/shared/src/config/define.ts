@@ -104,6 +104,13 @@ export interface SandboxDefinition {
   autoPR?: boolean;
 }
 
+// ── Kanban ────────────────────────────────────────────────────────
+
+export interface KanbanDefinition {
+  /** WIP limits per column status, e.g. { 'in-progress': 3, 'pending': 10 } */
+  wipLimits?: Record<string, number>;
+}
+
 // ── Top-level Config ─────────────────────────────────────────────
 
 export interface SquadSDKConfig {
@@ -116,6 +123,7 @@ export interface SquadSDKConfig {
   telemetry?: TelemetryDefinition;
   models?: ModelConfig;
   sandbox?: SandboxDefinition;
+  kanban?: KanbanDefinition;
 }
 
 // ── Builder Functions ────────────────────────────────────────────

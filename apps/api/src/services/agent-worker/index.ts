@@ -28,6 +28,7 @@ import {
 import { createTask, getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
 import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
+import { MetricsCollector } from './metrics.js';
 import type { TeamStatusService } from '../team-status/index.js';
 import type { CodeReviewService } from '../code-review/index.js';
 
@@ -85,6 +86,17 @@ export class AgentWorkerService {
   private allSkills: ParsedSkill[] = [];
   private recallEngine: MemoryRecallEngine | null = null;
   private recallEngineInitialized = false;
+
+  /** Circuit breaker state per agent: closed (normal), open (paused), half-open (testing). */
+  private circuitBreaker = new Map<string, {
+    state: 'closed' | 'open' | 'half-open';
+    consecutiveFailures: number;
+    pausedUntil: number;
+  }>();
+
+  private readonly CB_FAILURE_THRESHOLD = 3;
+  private readonly CB_PAUSE_MS = 5 * 60 * 1000; // 5 minutes
+  private metrics = new MetricsCollector();
 
   constructor(config: AgentWorkerConfig) {
     this.config = config;
@@ -176,15 +188,21 @@ export class AgentWorkerService {
     this.persistQueue();
   }
 
-  getStatus(): Record<string, { activeTask: string | null; queueLength: number }> {
-    const status: Record<string, { activeTask: string | null; queueLength: number }> = {};
+  getStatus(): Record<string, { activeTask: string | null; queueLength: number; circuitBreaker: string }> {
+    const status: Record<string, { activeTask: string | null; queueLength: number; circuitBreaker: string }> = {};
     for (const agent of this.config.agents) {
+      const cb = this.circuitBreaker.get(agent.id);
       status[agent.id] = {
         activeTask: this.activeTask.get(agent.id) ?? null,
         queueLength: this.queues.get(agent.id)?.length ?? 0,
+        circuitBreaker: cb?.state ?? 'closed',
       };
     }
     return status;
+  }
+
+  getMetrics(): import('./metrics.js').QueueMetrics {
+    return this.metrics.getMetrics(() => this.getStatus());
   }
 
   private buildTeamStatusPrompt(currentAgentId: string): string {
@@ -271,6 +289,19 @@ export class AgentWorkerService {
   /** Get attempt count for a task. */
   getAttempts(taskId: string): number {
     return this.taskAttempts.get(taskId)?.count ?? 0;
+  }
+
+  /**
+   * Exponential backoff with jitter.
+   * delay = min(base * 2^attempt, maxDelay) ± 20% jitter
+   */
+  private getBackoffDelay(taskId: string): number {
+    const attempts = this.getAttempts(taskId);
+    const BASE_DELAY = 5_000;    // 5 seconds
+    const MAX_DELAY = 300_000;   // 5 minutes
+    const raw = Math.min(BASE_DELAY * Math.pow(2, attempts), MAX_DELAY);
+    const jitter = raw * 0.2 * (Math.random() * 2 - 1); // ±20%
+    return Math.round(raw + jitter);
   }
 
   /** Recover queue state from disk + re-enqueue in-progress tasks. */
@@ -424,11 +455,63 @@ export class AgentWorkerService {
     return queue.splice(bestIdx, 1)[0] ?? null;
   }
 
+  // ── Circuit Breaker ─────────────────────────────────────────────
+
+  private checkCircuitBreaker(agentId: string): boolean {
+    const cb = this.circuitBreaker.get(agentId);
+    if (!cb || cb.state === 'closed') return true;
+    if (cb.state === 'open') {
+      if (Date.now() >= cb.pausedUntil) {
+        cb.state = 'half-open';
+        console.log(`[AgentWorker] Circuit breaker half-open for ${agentId} — testing one task`);
+        return true;
+      }
+      const remainingSec = Math.round((cb.pausedUntil - Date.now()) / 1000);
+      console.log(`[AgentWorker] Circuit breaker OPEN for ${agentId} — paused for ${remainingSec}s more`);
+      return false;
+    }
+    // half-open: allow
+    return true;
+  }
+
+  private recordSuccess(agentId: string): void {
+    const cb = this.circuitBreaker.get(agentId);
+    if (cb) {
+      cb.consecutiveFailures = 0;
+      cb.state = 'closed';
+    }
+  }
+
+  private recordFailure(agentId: string): void {
+    const cb = this.circuitBreaker.get(agentId) ?? { state: 'closed' as const, consecutiveFailures: 0, pausedUntil: 0 };
+    cb.consecutiveFailures++;
+    if (cb.consecutiveFailures >= this.CB_FAILURE_THRESHOLD) {
+      cb.state = 'open';
+      cb.pausedUntil = Date.now() + this.CB_PAUSE_MS;
+      console.log(`[AgentWorker] Circuit breaker OPEN for ${agentId} — paused for 5 minutes after ${cb.consecutiveFailures} failures`);
+      this.config.wsManager?.broadcast({
+        type: 'agent:status',
+        payload: { agentId, status: 'paused', reason: 'circuit-breaker', resumeAt: new Date(cb.pausedUntil).toISOString() },
+        timestamp: new Date().toISOString(),
+      });
+    }
+    this.circuitBreaker.set(agentId, cb);
+  }
+
   private async processNext(agentId: string): Promise<void> {
     if (this.activeTask.has(agentId)) return;
 
     const queue = this.queues.get(agentId);
     if (!queue || queue.length === 0) return;
+
+    // Circuit breaker check — skip processing if agent is paused
+    if (!this.checkCircuitBreaker(agentId)) {
+      this.activeTask.delete(agentId);
+      const cb = this.circuitBreaker.get(agentId);
+      const delay = cb ? Math.max(cb.pausedUntil - Date.now(), 10_000) : 10_000;
+      setTimeout(() => this.processNext(agentId), delay);
+      return;
+    }
 
     // Priority-based dequeue: P0 first, then P1, P2, P3. FIFO within same priority.
     const taskId = await this.dequeueByPriority(queue);
@@ -439,6 +522,7 @@ export class AgentWorkerService {
     this.activeTask.set(agentId, taskId);
     this.persistQueue();
 
+    let taskFailed = false;
     try {
       const task = await getTask(this.config.tasksDir, taskId);
 
@@ -898,6 +982,13 @@ export class AgentWorkerService {
 
       console.log(`[AgentWorker] ${agent.name} completed: ${task.title}`);
 
+      // Metrics: record completion with duration
+      const durationMs = Date.now() - new Date(task.updatedAt).getTime();
+      this.metrics.recordCompletion(agentId, durationMs);
+
+      // Circuit breaker: record success
+      this.recordSuccess(agentId);
+
       // Clear retry attempts on success
       this.clearAttempts(taskId);
 
@@ -964,12 +1055,19 @@ export class AgentWorkerService {
         /* best effort */
       }
     } catch (err) {
+      taskFailed = true;
       const message = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? err.stack?.substring(0, 500) : '';
       console.error(`[AgentWorker] ${agentId} failed on ${taskId}:`, message);
 
       // Record the failure with actual error message
       this.recordAttempt(taskId, message);
+
+      // Circuit breaker: record failure
+      this.recordFailure(agentId);
+
+      // Metrics: record failure
+      this.metrics.recordFailure(agentId);
 
       // Persist error to a crash-safe log file (survives server restarts)
       try {
@@ -1002,8 +1100,13 @@ export class AgentWorkerService {
       if ((this.queues.get(agentId)?.length ?? 0) === 0) {
         this.broadcastAgentIdle(agentId);
       }
-      // Wait before picking next task to let resources settle
-      setTimeout(() => this.processNext(agentId), 3000);
+      if (taskFailed) {
+        const backoffMs = this.getBackoffDelay(taskId);
+        console.log(`[AgentWorker] Next retry for ${agentId} in ${Math.round(backoffMs / 1000)}s (backoff)`);
+        setTimeout(() => this.processNext(agentId), backoffMs);
+      } else {
+        setTimeout(() => this.processNext(agentId), 1000);
+      }
     }
   }
 
@@ -1136,6 +1239,7 @@ export class AgentWorkerService {
       /* best effort */
     }
 
+    let delegationFailed = false;
     try {
       const result = await this.config.aiProvider.chatCompletion({
         taskTitle: task.title,
@@ -1292,6 +1396,7 @@ export class AgentWorkerService {
       // Start monitoring subtask completion in the background
       this.monitorSubtaskCompletion(agent, taskId, subtaskIds);
     } catch (err) {
+      delegationFailed = true;
       const message = err instanceof Error ? err.message : String(err);
       console.error(`[AgentWorker] ${agent.name} delegation failed:`, message);
       this.recordAttempt(taskId, message);
@@ -1309,7 +1414,13 @@ export class AgentWorkerService {
       if ((this.queues.get(agent.id)?.length ?? 0) === 0) {
         this.broadcastAgentIdle(agent.id);
       }
-      setTimeout(() => this.processNext(agent.id), 3000);
+      if (delegationFailed) {
+        const backoffMs = this.getBackoffDelay(taskId);
+        console.log(`[AgentWorker] Next retry for ${agent.id} in ${Math.round(backoffMs / 1000)}s (backoff)`);
+        setTimeout(() => this.processNext(agent.id), backoffMs);
+      } else {
+        setTimeout(() => this.processNext(agent.id), 1000);
+      }
     }
   }
 
