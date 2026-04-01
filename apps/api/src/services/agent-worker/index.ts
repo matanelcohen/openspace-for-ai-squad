@@ -1363,7 +1363,7 @@ export class AgentWorkerService {
           description: sub.description,
           priority: task.priority,
           assignee: sub.assignee,
-          status: 'pending',
+          status: 'in-progress',
           labels: [`parent:${taskId}`],
           parent: taskId,
         });
