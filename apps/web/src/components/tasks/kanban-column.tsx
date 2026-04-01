@@ -22,7 +22,9 @@ interface KanbanColumnProps {
 const columnColors: Record<TaskStatus, string> = {
   pending: 'border-t-gray-400',
   'in-progress': 'border-t-blue-500',
+  'in-review': 'border-t-violet-500',
   done: 'border-t-green-500',
+  merged: 'border-t-emerald-500',
   blocked: 'border-t-red-500',
   delegated: 'border-t-purple-500',
 };

@@ -119,7 +119,7 @@ export function createServer(): SquadMcpServer {
       assignee: z.string().optional().describe('Agent to reassign the task to'),
       priority: z.enum(['P0', 'P1', 'P2', 'P3']).optional().describe('New priority level'),
       status: z
-        .enum(['pending', 'in-progress', 'done', 'blocked', 'delegated'])
+        .enum(['pending', 'in-progress', 'in-review', 'done', 'merged', 'blocked', 'delegated'])
         .optional()
         .describe('New task status'),
       labels: z.array(z.string()).optional().describe('Labels to set on the task'),

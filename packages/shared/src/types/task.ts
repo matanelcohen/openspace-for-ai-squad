@@ -6,7 +6,9 @@
 export type TaskStatus =
   | 'pending'
   | 'in-progress'
+  | 'in-review'
   | 'done'
+  | 'merged'
   | 'blocked'
   | 'delegated';
 

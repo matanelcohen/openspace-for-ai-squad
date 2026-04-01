@@ -243,6 +243,40 @@ export class AgentWorkerService {
         }
       } catch { /* ignore */ }
     }, 60 * 60 * 1000);
+
+    // Poll PR statuses every 60s — update tasks from in-review → merged
+    setInterval(async () => {
+      try {
+        const { readdir } = await import('node:fs/promises');
+        const files = await readdir(this.config.tasksDir);
+        for (const file of files) {
+          if (!file.endsWith('.md')) continue;
+          try {
+            const task = await getTask(this.config.tasksDir, file.replace('.md', ''));
+            if (task.status !== 'in-review') continue;
+            const prLabel = task.labels?.find((l: string) => l.startsWith('pr:'));
+            if (!prLabel) continue;
+            const prNumber = prLabel.split(':')[1];
+
+            const { execSync } = await import('node:child_process');
+            const projectDir = join(this.config.squadDir, '..');
+            const prState = execSync(`gh pr view ${prNumber} --json state -q .state`, {
+              cwd: projectDir, encoding: 'utf-8', timeout: 10_000,
+            }).trim();
+
+            if (prState === 'MERGED') {
+              await updateTask(this.config.tasksDir, task.id, { status: 'merged' });
+              console.log(`[AgentWorker] PR #${prNumber} merged → task ${task.id} status: merged`);
+              this.broadcastTaskUpdate(task.id, 'merged');
+            } else if (prState === 'CLOSED') {
+              await updateTask(this.config.tasksDir, task.id, { status: 'blocked' });
+              console.log(`[AgentWorker] PR #${prNumber} closed → task ${task.id} status: blocked`);
+              this.broadcastTaskUpdate(task.id, 'blocked');
+            }
+          } catch { /* skip */ }
+        }
+      } catch { /* ignore */ }
+    }, 60_000);
   }
 
   stop(): void {
@@ -1058,7 +1092,7 @@ export class AgentWorkerService {
         : '';
 
       await this.patchTask(taskId, {
-        status: prInfo ? 'in-progress' : 'done',
+        status: prInfo ? 'in-review' : 'done',
         labels: prInfo
           ? [...(task.labels ?? []), `pr:${prInfo.number}`, 'merge:auto']
           : task.labels,
@@ -1069,7 +1103,7 @@ export class AgentWorkerService {
           branchSection +
           `\n\n**[${now()}]** ✅ ${agent.name} completed this task.\n\n**Result:**\n${result.content}`,
       });
-      this.broadcastTaskUpdate(taskId, prInfo ? 'in-progress' : 'done');
+      this.broadcastTaskUpdate(taskId, prInfo ? 'in-review' : 'done');
       this.emitActivity(
         agentId,
         'completed',
@@ -1570,15 +1604,15 @@ export class AgentWorkerService {
             : '';
 
           await this.patchTask(parentTaskId, {
-            status: 'done',
+            status: featurePrInfo ? 'in-review' : 'done',
             labels: featurePrInfo
               ? [...(parentTask.labels ?? []), `pr:${featurePrInfo.number}`]
               : parentTask.labels,
             description:
               parentTask.description +
-              `\n\n---\n**[${now}]** ✅ All ${resolved.length} subtasks completed.\n\n${completionSummary}${prSection}\n\n**[${now}]** ✅ ${agent.name} marked parent task as done.`,
+              `\n\n---\n**[${now}]** ✅ All ${resolved.length} subtasks completed.\n\n${completionSummary}${prSection}\n\n**[${now}]** ✅ ${agent.name} marked parent task as ${featurePrInfo ? 'in-review' : 'done'}.`,
           });
-          this.broadcastTaskUpdate(parentTaskId, 'done');
+          this.broadcastTaskUpdate(parentTaskId, featurePrInfo ? 'in-review' : 'done');
           this.emitActivity(agent.id, 'completed', `All subtasks done for: ${parentTask.title}`);
 
           // Broadcast subtask completed events

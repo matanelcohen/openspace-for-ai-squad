@@ -29,9 +29,11 @@ const priorityOrder: Record<TaskPriority, number> = { P0: 0, P1: 1, P2: 2, P3: 3
 const statusOrder: Record<TaskStatus, number> = {
   pending: 0,
   'in-progress': 1,
-  done: 2,
-  blocked: 3,
-  delegated: 4,
+  'in-review': 2,
+  done: 3,
+  merged: 4,
+  blocked: 5,
+  delegated: 6,
 };
 
 function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
