@@ -8,7 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  /** Optional custom fallback UI to render when an error is caught. */
   fallback?: ReactNode;
+  /** Optional callback invoked when an error is caught. */
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+  /** When any value in this array changes, the error state auto-resets. */
+  resetKeys?: unknown[];
 }
 
 interface ErrorBoundaryState {
@@ -28,6 +33,22 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    this.props.onError?.(error, errorInfo);
+  }
+
+  componentDidUpdate(prevProps: ErrorBoundaryProps): void {
+    if (!this.state.hasError) return;
+
+    const prevKeys = prevProps.resetKeys ?? [];
+    const nextKeys = this.props.resetKeys ?? [];
+
+    const hasChanged =
+      prevKeys.length !== nextKeys.length ||
+      prevKeys.some((key, i) => !Object.is(key, nextKeys[i]));
+
+    if (hasChanged) {
+      this.setState({ hasError: false, error: null });
+    }
   }
 
   handleReset = (): void => {
@@ -80,8 +101,7 @@ function withErrorBoundary<P extends object>(
   WrappedComponent: React.ComponentType<P>,
   fallback?: ReactNode,
 ) {
-  const displayName =
-    WrappedComponent.displayName || WrappedComponent.name || 'Component';
+  const displayName = WrappedComponent.displayName || WrappedComponent.name || 'Component';
 
   const WithErrorBoundary = (props: P) => (
     <ErrorBoundary fallback={fallback}>
