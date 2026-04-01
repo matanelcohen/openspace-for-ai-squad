@@ -137,7 +137,11 @@ const worktreesRoute: FastifyPluginAsync = async (app) => {
     const worktreeDir = resolve(projectDir, '.git-worktrees');
     if (existsSync(worktreeDir)) {
       try {
-        rmSync(worktreeDir, { recursive: true, force: true });
+        // Remove contents but keep the directory
+        const { readdirSync } = await import('node:fs');
+        for (const entry of readdirSync(worktreeDir)) {
+          rmSync(resolve(worktreeDir, entry), { recursive: true, force: true });
+        }
       } catch { /* best effort */ }
     }
 
