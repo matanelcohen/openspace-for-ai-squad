@@ -15,7 +15,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { GitHubService, PRCheckRun } from './index.js';
 import { PRAutoMergeService, type PRAutoMergeConfig } from './auto-merge.js';
-import type { WorktreeService } from '../worktree/index.js';
+import type { WorktreeService } from '../sandbox-worktree/index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers

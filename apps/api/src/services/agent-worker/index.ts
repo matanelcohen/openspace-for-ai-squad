@@ -27,7 +27,7 @@ import {
 } from '../seed-skills.js';
 import { getTask, updateTask } from '../squad-writer/task-writer.js';
 import type { WebSocketManager } from '../websocket/index.js';
-import type { WorktreeService, WorktreeInfo } from '../worktree/index.js';
+import type { WorktreeService, WorktreeInfo } from '../sandbox-worktree/index.js';
 import { MetricsCollector } from './metrics.js';
 import type { CodeReviewService } from '../code-review/index.js';
 

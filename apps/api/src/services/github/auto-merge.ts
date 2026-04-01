@@ -13,7 +13,7 @@
 import type { Task } from '@matanelcohen/openspace-shared';
 
 import type { GitHubService, PRCheckRun } from './index.js';
-import type { WorktreeService } from '../worktree/index.js';
+import type { WorktreeService } from '../sandbox-worktree/index.js';
 
 // ---------------------------------------------------------------------------
 // Types

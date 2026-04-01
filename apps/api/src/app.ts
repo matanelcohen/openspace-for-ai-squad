@@ -65,7 +65,7 @@ import {
 import type { WebSocketManager } from './services/websocket/index.js';
 import { wsPlugin } from './services/websocket/index.js';
 import { WorkspaceService } from './services/workspace/index.js';
-import { WorktreeService } from './services/worktree/index.js';
+import { WorktreeService } from './services/sandbox-worktree/index.js';
 import { CodeReviewService } from './services/code-review/index.js';
 import { YoloService } from './services/yolo/index.js';
 
