@@ -196,6 +196,17 @@ This task is already done. Nothing to implement.
 - Completed "Instrument DAG engine, agent worker, and tool calls with rich tracing spans": All tests pass: **122 tracing + 720 shared + 17 agent-worker = 859 tests passing**.
 
 Here's what I did:
+- The OTLP collector in otlp-collector.ts maps OTel numeric span kinds (0-4) but doesn't detect semantic kinds (tool, llm, agent) from span attributes. A detectSemanticKind() function that inspects flattened attributes for keys like tool.name, llm.model, gen_ai.request.model is needed to bridge OTel standard kinds to application-specific semantic kinds.
+- buildSpanTree() in traces.ts uses kind-based conditional extraction (if kind==='tool', if kind==='llm') which fails when semantic kind detection is incomplete. Adding fallback extraction that checks for attribute presence (e.g., tool.name exists → extract tool data regardless of kind) makes the pipeline more resilient.
+- The tracing package instruments are in packages/tracing/src/instrument-llm.ts and instrument-tool.ts. Type definitions for span attributes live in packages/tracing/src/types.ts with interfaces LLMSpanAttributes and ToolSpanAttributes.
+- Tests in apps/web/ have pre-existing failures (React is not defined) unrelated to backend changes. When verifying backend changes, run only the relevant test files rather than the full suite to avoid noise from unrelated frontend test failures.
+- Completed "Backend: Fix OTLP kind detection and enrich span data": Done. Here's a summary of the changes:
+
+**5 files changed, 99 tests passing:**
+
+1. **`packages/tracing/src/types.ts`** — Extended `LLMSpanAttributes` with `llm.input`, `llm.output`, `llm.messages_count`, `llm.stop_reason`, `llm.temperature`, `llm.max_tokens`. Extended `ToolSpanAttributes` with `tool.input_size_bytes`, `tool.output_size_bytes`.
+
+2. **`packages/tracing/src/instrument-llm.ts`** — Now captures `llm.input` (initial attrs), `llm.output` (after call), and `llm.messages_count` (when inp
 
 ## Summary
 

@@ -202,6 +202,9 @@ Here's what I did:
 - Uses npx eslint for linting individual files and npx vitest run for running scoped tests in the apps/web package.
 - Span kinds in the tracing system use emoji indicators: 🔧 tool, 🤖 llm, 🧠 agent, ⚙️ workflow/internal, 💭 reasoning. Spans have attributes for tool.name, tool.input, tool.output, model, tokens, cost, TTFT, queue wait time.
 - Completed "Enhance trace viewer UI to display tool inputs/outputs, span tree, and rich attributes": Committed successfully. Here's a summary of what I built:
+- Trace viewer UI lives in apps/web/src/components/traces/trace-detail.tsx with types in apps/web/src/lib/trace-types.ts and mock data in apps/web/src/lib/mock-traces.ts.
+- When adding new fields to the Span interface, mock-traces.ts must also be updated so dev previews render the new data.
+- Project uses pnpm workspaces monorepo with apps/web as the frontend app; build verification is done via `pnpm build` in apps/web.
 
 ## ✅ Trace Viewer UI Enhancements — Complete
 

@@ -72,6 +72,10 @@
 - The tracing package is at `packages/tracing/` with `instrumentToolCall` and `instrumentLLMCall` in `instrument-tool.ts`, and span attribute types in `types.ts`. Tool spans record attributes prefixed with `tool.` (e.g., tool.input, tool.output, tool.name).
 - Tests are structured across three layers: `packages/tracing/src/__tests__/` for unit tests, `apps/api/src/routes/__tests__/` for API route tests, and `apps/web/src/components/traces/__tests__/` for frontend component tests. All use vitest.
 - Completed "Test trace visibility end-to-end": Committed successfully. Here's a summary of what I did:
+- The tracing package is at packages/tracing and its filter name for pnpm is @matanelcohen/openspace-tracing. Run its tests with `pnpm -F @matanelcohen/openspace-tracing test`.
+- The project uses vitest for unit/integration tests and Playwright for e2e tests (e2e/trace-*.spec.ts). Run all tests with `pnpm test` from the repo root.
+- Completed "Tests: Validate enriched traces end-to-end": 
+- Trace enrichment tests live in apps/api/src/routes/trace-enrichment.test.ts. The OTLP collector classifies spans as kind='tool' or kind='llm' based on semantic attributes like tool.name, llm.model, and gen_ai.request.model.
 
 ## Summary
 

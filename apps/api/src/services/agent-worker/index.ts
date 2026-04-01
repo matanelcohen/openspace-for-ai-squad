@@ -1070,7 +1070,17 @@ export class AgentWorkerService {
                 body: `Automated by **${agent.name}** (${agent.role})\n\n**Task:** ${taskId}\n\n${result.content.substring(0, 500)}`,
               });
             } catch (err) {
-              console.warn(`[AgentWorker] PR creation failed for ${taskId}:`, err);
+              console.warn(`[AgentWorker] PR creation attempt 1 failed for ${taskId}:`, err);
+              // Retry once after 5s
+              await new Promise(r => setTimeout(r, 5000));
+              try {
+                prInfo = await wts.createPR(taskId, {
+                  title: task.title,
+                  body: `Automated by **${agent.name}** (${agent.role})\n\n**Task:** ${taskId}\n\n${result.content.substring(0, 500)}`,
+                });
+              } catch (err2) {
+                console.warn(`[AgentWorker] PR creation attempt 2 failed for ${taskId}:`, err2);
+              }
             }
           }
         }
