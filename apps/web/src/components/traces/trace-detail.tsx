@@ -5,12 +5,15 @@ import {
   ArrowLeft,
   Bot,
   Brain,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Clock,
   Coins,
+  Copy,
   Cpu,
+  Download,
   Loader2,
   Search as SearchIcon,
   Wrench,
@@ -22,6 +25,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { useTrace } from '@/hooks/use-traces';
 import type { Span, SpanKind, TraceStatus } from '@/lib/trace-types';
 import { cn } from '@/lib/utils';
@@ -100,6 +104,27 @@ function formatTimestamp(ts: number): string {
   });
 }
 
+function formatTokenCount(count: number): string {
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
+  return count.toString();
+}
+
+const KIND_EMOJI: Record<string, string> = {
+  tool: '🔧',
+  llm: '🤖',
+  chain: '⛓',
+  agent: '🧠',
+  retriever: '🔍',
+  embedding: '📊',
+  reasoning: '💭',
+  internal: '⚙️',
+  server: '🖥️',
+  client: '📱',
+  producer: '📤',
+  consumer: '📥',
+  unspecified: '❓',
+};
+
 function StatusIcon({ status }: { status: TraceStatus }) {
   switch (status) {
     case 'success':
@@ -128,6 +153,54 @@ function flattenSpans(span: Span, depth: number = 0): FlatSpan[] {
       result.push(...flattenSpans(child, depth + 1));
     });
   return result;
+}
+
+// --- Span Subtitle ---
+
+function SpanSubtitle({ span }: { span: Span }) {
+  let content: React.ReactNode = null;
+
+  switch (span.kind) {
+    case 'tool': {
+      if (span.inputPreview || span.outputPreview) {
+        content = (
+          <>
+            {span.inputPreview && <span className="truncate">{span.inputPreview}</span>}
+            {span.inputPreview && span.outputPreview && (
+              <span className="mx-1 text-muted-foreground/50">→</span>
+            )}
+            {span.outputPreview && <span className="truncate">{span.outputPreview}</span>}
+          </>
+        );
+      }
+      break;
+    }
+    case 'llm': {
+      const parts: string[] = [];
+      if (span.model) parts.push(span.model);
+      if (span.tokens) parts.push(`${formatTokenCount(span.tokens.total)} tokens`);
+      if (span.cost != null) parts.push(`$${span.cost.toFixed(4)}`);
+      if (parts.length > 0) content = parts.join(' · ');
+      break;
+    }
+    case 'agent': {
+      if (span.inputPreview) content = span.inputPreview;
+      break;
+    }
+    case 'chain': {
+      const childCount = span.children.length;
+      if (childCount > 0) content = `${childCount} step${childCount !== 1 ? 's' : ''}`;
+      break;
+    }
+    default: {
+      if (span.inputPreview) content = span.inputPreview;
+      break;
+    }
+  }
+
+  if (!content) return null;
+
+  return <div className="truncate text-[10px] font-mono text-muted-foreground">{content}</div>;
 }
 
 // --- Waterfall Row ---
@@ -180,11 +253,11 @@ function WaterfallRow({
       }}
     >
       {/* Span label column */}
-      <div className="flex w-[320px] min-w-[320px] items-center gap-1 border-r border-border/50 px-2 py-1.5">
+      <div className="flex w-[400px] min-w-[400px] items-start gap-1 border-r border-border/50 px-2 py-2">
         <div style={{ width: depth * 20 }} className="flex-shrink-0" />
         {hasChildren ? (
           <button
-            className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded hover:bg-muted"
+            className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded hover:bg-muted"
             onClick={(e) => {
               e.stopPropagation();
               onToggle(span.id);
@@ -197,14 +270,21 @@ function WaterfallRow({
             )}
           </button>
         ) : (
-          <div className="w-5 flex-shrink-0" />
+          <div className="mt-0.5 w-5 flex-shrink-0" />
         )}
-        <StatusIcon status={span.status} />
-        <Icon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-        <span className="truncate text-xs font-medium">{span.name}</span>
-        <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-muted-foreground">
-          {formatDuration(span.duration)}
-        </span>
+        <div className="mt-0.5 flex-shrink-0">
+          <StatusIcon status={span.status} />
+        </div>
+        <Icon className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1">
+            <span className="truncate text-xs font-medium">{span.toolName ?? span.name}</span>
+            <span className="ml-auto flex-shrink-0 text-[10px] font-mono text-muted-foreground">
+              {formatDuration(span.duration)}
+            </span>
+          </div>
+          <SpanSubtitle span={span} />
+        </div>
       </div>
 
       {/* Timing bar column */}
@@ -247,14 +327,48 @@ interface SpanDetailProps {
 function SpanDetail({ span }: SpanDetailProps) {
   const Icon = SPAN_ICONS[span.kind] ?? Zap;
   const [activeTab, setActiveTab] = useState<'input' | 'output' | 'metadata'>('input');
+  const [copied, setCopied] = useState(false);
+
+  const tabContent = useMemo(() => {
+    if (activeTab === 'input') return JSON.stringify(span.input, null, 2);
+    if (activeTab === 'output')
+      return span.output ? JSON.stringify(span.output, null, 2) : (span.error ?? 'No output');
+    return JSON.stringify(span.metadata, null, 2);
+  }, [activeTab, span]);
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(tabContent ?? '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [tabContent]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
-      <div className={cn('border-b p-4', SPAN_BG_COLORS[span.kind] ?? 'bg-blue-500/20 border-blue-500/40')}>
+      <div
+        className={cn(
+          'border-b p-4',
+          SPAN_BG_COLORS[span.kind] ?? 'bg-blue-500/20 border-blue-500/40',
+        )}
+      >
         <div className="flex items-center gap-2">
           <Icon className="h-5 w-5" />
           <h3 className="font-semibold">{span.name}</h3>
+          {span.kind === 'tool' && span.toolName && (
+            <Badge variant="secondary" className="text-xs">
+              {span.toolName}
+            </Badge>
+          )}
+          {span.kind === 'llm' && span.model && (
+            <Badge variant="secondary" className="text-xs">
+              {span.model}
+            </Badge>
+          )}
+          {span.kind === 'llm' && span.provider && (
+            <Badge variant="outline" className="text-xs">
+              {span.provider}
+            </Badge>
+          )}
           <Badge variant="outline" className="ml-auto text-xs capitalize">
             {span.kind}
           </Badge>
@@ -339,12 +453,20 @@ function SpanDetail({ span }: SpanDetailProps) {
       </div>
 
       {/* Tab content */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="relative flex-1 overflow-auto p-4">
+        <button
+          onClick={handleCopy}
+          className="absolute right-4 top-4 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          title="Copy to clipboard"
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-green-500" />
+          ) : (
+            <Copy className="h-3.5 w-3.5" />
+          )}
+        </button>
         <pre className="whitespace-pre-wrap break-words text-xs font-mono text-muted-foreground">
-          {activeTab === 'input' && JSON.stringify(span.input, null, 2)}
-          {activeTab === 'output' &&
-            (span.output ? JSON.stringify(span.output, null, 2) : (span.error ?? 'No output'))}
-          {activeTab === 'metadata' && JSON.stringify(span.metadata, null, 2)}
+          {tabContent}
         </pre>
       </div>
     </div>
@@ -361,6 +483,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
   const { data: trace, isLoading, isError } = useTrace(traceId);
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   const toggleCollapsed = useCallback((spanId: string) => {
     setCollapsed((prev) => {
@@ -371,13 +494,52 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
     });
   }, []);
 
-  const flatSpans = useMemo(() => {
+  const allFlatSpans = useMemo(() => {
     if (!trace) return [];
-    const all = flattenSpans(trace.rootSpan);
+    return flattenSpans(trace.rootSpan);
+  }, [trace]);
+
+  const flatSpans = useMemo(() => {
+    let spans = allFlatSpans;
+
+    // Apply search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchingIds = new Set<string>();
+
+      for (const { span } of spans) {
+        if (
+          span.name.toLowerCase().includes(query) ||
+          span.toolName?.toLowerCase().includes(query) ||
+          span.model?.toLowerCase().includes(query) ||
+          span.inputPreview?.toLowerCase().includes(query) ||
+          span.outputPreview?.toLowerCase().includes(query)
+        ) {
+          matchingIds.add(span.id);
+        }
+      }
+
+      // Include ancestors of matching spans to preserve hierarchy
+      const visibleIds = new Set(matchingIds);
+      for (const { span } of spans) {
+        if (matchingIds.has(span.id)) {
+          let current = span;
+          while (current.parentId) {
+            visibleIds.add(current.parentId);
+            const parent = spans.find((s) => s.span.id === current.parentId);
+            if (parent) current = parent.span;
+            else break;
+          }
+        }
+      }
+
+      spans = spans.filter(({ span }) => visibleIds.has(span.id));
+    }
+
     // Filter out children of collapsed spans
     const visible: FlatSpan[] = [];
     const collapsedAncestors = new Set<string>();
-    for (const item of all) {
+    for (const item of spans) {
       if (item.span.parentId && collapsedAncestors.has(item.span.parentId)) {
         collapsedAncestors.add(item.span.id);
         continue;
@@ -388,7 +550,15 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
       visible.push(item);
     }
     return visible;
-  }, [trace, collapsed]);
+  }, [allFlatSpans, collapsed, searchQuery]);
+
+  const kindSummary = useMemo(() => {
+    const counts: Partial<Record<string, number>> = {};
+    for (const { span } of allFlatSpans) {
+      counts[span.kind] = (counts[span.kind] ?? 0) + 1;
+    }
+    return counts;
+  }, [allFlatSpans]);
 
   const traceStart = trace?.startTime ?? 0;
   const traceDuration = trace?.duration ?? (trace ? Date.now() - trace.startTime : 1);
@@ -452,6 +622,22 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
             <span>{trace.spanCount} spans</span>
           </div>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-1.5"
+          onClick={() => {
+            const a = document.createElement('a');
+            a.href = `/api/traces/${traceId}/export`;
+            a.download = `trace-${traceId}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }}
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export
+        </Button>
       </div>
 
       {/* Legend */}
@@ -468,13 +654,45 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
         })}
       </div>
 
+      {/* Span kind summary */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {Object.entries(kindSummary).map(([kind, count]) => (
+          <Badge
+            key={kind}
+            variant="secondary"
+            className={cn('gap-1 border text-xs', SPAN_BG_COLORS[kind])}
+          >
+            <span>{KIND_EMOJI[kind] ?? '❓'}</span>
+            <span>
+              {count} {kind}
+            </span>
+          </Badge>
+        ))}
+        {trace.totalCost > 0 && (
+          <Badge variant="secondary" className="gap-1 text-xs">
+            <Coins className="h-3 w-3" />${trace.totalCost.toFixed(4)}
+          </Badge>
+        )}
+      </div>
+
+      {/* Search */}
+      <div className="relative">
+        <SearchIcon className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          placeholder="Search spans by name, tool, model, input, output…"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="h-8 pl-8 text-xs"
+        />
+      </div>
+
       {/* Main content: waterfall + detail panel */}
       <div className="flex flex-1 gap-0 overflow-hidden rounded-lg border">
         {/* Waterfall */}
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Time scale header */}
           <div className="flex border-b bg-muted/30">
-            <div className="w-[320px] min-w-[320px] border-r border-border/50 px-2 py-1.5 text-xs font-medium text-muted-foreground">
+            <div className="w-[400px] min-w-[400px] border-r border-border/50 px-2 py-1.5 text-xs font-medium text-muted-foreground">
               Span
             </div>
             <div className="relative flex-1 px-2 py-1.5">
@@ -494,7 +712,7 @@ export function TraceDetail({ traceId }: TraceDetailProps) {
           <div className="relative flex-1 overflow-auto">
             {/* Vertical grid lines */}
             <div className="pointer-events-none absolute inset-0 flex">
-              <div className="w-[320px] min-w-[320px]" />
+              <div className="w-[400px] min-w-[400px]" />
               <div className="relative flex-1">
                 {timeMarkers.map((m) => (
                   <div
