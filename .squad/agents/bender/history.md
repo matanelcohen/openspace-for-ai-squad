@@ -178,6 +178,17 @@ This task is already done. Nothing to implement.
 - Preview attributes use 200-character truncation as the standard for human-readable summaries in trace spans (input_preview, output_preview, system_prompt_preview, etc.).
 - Tracing instrumentation lives in `packages/tracing/src/` with separate files per span kind: `instrument-tool.ts`, `instrument-llm.ts`, `instrument-agent.ts`. Types are in `types.ts` and re-exported from `index.ts`.
 - Completed "Enrich backend trace attributes": All 122 tests pass. Done.
+- Tracing span attributes are stored as JSON strings in the SQLite `trace_spans` table and must be parsed with JSON.parse wrapped in try/catch for safety.
+- The tracing package instruments tools in `packages/tracing/src/instrument-tool.ts` and LLMs in `instrument-llm.ts`, with span types defined in `types.ts` and storage in `trace-store.ts`.
+- Trace API routes live in `apps/api/src/routes/traces.ts` with a `buildSpanTree()` function that extracts span attributes like `tool.input` and `tool.output` from parsed JSON.
+- Most test failures in the repo (170+ files) are pre-existing React component failures (`React is not defined`), unrelated to backend/tracing changes. Run tracing tests specifically with `npx vitest run packages/tracing/` to validate changes.
+- Completed "Enrich trace API and span recording": Done. Here's what I did across 5 files:
+
+**`packages/tracing/src/instrument-tool.ts`** — Added `safeStringify`, `makeTypeHint`, `getByteSize` helpers. Tool spans now emit `tool.input_preview`, `tool.output_preview`, `tool.input_type`, `tool.output_type`, `tool.input_size_bytes`, `tool.output_size_bytes`.
+
+**`packages/tracing/src/tracer.ts`** — `startSpan()` now looks up the parent span name and sets `span.parent_name` attribute automatically.
+
+**`packages/tracing/src/types.ts`** — Extended `Tool
 
 ## Summary
 

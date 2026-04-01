@@ -188,6 +188,24 @@ Here's what I did:
 - Commit messages follow conventional commits format with scope (e.g. 'feat(traces):') and detailed body sections grouped by component.
 - Trace viewer components live in apps/web/src/components/traces/ with trace-detail.tsx (waterfall), trace-list.tsx (list), and trace-stats.tsx (analytics dashboard). Types are in apps/web/src/lib/trace-types.ts, mock data in apps/web/src/lib/mock-traces.ts.
 - Completed "Overhaul trace viewer UI for tool visibility": Committed successfully. Lint-staged (eslint + prettier) passed automatically. Here's what I did:
+- The openspace-for-ai-squad monorepo uses pnpm workspaces with filter syntax like `pnpm --filter "@matanelcohen/openspace-web"` to run commands on specific packages.
+- Waterfall timeline color scheme convention: tool=blue, llm=purple, agent=green, internal=gray for span kind visualization.
+- The web app build has a pre-existing type error in `app/chat/page.tsx` (ChatPage React types) that is unrelated to trace components — use focused tsc checks or grep for specific paths when validating changes.
+- Completed "Build rich trace detail UI": All 8 tests pass. Here's a summary of what I built:
+- The openspace-for-ai-squad repo uses git worktrees under .git-worktrees/ for isolated task branches.
+- Trace viewer components live in apps/web/src/components/ with types in apps/web/src/lib/trace-types.ts and mock data in apps/web/src/lib/mock-traces.ts.
+- The web app uses shadcn/ui components stored in apps/web/src/components/ui/ (tooltip, collapsible, etc).
+- Completed "Upgrade trace viewer UI for rich visibility": 
+- Project uses pnpm workspaces with frozen lockfile for installs.
+
+## ✨ Rich Trace Detail UI — Complete
+
+### Changes made to 2 files:
+
+**`trace-detail.tsx`** — Major redesign:
+1. **Trace Summary Header** — 7 stat cards at top: Status, Duration, Total Cost, Tokens, Tool Calls, LLM Calls, Errors
+2. **Tool spans** — Prominent blue badge with tool name + icon, payload size display, collapsible input/output JSON sections with copy buttons
+3. **LLM spans** — Purple badge with model name, prompt/completion token bre
 
 ## Summary
 

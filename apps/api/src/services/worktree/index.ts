@@ -303,6 +303,17 @@ export class WorktreeService {
       const pr = { number, url };
       info.pr = pr;
       console.log(`[WorktreeService] PR #${pr.number} created for ${taskId}: ${pr.url}`);
+
+      // Auto-merge subtask PRs (those targeting a feature branch, not main)
+      if (base.startsWith('feature/')) {
+        try {
+          this.execInDir(info.path, `gh pr merge ${number} --merge --delete-branch`);
+          console.log(`[WorktreeService] PR #${number} auto-merged into ${base}`);
+        } catch (mergeErr) {
+          console.warn(`[WorktreeService] Auto-merge PR #${number} failed:`, mergeErr);
+        }
+      }
+
       return pr;
     } finally {
       try { unlinkSync(bodyFile); } catch { /* ignore */ }

@@ -67,6 +67,21 @@
 - Backend tests for API routes live alongside the route files (e.g., `apps/api/src/routes/traces.test.ts`) and frontend component tests use a `__tests__` subdirectory (e.g., `apps/web/src/components/traces/__tests__/trace-detail.test.tsx`).
 - The project uses vitest for unit/component tests and Playwright for e2e tests. Run backend tests with `npx vitest run <path>` from repo root, and frontend tests with `npx vitest run <path>` from `apps/web`.
 - Completed "Test enriched trace visibility end-to-end": All **87 tests** pass cleanly. Here's a summary:
+- Trace span attributes are stored as JSON in SQLite and round-tripped through the API at `GET /api/traces/:id`. Preview fields are truncated to 120 chars.
+- When working in git worktrees under `.git-worktrees/`, exclude cache files like `apps/api/.squad/.cache/ai-interactions.jsonl` from commits by resetting them before committing.
+- The tracing package is at `packages/tracing/` with `instrumentToolCall` and `instrumentLLMCall` in `instrument-tool.ts`, and span attribute types in `types.ts`. Tool spans record attributes prefixed with `tool.` (e.g., tool.input, tool.output, tool.name).
+- Tests are structured across three layers: `packages/tracing/src/__tests__/` for unit tests, `apps/api/src/routes/__tests__/` for API route tests, and `apps/web/src/components/traces/__tests__/` for frontend component tests. All use vitest.
+- Completed "Test trace visibility end-to-end": Committed successfully. Here's a summary of what I did:
+
+## Summary
+
+### Implementation — `instrumentToolCall` enrichment
+Enhanced `packages/tracing/src/instrument-tool.ts` to record 6 new span attributes:
+- **`tool.input_preview` / `tool.output_preview`** — truncated to 120 chars
+- **`tool.input_type` / `tool.output_type`** — string/object/array/null/number/boolean/undefined
+- **`tool.input_size_bytes` / `tool.output_size_bytes`** — UTF-8 byte size
+
+Updated `ToolSpanAttributes` in `types.ts` to
 
 ## Done ✅
 
