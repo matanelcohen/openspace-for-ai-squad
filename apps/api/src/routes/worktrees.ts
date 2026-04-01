@@ -113,6 +113,7 @@ const worktreesRoute: FastifyPluginAsync = async (app) => {
     const wts = (app as any).worktreeService;
     if (!wts) return reply.code(503).send({ error: 'WorktreeService not available' });
 
+    // First: destroy tracked worktrees via git
     const all = wts.list();
     let destroyed = 0;
     for (const wt of all) {
@@ -121,7 +122,26 @@ const worktreesRoute: FastifyPluginAsync = async (app) => {
         destroyed++;
       } catch { /* best effort */ }
     }
-    return { destroyed, total: all.length };
+
+    // Second: nuke the .git-worktrees directory to catch any untracked leftovers
+    const { execSync } = await import('node:child_process');
+    const { resolve } = await import('node:path');
+    const { rmSync, existsSync } = await import('node:fs');
+    const projectDir = resolve(app.squadParser.getTasksDir(), '..', '..');
+    
+    try {
+      // Prune stale git worktree entries
+      execSync('git worktree prune', { cwd: projectDir, timeout: 10_000 });
+    } catch { /* best effort */ }
+
+    const worktreeDir = resolve(projectDir, '.git-worktrees');
+    if (existsSync(worktreeDir)) {
+      try {
+        rmSync(worktreeDir, { recursive: true, force: true });
+      } catch { /* best effort */ }
+    }
+
+    return { destroyed, total: all.length, dirCleaned: true };
   });
 };
 
