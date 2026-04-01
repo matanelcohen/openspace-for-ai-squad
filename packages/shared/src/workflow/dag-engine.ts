@@ -343,7 +343,29 @@ export class DAGWorkflowEngine {
     await this.checkpoint(state);
     this.emit('workflow:started', state);
 
-    // Execute
+    // Execute — wrapped in a root tracing span if tracer is available
+    const tracer = this.config.tracer;
+    if (tracer) {
+      return tracer.withSpan('dag.workflow', 'internal', async (spanCtx) => {
+        tracer.setAttributes(spanCtx.spanId, {
+          'workflow.id': workflow.id,
+          'workflow.version': workflow.version,
+          'workflow.execution_id': executionId,
+          'workflow.node_count': workflow.nodes.length,
+          'workflow.edge_count': workflow.edges.length,
+          'workflow.trace_id': ctx.traceId,
+        });
+
+        const result = await this.runLoop(workflow, state, ctx);
+
+        tracer.setAttributes(spanCtx.spanId, {
+          'workflow.status': result.status,
+          'workflow.checkpoint_version': result.checkpointVersion,
+        });
+        return result;
+      });
+    }
+
     return this.runLoop(workflow, state, ctx);
   }
 
@@ -430,6 +452,7 @@ export class DAGWorkflowEngine {
   ): Promise<EnhancedWorkflowExecutionState> {
     let state = initialState;
     const maxConcurrency = this.config.maxConcurrency ?? 10;
+    const tracer = this.config.tracer;
 
     // Check workflow-level timeout
     const workflowDeadline = def.timeoutMs
@@ -441,6 +464,13 @@ export class DAGWorkflowEngine {
       if (Date.now() > workflowDeadline) {
         state = { ...state, status: 'timed_out', completedAt: new Date().toISOString() };
         await this.checkpoint(state);
+        tracer?.recordEvent(
+          tracer.startSpan('dag.workflow.timeout', 'internal', {
+            'workflow.execution_id': state.executionId,
+            'workflow.deadline_ms': def.timeoutMs,
+          }).spanId,
+          'workflow.timed_out',
+        );
         this.emit('workflow:timed_out', state);
         return state;
       }
@@ -452,30 +482,46 @@ export class DAGWorkflowEngine {
       const batches = chunkArray(readyNodes, maxConcurrency);
 
       for (const batch of batches) {
-        const results = await Promise.allSettled(
-          batch.map(async (node) => {
-            const result = await this.executeNode(def, state, node, ctx);
-            return { nodeId: node.id, state: result.state, ctx: result.ctx };
-          }),
-        );
+        const executeBatch = async () => {
+          const results = await Promise.allSettled(
+            batch.map(async (node) => {
+              const result = await this.executeNode(def, state, node, ctx);
+              return { nodeId: node.id, state: result.state, ctx: result.ctx };
+            }),
+          );
 
-        // Merge results back into state
-        for (const result of results) {
-          if (result.status === 'fulfilled') {
-            const { nodeId, state: nodeState, ctx: updatedCtx } = result.value;
-            // Merge node state
-            state = {
-              ...state,
-              updatedAt: new Date().toISOString(),
-              nodeStates: {
-                ...state.nodeStates,
-                [nodeId]: nodeState.nodeStates[nodeId]!,
-              },
-            };
-            // Merge context (node outputs, vars)
-            ctx.nodeOutputs = { ...ctx.nodeOutputs, ...updatedCtx.nodeOutputs };
-            ctx.vars = { ...ctx.vars, ...updatedCtx.vars };
+          // Merge results back into state
+          for (const result of results) {
+            if (result.status === 'fulfilled') {
+              const { nodeId, state: nodeState, ctx: updatedCtx } = result.value;
+              // Merge node state
+              state = {
+                ...state,
+                updatedAt: new Date().toISOString(),
+                nodeStates: {
+                  ...state.nodeStates,
+                  [nodeId]: nodeState.nodeStates[nodeId]!,
+                },
+              };
+              // Merge context (node outputs, vars)
+              ctx.nodeOutputs = { ...ctx.nodeOutputs, ...updatedCtx.nodeOutputs };
+              ctx.vars = { ...ctx.vars, ...updatedCtx.vars };
+            }
           }
+        };
+
+        // Wrap batch in a span if tracer is available
+        if (tracer) {
+          await tracer.withSpan('dag.batch', 'internal', async (spanCtx) => {
+            tracer.setAttributes(spanCtx.spanId, {
+              'batch.size': batch.length,
+              'batch.node_ids': batch.map((n) => n.id),
+              'batch.node_types': batch.map((n) => n.type),
+            });
+            await executeBatch();
+          });
+        } else {
+          await executeBatch();
         }
 
         // Evaluate outbound edge predicates for completed condition nodes
@@ -542,6 +588,9 @@ export class DAGWorkflowEngine {
     node: StepNode,
     ctx: ExecutionContext,
   ): Promise<{ state: EnhancedWorkflowExecutionState; ctx: ExecutionContext }> {
+    const tracer = this.config.tracer;
+
+    const executeNodeInner = async (): Promise<{ state: EnhancedWorkflowExecutionState; ctx: ExecutionContext }> => {
     let current = updateNodeState(state, node.id, {
       status: 'running',
       startedAt: new Date().toISOString(),
@@ -693,6 +742,28 @@ export class DAGWorkflowEngine {
     }
 
     return { state: current, ctx };
+    };
+
+    // Wrap in a per-node span if tracer is available
+    if (tracer) {
+      return tracer.withSpan(`dag.node.${node.type}`, 'internal', async (spanCtx) => {
+        tracer.setAttributes(spanCtx.spanId, {
+          'node.id': node.id,
+          'node.type': node.type,
+          'node.label': node.label ?? node.id,
+          'workflow.execution_id': ctx.executionId,
+        });
+        const result = await executeNodeInner();
+        const finalStatus = result.state.nodeStates[node.id]?.status ?? 'unknown';
+        tracer.setAttributes(spanCtx.spanId, {
+          'node.status': finalStatus,
+          'node.duration_ms': result.state.nodeStates[node.id]?.durationMs ?? 0,
+        });
+        return result;
+      });
+    }
+
+    return executeNodeInner();
   }
 
   // ── Private: Sub-Workflow Execution ────────────────────────────
@@ -846,6 +917,7 @@ export class DAGWorkflowEngine {
     const maxAttempts = (node.retries ?? 0) + 1;
     const attempts: EnhancedNodeExecutionState['attempts'] = [];
     let totalDuration = 0;
+    const tracer = this.config.tracer;
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       if (attempt > 0) {
@@ -860,22 +932,63 @@ export class DAGWorkflowEngine {
 
         if (config.toolId) {
           const params = resolveToolParams(config.toolParams, ctx);
-          const result = await withTimeout(
-            ctx.toolRegistry.invoke({
-              toolId: config.toolId,
-              parameters: params,
-              timeout: node.timeoutMs,
-            }),
-            node.timeoutMs ?? 30_000,
-          );
-          if (!result.success) {
-            throw new Error(result.error?.message ?? `Tool "${config.toolId}" failed`);
+
+          const invokeToolCall = async () => {
+            const result = await withTimeout(
+              ctx.toolRegistry.invoke({
+                toolId: config.toolId!,
+                parameters: params,
+                timeout: node.timeoutMs,
+              }),
+              node.timeoutMs ?? 30_000,
+            );
+            if (!result.success) {
+              throw new Error(result.error?.message ?? `Tool "${config.toolId}" failed`);
+            }
+            return result.data;
+          };
+
+          // Wrap tool invocation in a tracing span
+          if (tracer) {
+            output = await tracer.withSpan(`tool:${config.toolId}`, 'tool', async (spanCtx) => {
+              tracer.setAttributes(spanCtx.spanId, {
+                'tool.id': config.toolId!,
+                'tool.name': config.toolId!,
+                'tool.input': params,
+                'tool.timeout_ms': node.timeoutMs ?? 30_000,
+                'tool.attempt': attempt,
+                'tool.max_attempts': maxAttempts,
+                'node.id': node.id,
+                'workflow.execution_id': ctx.executionId,
+              });
+              const toolStart = performance.now();
+              const data = await invokeToolCall();
+              const toolDurationMs = performance.now() - toolStart;
+              tracer.setAttributes(spanCtx.spanId, {
+                'tool.output': data,
+                'tool.duration_ms': Math.round(toolDurationMs * 100) / 100,
+              });
+              return data;
+            });
+          } else {
+            output = await invokeToolCall();
           }
-          output = result.data;
         } else if (config.handler) {
           const handler = this.config.handlers?.[config.handler];
           if (!handler) throw new Error(`Unknown handler: "${config.handler}"`);
-          output = await withTimeout(handler(node, ctx), node.timeoutMs ?? 30_000);
+
+          if (tracer) {
+            output = await tracer.withSpan(`handler:${config.handler}`, 'internal', async (spanCtx) => {
+              tracer.setAttributes(spanCtx.spanId, {
+                'handler.name': config.handler!,
+                'handler.attempt': attempt,
+                'node.id': node.id,
+              });
+              return withTimeout(handler(node, ctx), node.timeoutMs ?? 30_000);
+            });
+          } else {
+            output = await withTimeout(handler(node, ctx), node.timeoutMs ?? 30_000);
+          }
         } else {
           throw new Error(`Task node "${node.id}" has neither toolId nor handler`);
         }
@@ -895,12 +1008,33 @@ export class DAGWorkflowEngine {
       } catch (err) {
         const durationMs = Date.now() - start;
         totalDuration += durationMs;
+
+        const isTimeout = err instanceof Error && /timed?\s*out|timeout/i.test(err.message);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+
+        // Record retry attempt as a tracing event
+        if (tracer) {
+          const retrySpanCtx = tracer.startSpan(`dag.retry.attempt`, 'internal', {
+            'retry.attempt': attempt,
+            'retry.node_id': node.id,
+            'retry.error': errorMessage,
+            'retry.is_timeout': isTimeout,
+            'retry.duration_ms': durationMs,
+          });
+          if (err instanceof Error && err.stack) {
+            tracer.setAttributes(retrySpanCtx.spanId, {
+              'exception.stacktrace': err.stack,
+            });
+          }
+          tracer.endSpan(retrySpanCtx.spanId, 'error');
+        }
+
         attempts.push({
           attempt,
           startedAt: new Date(start).toISOString(),
           completedAt: new Date().toISOString(),
           status: 'failed',
-          error: err instanceof Error ? err.message : String(err),
+          error: errorMessage,
           durationMs,
         });
       }
@@ -1054,6 +1188,16 @@ export class DAGWorkflowEngine {
 
   private async checkpoint(state: EnhancedWorkflowExecutionState): Promise<void> {
     await this.config.checkpointStore.save(state);
+    // Record checkpoint as a tracing event
+    const tracer = this.config.tracer;
+    if (tracer) {
+      const spanCtx = tracer.startSpan('dag.checkpoint', 'internal', {
+        'checkpoint.version': state.checkpointVersion,
+        'checkpoint.workflow_status': state.status,
+        'workflow.execution_id': state.executionId,
+      });
+      tracer.endSpan(spanCtx.spanId, 'ok');
+    }
     this.emit('checkpoint:saved', state);
   }
 

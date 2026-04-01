@@ -306,6 +306,9 @@ importers:
       '@matanelcohen/openspace-shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@matanelcohen/openspace-tracing':
+        specifier: workspace:*
+        version: link:../../packages/tracing
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -606,6 +609,10 @@ importers:
         version: 3.2.4(@types/debug@4.1.13)(@types/node@22.19.15)(jiti@1.21.7)(jsdom@25.0.1)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/shared:
+    dependencies:
+      '@matanelcohen/openspace-tracing':
+        specifier: workspace:*
+        version: link:../tracing
     devDependencies:
       typescript:
         specifier: ^5.7.0

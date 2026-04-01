@@ -10,6 +10,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } fr
 import { dirname, join } from 'node:path';
 
 import type { MemoryAttribution, ResponseTier, Task } from '@matanelcohen/openspace-shared';
+import type { Tracer, TraceCollectorHandle } from '@matanelcohen/openspace-tracing';
 import type Database from 'better-sqlite3';
 
 import type { ActivityFeed } from '../activity/index.js';
@@ -69,6 +70,10 @@ interface AgentWorkerConfig {
   taskTimeoutMs?: number;
   /** Per-priority timeout overrides in ms. */
   priorityTimeouts?: Record<string, number>;
+  /** Optional tracer for span-based tracing instrumentation. */
+  tracer?: Tracer;
+  /** Optional trace collector for flushing spans. */
+  traceCollector?: TraceCollectorHandle;
 }
 
 interface QueueState {
@@ -629,6 +634,7 @@ export class AgentWorkerService {
     if (!queue || queue.length === 0) return;
 
     // Circuit breaker check — skip processing if agent is paused
+    const cbState = this.circuitBreaker.get(agentId);
     if (!this.checkCircuitBreaker(agentId)) {
       this.activeTask.delete(agentId);
       const cb = this.circuitBreaker.get(agentId);
@@ -646,9 +652,34 @@ export class AgentWorkerService {
     this.activeTask.set(agentId, taskId);
     this.persistQueue();
 
+    const tracer = this.config.tracer;
+
     let taskFailed = false;
+    let rootSpanId: string | undefined;
+    let llmSpanId: string | undefined;
     try {
       const task = await this.fetchTask(taskId);
+
+      // Start root tracing span for task processing
+      if (tracer) {
+        const queueWaitMs = Date.now() - new Date(task.createdAt ?? task.updatedAt).getTime();
+        const triggerSource = task.labels?.some((l) => l.startsWith('parent:'))
+          ? 'delegation'
+          : 'user';
+
+        const spanCtx = tracer.startSpan('agent.task', 'agent', {
+          'agent.id': agentId,
+          'agent.name': this.config.agents.find((a) => a.id === agentId)?.name ?? agentId,
+          'task.id': taskId,
+          'task.title': task.title,
+          'task.priority': task.priority,
+          'task.trigger': triggerSource,
+          'task.queue_wait_ms': queueWaitMs,
+          'circuit_breaker.state': cbState?.state ?? 'closed',
+          'circuit_breaker.consecutive_failures': cbState?.consecutiveFailures ?? 0,
+        });
+        rootSpanId = spanCtx.spanId;
+      }
 
       // TTL check — skip expired tasks
       if (task.expiresAt && new Date(task.expiresAt) < new Date()) {
@@ -754,6 +785,19 @@ export class AgentWorkerService {
         agent.role.toLowerCase().includes('lead') || agent.role.toLowerCase().includes('architect');
 
       if (isLead) {
+        // Record delegation span
+        if (tracer) {
+          const delegationSpanCtx = tracer.startSpan('agent.delegation', 'agent', {
+            'delegation.type': 'lead',
+            'task.id': taskId,
+            'agent.id': agentId,
+          });
+          tracer.endSpan(delegationSpanCtx.spanId, 'ok');
+          if (rootSpanId) {
+            tracer.setAttributes(rootSpanId, { 'task.status': 'delegated' });
+            tracer.endSpan(rootSpanId, 'ok');
+          }
+        }
         await this.handleLeadDelegation(agent, task, taskId, tier);
         return;
       }
@@ -764,6 +808,7 @@ export class AgentWorkerService {
 
       // Select relevant skills using LLM (falls back to keyword matching)
       let finalSkills: ParsedSkill[] = [];
+      const skillSelectionStart = performance.now();
       try {
         finalSkills = await this.selectSkillsWithLLM(agent, task, this.allSkills);
       } catch {
@@ -802,13 +847,28 @@ export class AgentWorkerService {
 
       const skillsPrompt = buildSkillsPrompt(finalSkills);
 
+      // Record skill selection span
+      if (tracer) {
+        const skillDurationMs = performance.now() - skillSelectionStart;
+        const skillSpanCtx = tracer.startSpan('agent.skill_selection', 'internal', {
+          'skill.count': finalSkills.length,
+          'skill.ids': finalSkills.map((s) => s.id),
+          'skill.duration_ms': Math.round(skillDurationMs * 100) / 100,
+          'task.id': taskId,
+          'agent.id': agentId,
+        });
+        tracer.endSpan(skillSpanCtx.spanId, 'ok');
+      }
+
       // Retrieve relevant memories via MemoryRecallEngine (FTS5 + strength + recency scoring)
       let memoriesPrompt = '';
       let memoryAttributions: MemoryAttribution[] = [];
+      const memoryRecallStart = performance.now();
       try {
         const engine = await this.ensureRecallEngine();
         if (engine) {
-          const recallResults = engine.recall(agent.id, taskText);
+          const taskTextForRecall = `${task.title} ${task.description ?? ''}`;
+          const recallResults = engine.recall(agent.id, taskTextForRecall);
           if (recallResults.length > 0) {
             const contextBlock = engine.buildContextBlock(recallResults);
             if (contextBlock) {
@@ -819,6 +879,18 @@ export class AgentWorkerService {
         }
       } catch {
         /* best effort — memory recall is non-critical */
+      }
+      // Record memory recall span
+      if (tracer) {
+        const memDurationMs = performance.now() - memoryRecallStart;
+        const memSpanCtx = tracer.startSpan('agent.memory_recall', 'internal', {
+          'memory.count': memoryAttributions.length,
+          'memory.duration_ms': Math.round(memDurationMs * 100) / 100,
+          'memory.has_context': memoriesPrompt.length > 0,
+          'task.id': taskId,
+          'agent.id': agentId,
+        });
+        tracer.endSpan(memSpanCtx.spanId, 'ok');
       }
 
       // ── Build shared event handler ────────────────────────────────
@@ -890,6 +962,7 @@ export class AgentWorkerService {
       };
 
       // ── AI completion — prefer agentic mode when available ──────
+      const promptBuildStart = performance.now();
       let teamStatusPrompt = '';
       if (this.config.teamStatusService) {
         try {
@@ -919,6 +992,21 @@ export class AgentWorkerService {
         (memoriesPrompt ? `${memoriesPrompt}\n` : '') +
         (skillsPrompt ? `${skillsPrompt}\n\n` : '') +
         `When done, provide a brief summary of what you did.`;
+
+      // Record prompt building span
+      if (tracer) {
+        const promptBuildDurationMs = performance.now() - promptBuildStart;
+        const promptSpanCtx = tracer.startSpan('agent.prompt_build', 'internal', {
+          'prompt.build_duration_ms': Math.round(promptBuildDurationMs * 100) / 100,
+          'prompt.system_length': systemPrompt.length,
+          'prompt.has_memories': memoriesPrompt.length > 0,
+          'prompt.has_skills': !!skillsPrompt,
+          'prompt.has_team_status': !!teamStatusPrompt,
+          'task.id': taskId,
+          'agent.id': agentId,
+        });
+        tracer.endSpan(promptSpanCtx.spanId, 'ok');
+      }
 
       const messages = [
         {
@@ -974,6 +1062,17 @@ export class AgentWorkerService {
 
       let result;
       let worktree: WorktreeInfo | null = null;
+      const llmStart = performance.now();
+
+      if (tracer) {
+        const llmSpanCtx = tracer.startSpan('agent.llm_execution', 'llm', {
+          'llm.mode': this.config.aiProvider.agenticCompletion ? 'agentic' : 'chat',
+          'task.id': taskId,
+          'agent.id': agentId,
+        });
+        llmSpanId = llmSpanCtx.spanId;
+      }
+
       if (this.config.aiProvider.agenticCompletion) {
         // Determine working directory: use worktree sandbox if available
         let workDir: string;
@@ -1056,6 +1155,16 @@ export class AgentWorkerService {
         ]);
       }
 
+      // Close LLM execution span
+      if (tracer && llmSpanId) {
+        const llmDurationMs = performance.now() - llmStart;
+        tracer.setAttributes(llmSpanId, {
+          'llm.total_duration_ms': Math.round(llmDurationMs * 100) / 100,
+          'llm.result_length': result.content?.length ?? 0,
+        });
+        tracer.endSpan(llmSpanId, 'ok');
+      }
+
       // Auto-commit + PR if worktree sandbox was used
       let prInfo: { number: number; url: string } | undefined;
       if (worktree && this.config.worktreeService) {
@@ -1121,6 +1230,17 @@ export class AgentWorkerService {
 
       // Clear retry attempts on success
       this.clearAttempts(taskId);
+
+      // End root span on success
+      if (tracer && rootSpanId) {
+        tracer.setAttributes(rootSpanId, {
+          'task.status': 'completed',
+          'task.duration_ms': durationMs,
+          'task.has_pr': !!prInfo,
+          'task.pr_number': prInfo?.number,
+        });
+        tracer.endSpan(rootSpanId, 'ok');
+      }
 
       // Extract and save memories from this task using LLM-based extraction
       try {
@@ -1189,6 +1309,30 @@ export class AgentWorkerService {
       const message = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error ? err.stack?.substring(0, 500) : '';
       console.error(`[AgentWorker] ${agentId} failed on ${taskId}:`, message);
+
+      // End LLM span on error if still open
+      if (tracer && llmSpanId) {
+        tracer.setAttributes(llmSpanId, {
+          'llm.error': message,
+        });
+        tracer.endSpan(llmSpanId, 'error');
+        llmSpanId = undefined;
+      }
+
+      // End root span on error
+      if (tracer && rootSpanId) {
+        const isTimeout = /timed?\s*out|timeout/i.test(message);
+        tracer.recordEvent(rootSpanId, 'exception', {
+          'exception.message': message,
+          'exception.stacktrace': err instanceof Error ? err.stack : undefined,
+          'exception.type': isTimeout ? 'TimeoutError' : (err instanceof Error ? err.constructor.name : 'Error'),
+        });
+        tracer.setAttributes(rootSpanId, {
+          'task.status': 'failed',
+          'task.error': message,
+        });
+        tracer.endSpan(rootSpanId, 'error');
+      }
 
       // Record the failure with actual error message
       this.recordAttempt(taskId, message);

@@ -10,7 +10,6 @@ import type {
   SpanEvent,
   SpanKind,
   SpanStatus,
-  TokenUsage,
   TraceCollectorHandle,
   TracerConfig,
 } from './types.js';
@@ -159,10 +158,26 @@ export class Tracer {
         this.endSpan(ctx.spanId, 'ok');
         return result;
       } catch (err) {
-        this.recordEvent(ctx.spanId, 'exception', {
+        const isTimeout =
+          err instanceof Error &&
+          /timed?\s*out|timeout|deadline exceeded/i.test(err.message);
+
+        const exceptionAttrs: Record<string, unknown> = {
           'exception.message':
             err instanceof Error ? err.message : String(err),
-        });
+        };
+
+        if (err instanceof Error && err.stack) {
+          exceptionAttrs['exception.stacktrace'] = err.stack;
+        }
+
+        if (isTimeout) {
+          exceptionAttrs['exception.type'] = 'TimeoutError';
+        } else if (err instanceof Error) {
+          exceptionAttrs['exception.type'] = err.constructor.name;
+        }
+
+        this.recordEvent(ctx.spanId, 'exception', exceptionAttrs);
         this.endSpan(ctx.spanId, 'error');
         throw err;
       }

@@ -22,6 +22,7 @@
     "@matanelcohen/openspace-mcp-server": "workspace:*",
     "@matanelcohen/openspace-memory-store": "workspace:*",
     "@matanelcohen/openspace-shared": "workspace:*",
+    "@matanelcohen/openspace-tracing": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.214.0",
     "@opentelemetry/sdk-node": "^0.214.0",

@@ -8,6 +8,7 @@
  */
 
 import type { InterruptPolicy, InterruptResolution, InterruptState } from './interrupt.js';
+import type { Tracer } from '@matanelcohen/openspace-tracing';
 
 // ── Step Node Types ─────────────────────────────────────────────
 
@@ -548,6 +549,9 @@ export interface DAGWorkflowEngineConfig {
 
   /** Event listeners for observability. */
   eventListeners?: WorkflowEventHandler[];
+
+  /** Optional tracer for span-based tracing instrumentation. */
+  tracer?: Tracer;
 }
 
 /** Options for starting a new workflow execution. */
