@@ -38,43 +38,51 @@ export function instrumentLLMCall<TInput, TOutput>(
       'llm.model': model,
       ...(provider && { 'llm.provider': provider }),
       ...(streaming !== undefined && { 'llm.streaming': streaming }),
+      'llm.input': input,
+      ...(Array.isArray(input) && { 'llm.messages_count': input.length }),
     } satisfies Partial<Record<keyof LLMSpanAttributes, unknown>>;
 
-    return tracer.withSpan(`llm:${model}`, 'llm', async (ctx) => {
-      const start = performance.now();
+    return tracer.withSpan(
+      `llm:${model}`,
+      'llm',
+      async (ctx) => {
+        const start = performance.now();
 
-      if (streaming) {
-        tracer.recordEvent(ctx.spanId, 'llm.stream.start');
-      }
+        if (streaming) {
+          tracer.recordEvent(ctx.spanId, 'llm.stream.start');
+        }
 
-      const output = await fn(input);
-      const totalDurationMs = performance.now() - start;
+        const output = await fn(input);
+        const totalDurationMs = performance.now() - start;
 
-      const usage = extractUsage?.(output);
-      const promptTokens = usage?.promptTokens;
-      const completionTokens = usage?.completionTokens;
-      const totalTokens =
-        promptTokens !== undefined || completionTokens !== undefined
-          ? (promptTokens ?? 0) + (completionTokens ?? 0)
-          : undefined;
+        const usage = extractUsage?.(output);
+        const promptTokens = usage?.promptTokens;
+        const completionTokens = usage?.completionTokens;
+        const totalTokens =
+          promptTokens !== undefined || completionTokens !== undefined
+            ? (promptTokens ?? 0) + (completionTokens ?? 0)
+            : undefined;
 
-      const costUsd =
-        priceTable && promptTokens !== undefined && completionTokens !== undefined
-          ? calculateCost(model, promptTokens, completionTokens, priceTable)
-          : undefined;
+        const costUsd =
+          priceTable && promptTokens !== undefined && completionTokens !== undefined
+            ? calculateCost(model, promptTokens, completionTokens, priceTable)
+            : undefined;
 
-      const llmAttrs: Record<string, unknown> = {
-        ...(promptTokens !== undefined && { 'llm.prompt_tokens': promptTokens }),
-        ...(completionTokens !== undefined && {
-          'llm.completion_tokens': completionTokens,
-        }),
-        ...(totalTokens !== undefined && { 'llm.total_tokens': totalTokens }),
-        ...(costUsd !== undefined && { 'llm.cost_usd': costUsd }),
-        'llm.total_duration_ms': Math.round(totalDurationMs * 100) / 100,
-      };
+        const llmAttrs: Record<string, unknown> = {
+          ...(promptTokens !== undefined && { 'llm.prompt_tokens': promptTokens }),
+          ...(completionTokens !== undefined && {
+            'llm.completion_tokens': completionTokens,
+          }),
+          ...(totalTokens !== undefined && { 'llm.total_tokens': totalTokens }),
+          ...(costUsd !== undefined && { 'llm.cost_usd': costUsd }),
+          'llm.total_duration_ms': Math.round(totalDurationMs * 100) / 100,
+          'llm.output': output,
+        };
 
-      tracer.setAttributes(ctx.spanId, llmAttrs);
-      return output;
-    }, attrs);
+        tracer.setAttributes(ctx.spanId, llmAttrs);
+        return output;
+      },
+      attrs,
+    );
   };
 }

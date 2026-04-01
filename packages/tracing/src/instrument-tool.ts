@@ -33,24 +33,45 @@ export function instrumentToolCall<TInput, TOutput>(
       'tool.input': input,
     } satisfies Partial<Record<keyof ToolSpanAttributes, unknown>>;
 
-    return tracer.withSpan(`tool:${toolName}`, 'tool', async (ctx) => {
-      const start = performance.now();
-      try {
-        const output = await fn(input);
-        const durationMs = performance.now() - start;
-        tracer.setAttributes(ctx.spanId, {
-          'tool.output': output,
-          'tool.duration_ms': Math.round(durationMs * 100) / 100,
-        });
-        return output;
-      } catch (err) {
-        const durationMs = performance.now() - start;
-        tracer.setAttributes(ctx.spanId, {
-          'tool.error': err instanceof Error ? err.message : String(err),
-          'tool.duration_ms': Math.round(durationMs * 100) / 100,
-        });
-        throw err;
-      }
-    }, attrs);
+    return tracer.withSpan(
+      `tool:${toolName}`,
+      'tool',
+      async (ctx) => {
+        const start = performance.now();
+        try {
+          const output = await fn(input);
+          const durationMs = performance.now() - start;
+          const inputSizeBytes = (() => {
+            try {
+              return JSON.stringify(input)?.length ?? 0;
+            } catch {
+              return 0;
+            }
+          })();
+          const outputSizeBytes = (() => {
+            try {
+              return JSON.stringify(output)?.length ?? 0;
+            } catch {
+              return 0;
+            }
+          })();
+          tracer.setAttributes(ctx.spanId, {
+            'tool.output': output,
+            'tool.duration_ms': Math.round(durationMs * 100) / 100,
+            'tool.input_size_bytes': inputSizeBytes,
+            'tool.output_size_bytes': outputSizeBytes,
+          });
+          return output;
+        } catch (err) {
+          const durationMs = performance.now() - start;
+          tracer.setAttributes(ctx.spanId, {
+            'tool.error': err instanceof Error ? err.message : String(err),
+            'tool.duration_ms': Math.round(durationMs * 100) / 100,
+          });
+          throw err;
+        }
+      },
+      attrs,
+    );
   };
 }

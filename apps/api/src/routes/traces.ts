@@ -75,6 +75,12 @@ interface SpanResponse {
   provider: string | null;
   inputPreview: string | null;
   outputPreview: string | null;
+  temperature: number | null;
+  maxTokens: number | null;
+  stopReason: string | null;
+  messagesCount: number | null;
+  inputBytes: number | null;
+  outputBytes: number | null;
   metadata: Record<string, unknown>;
   children: SpanResponse[];
 }
@@ -99,8 +105,20 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
     let model: string | null = null;
     let tokens: { prompt: number; completion: number; total: number } | null = null;
     let cost: number | null = null;
+    let temperature: number | null = null;
+    let maxTokens: number | null = null;
+    let stopReason: string | null = null;
+    let messagesCount: number | null = null;
+    let inputBytes: number | null = null;
+    let outputBytes: number | null = null;
 
-    if (s.kind === 'tool') {
+    const hasToolAttrs = attrs['tool.name'] != null || attrs['tool.id'] != null;
+    const hasLlmAttrs =
+      attrs['llm.model'] != null ||
+      attrs['gen_ai.request.model'] != null ||
+      attrs['ai.model'] != null;
+
+    if (s.kind === 'tool' || hasToolAttrs) {
       // Tool spans: extract tool.* attributes
       const toolInput = attrs['tool.input'] ?? attrs['arguments'] ?? attrs['input'];
       const toolOutput = attrs['tool.output'] ?? attrs['output'] ?? attrs['result'];
@@ -118,18 +136,45 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
       if (toolDuration != null) {
         attrs['tool.duration_ms'] = toolDuration;
       }
-    } else if (s.kind === 'llm') {
-      // LLM spans: extract llm.* and ai.* attributes
-      const prompt = attrs['ai.prompt'] as string | undefined;
-      const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
-      const response = attrs['ai.response'] as string | undefined;
-      const llmModel = (attrs['llm.model'] as string) ?? (attrs['ai.model'] as string) ?? null;
 
-      const inputObj: Record<string, unknown> = {};
-      if (prompt) inputObj.prompt = prompt;
-      if (systemPrompt) inputObj.systemPrompt = systemPrompt;
-      input = Object.keys(inputObj).length > 0 ? inputObj : null;
-      output = response ? { response } : null;
+      // Compute input/output byte sizes
+      if (input != null) {
+        try {
+          inputBytes = JSON.stringify(input).length;
+        } catch {
+          /* ignore */
+        }
+      }
+      if (output != null) {
+        try {
+          outputBytes = JSON.stringify(output).length;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+
+    if (s.kind === 'llm' || hasLlmAttrs) {
+      // LLM spans: extract llm.* and ai.* attributes
+      const prompt = attrs['llm.input'] ?? (attrs['ai.prompt'] as string | undefined);
+      const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
+      const response = attrs['llm.output'] ?? (attrs['ai.response'] as string | undefined);
+      const llmModel =
+        (attrs['llm.model'] as string) ??
+        (attrs['gen_ai.request.model'] as string) ??
+        (attrs['ai.model'] as string) ??
+        null;
+
+      // Only overwrite input/output if not already set by tool extraction
+      if (input == null) {
+        const inputObj: Record<string, unknown> = {};
+        if (prompt) inputObj.prompt = prompt;
+        if (systemPrompt) inputObj.systemPrompt = systemPrompt;
+        input = Object.keys(inputObj).length > 0 ? inputObj : null;
+      }
+      if (output == null) {
+        output = response ? { response } : null;
+      }
       model = llmModel;
 
       // Token usage
@@ -145,9 +190,28 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
       const llmCost = attrs['llm.cost_usd'] as number | undefined;
       if (llmCost != null) cost = llmCost;
 
+      // Extended LLM fields
+      temperature =
+        (attrs['llm.temperature'] as number | undefined) ??
+        (attrs['gen_ai.request.temperature'] as number | undefined) ??
+        null;
+      maxTokens =
+        (attrs['llm.max_tokens'] as number | undefined) ??
+        (attrs['gen_ai.request.max_tokens'] as number | undefined) ??
+        null;
+      stopReason =
+        (attrs['llm.stop_reason'] as string | undefined) ??
+        (attrs['gen_ai.response.finish_reasons'] as string | undefined) ??
+        null;
+      messagesCount = (attrs['llm.messages_count'] as number | undefined) ?? null;
+
       // Error from exception events
-      error = (attrs['ai.error'] as string | undefined) ?? null;
-    } else {
+      if (!error) {
+        error = (attrs['ai.error'] as string | undefined) ?? null;
+      }
+    }
+
+    if (!hasToolAttrs && !hasLlmAttrs && s.kind !== 'tool' && s.kind !== 'llm') {
       // Other kinds (internal, agent, reasoning): fallback to ai.* attributes
       const prompt = attrs['ai.prompt'] as string | undefined;
       const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
@@ -180,13 +244,14 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
     }
 
     // Extract toolName and override generic span names for tool spans
-    const toolName = s.kind === 'tool' ? ((attrs['tool.name'] as string) ?? null) : null;
+    const toolName =
+      s.kind === 'tool' || hasToolAttrs ? ((attrs['tool.name'] as string) ?? null) : null;
     const spanName =
       s.kind === 'tool' && toolName && /^tool(-call)?$/i.test(s.name) ? toolName : s.name;
 
     // Extract provider for LLM spans
     const provider =
-      s.kind === 'llm'
+      s.kind === 'llm' || hasLlmAttrs
         ? ((attrs['llm.provider'] as string) ?? (attrs['ai.provider'] as string) ?? null)
         : null;
 
@@ -210,6 +275,12 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
       provider,
       inputPreview: makePreview(input),
       outputPreview: makePreview(output),
+      temperature,
+      maxTokens,
+      stopReason,
+      messagesCount,
+      inputBytes,
+      outputBytes,
       metadata: attrs,
       children: [],
     };
@@ -288,6 +359,12 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
       provider: null,
       inputPreview: null,
       outputPreview: null,
+      temperature: null,
+      maxTokens: null,
+      stopReason: null,
+      messagesCount: null,
+      inputBytes: null,
+      outputBytes: null,
       metadata: {},
       children: [],
     };

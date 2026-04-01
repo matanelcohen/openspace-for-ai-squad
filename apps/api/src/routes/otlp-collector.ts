@@ -101,6 +101,37 @@ function nanoToMs(nanos?: string): number {
   return Math.floor(Number(BigInt(nanos) / BigInt(1_000_000)));
 }
 
+/**
+ * Detect semantic span kind from attributes.
+ * OTel numeric kinds (0–5) don't represent tool/llm/agent;
+ * we infer semantic kind from well-known attribute keys.
+ */
+function detectSemanticKind(
+  attrs: Record<string, unknown>,
+  spanName: string,
+  otelKind?: number,
+): string {
+  // If an instrumentation explicitly set a kind string, use it directly
+  if (typeof attrs['openai.kind'] === 'string') return attrs['openai.kind'];
+
+  // Tool detection
+  if (attrs['tool.name'] != null || attrs['tool.id'] != null) return 'tool';
+
+  // LLM detection
+  if (
+    attrs['llm.model'] != null ||
+    attrs['gen_ai.request.model'] != null ||
+    attrs['ai.model'] != null
+  )
+    return 'llm';
+
+  // Agent detection
+  if (attrs['ai.agent_id'] != null || spanName.startsWith('agent:')) return 'agent';
+
+  // Fallback to numeric OTel kind
+  return SPAN_KIND_MAP[otelKind ?? 0] ?? 'internal';
+}
+
 /** Convert OTLP events to our JSON events format. */
 function mapEvents(events?: OtlpSpanEvent[]): string {
   if (!events?.length) return '[]';
@@ -138,7 +169,6 @@ const otlpCollectorRoute: FastifyPluginAsync = async (app) => {
             const endMs = otlpSpan.endTimeUnixNano ? nanoToMs(otlpSpan.endTimeUnixNano) : undefined;
             const durationMs = endMs !== undefined ? endMs - startMs : undefined;
             const status = STATUS_MAP[otlpSpan.status?.code ?? 0] ?? 'unset';
-            const kind = SPAN_KIND_MAP[otlpSpan.kind ?? 0] ?? 'internal';
 
             // Merge resource + span attributes + scope info
             const attrs: Record<string, unknown> = {
@@ -147,6 +177,9 @@ const otlpCollectorRoute: FastifyPluginAsync = async (app) => {
             };
             if (scopeName) attrs['otel.scope.name'] = scopeName;
             attrs['otel.source'] = 'otlp-collector';
+
+            // Auto-detect semantic kind from attributes (overrides numeric OTel kind)
+            const kind = detectSemanticKind(attrs, otlpSpan.name, otlpSpan.kind);
 
             // Ensure the parent trace row exists
             traceService.ensureTrace({
