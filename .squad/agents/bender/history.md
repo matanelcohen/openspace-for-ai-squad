@@ -148,6 +148,20 @@ This task is already done. Nothing to implement.
 1. **Tool name display** — Tool spans now show the actual `tool.name` attribute instead of generic names; `tool:X` prefixes are stripped
 2. **Enriched payload** — Tool spans populate `input`/`output`/`error` from `tool.*` attributes; LLM spans surface `llmProvider`, `llmStreaming`, `llmTimeToFirstTokenMs` as top-level fields
 3. **Compute
+- Standardized fallback IDs: `ai.agent_id` defaults to 'system' and `ai.task_title` defaults to 'untitled' (never null/undefined/'unknown').
+- The project uses OpenTelemetry (OTel) for tracing with spans stored in a SQLite database. Span attributes are stored as JSON in the `attributes` column of the `spans` table.
+- The project uses Fastify (not Express) for the API layer, with app setup in `apps/api/src/app.ts` and an OTLP collector route at `apps/api/src/routes/otlp-collector.ts`.
+- The repo uses git worktrees (`.git-worktrees/`) for parallel task branches, and tests are run with vitest (105 tracing tests).
+- The tracing package is at `packages/tracing/` with key files: `instrument-tool.ts`, `instrument-llm.ts`, `tracer.ts`, and `types.ts`. The API consumes it in `apps/api/src/services/ai/copilot-provider.ts`.
+- Completed "Enrich backend trace spans with tool inputs/outputs and metadata": Done. Here's the summary:
+
+**7 files changed across `packages/tracing/` and `apps/api/`:**
+
+| # | Change | File(s) |
+|---|--------|---------|
+| 1 | **Tool call OTel spans** — `tool.execution_start/end` events create child spans with `tool.name`, `tool.input`, `tool.output`, `tool.duration_ms`, `tool.error` | `copilot-provider.ts` |
+| 2 | **OTel span attributes** — `ai.prompt`, `ai.system_prompt`, `ai.response` confirmed on spans; added `metadata` to `TraceServiceLike` | `copilot-provider.ts` |
+|
 
 ## Review Summary
 

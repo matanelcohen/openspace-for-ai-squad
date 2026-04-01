@@ -178,6 +178,23 @@ Here's what I did:
 3. **API endpoint** — `GET /api/tasks/:id/dependency-graph` traverses the full dependency graph (upstream + downstream)
 4. **`TaskDependencyGraph` component** — Interactive DAG using `@xyflow/react`:
    -
+- Trace viewer components live in apps/web/src/components/traces/ (e.g., trace-detail.tsx), with types in apps/web/src/lib/trace-types.ts and mock data in apps/web/src/lib/mock-traces.ts.
+- The web app package is named @matanelcohen/openspace-web and can be targeted with pnpm --filter for build/test/lint commands.
+- The repo uses git worktrees at .git-worktrees/task-<id> for task branches, keeping the main working directory clean.
+- Pre-existing build errors exist in apps/web (e.g., chat/page.tsx) and many tests fail (layout, chat, voice) — stash-and-compare is needed to confirm new changes don't introduce regressions.
+- Completed "Enhance frontend trace viewer to display tool details and rich span data": Commit passed lint-staged (eslint + prettier). All done! Here's a summary:
+
+## ✅ Task Complete
+
+Enhanced the trace viewer with all 7 requested features across 3 files:
+
+**Files changed:** `trace-detail.tsx` (major rewrite), `trace-types.ts`, `mock-traces.ts`
+
+### What I built:
+
+1. **Tool call detail panel** — Dedicated panel showing tool name prominently, formatted JSON input/output with expand/collapse, duration, and error display with red alert box
+
+2. **Span list improvements** — Tool names s
 
 ## Summary
 

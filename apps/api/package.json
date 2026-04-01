@@ -3,7 +3,7 @@
   "version": "0.5.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --ignore '.git-worktrees/**' --ignore '.squad/**' src/index.ts",
     "build": "echo 'API runs via tsx — no build needed'",
     "start": "node dist/index.js",
     "test": "vitest run",
