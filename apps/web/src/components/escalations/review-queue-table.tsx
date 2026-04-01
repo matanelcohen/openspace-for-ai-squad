@@ -1,15 +1,13 @@
 'use client';
 
-import type { EscalationItem, EscalationPriority, EscalationStatus } from '@matanelcohen/openspace-shared';
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  CheckSquare,
-  Square,
-} from 'lucide-react';
+import type {
+  EscalationItem,
+  EscalationPriority,
+  EscalationStatus,
+} from '@matanelcohen/openspace-shared';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Square } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import { ConfidenceBadge } from '@/components/escalations/confidence-badge';
 import { EscalationStatusBadge } from '@/components/escalations/escalation-status-badge';
@@ -48,6 +46,72 @@ const priorityOrder: Record<EscalationPriority, number> = {
   medium: 2,
   low: 3,
 };
+
+interface EscalationRowProps {
+  esc: EscalationItem;
+  isSelected: boolean;
+  onToggle: (id: string) => void;
+}
+
+const EscalationRow = memo(function EscalationRow({
+  esc,
+  isSelected,
+  onToggle,
+}: EscalationRowProps) {
+  return (
+    <TableRow className="cursor-pointer" data-testid={`escalation-row-${esc.id}`}>
+      <TableCell>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle(esc.id);
+          }}
+          aria-label={isSelected ? `Deselect ${esc.id}` : `Select ${esc.id}`}
+        >
+          {isSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+        </Button>
+      </TableCell>
+      <TableCell>
+        <Link
+          href={`/escalations/${esc.id}`}
+          className="font-medium text-foreground hover:underline"
+        >
+          {esc.context.agentId}
+        </Link>
+      </TableCell>
+      <TableCell className="capitalize text-sm text-muted-foreground">
+        {esc.reason.replace(/_/g, ' ')}
+      </TableCell>
+      <TableCell>
+        <PriorityIndicator priority={esc.priority} />
+      </TableCell>
+      <TableCell>
+        <EscalationStatusBadge status={esc.status} />
+      </TableCell>
+      <TableCell>
+        <ConfidenceBadge score={esc.context.confidenceScore} />
+      </TableCell>
+      <TableCell>
+        {esc.status === 'pending' || esc.status === 'claimed' ? (
+          <SlaCountdown timeoutAt={esc.timeoutAt} />
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+        {new Date(esc.createdAt).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </TableCell>
+    </TableRow>
+  );
+});
 
 export function ReviewQueueTable({
   escalations,
@@ -116,15 +180,18 @@ export function ReviewQueueTable({
     }
   };
 
-  const toggleOne = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
-    }
-    onSelectionChange(next);
-  };
+  const toggleOne = useCallback(
+    (id: string) => {
+      const next = new Set(selectedIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      onSelectionChange(next);
+    },
+    [selectedIds, onSelectionChange],
+  );
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />;
@@ -259,65 +326,12 @@ export function ReviewQueueTable({
               </TableRow>
             ) : (
               filtered.map((esc) => (
-                <TableRow
+                <EscalationRow
                   key={esc.id}
-                  className="cursor-pointer"
-                  data-testid={`escalation-row-${esc.id}`}
-                >
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleOne(esc.id);
-                      }}
-                      aria-label={selectedIds.has(esc.id) ? `Deselect ${esc.id}` : `Select ${esc.id}`}
-                    >
-                      {selectedIds.has(esc.id) ? (
-                        <CheckSquare className="h-4 w-4" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/escalations/${esc.id}`}
-                      className="font-medium text-foreground hover:underline"
-                    >
-                      {esc.context.agentId}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="capitalize text-sm text-muted-foreground">
-                    {esc.reason.replace(/_/g, ' ')}
-                  </TableCell>
-                  <TableCell>
-                    <PriorityIndicator priority={esc.priority} />
-                  </TableCell>
-                  <TableCell>
-                    <EscalationStatusBadge status={esc.status} />
-                  </TableCell>
-                  <TableCell>
-                    <ConfidenceBadge score={esc.context.confidenceScore} />
-                  </TableCell>
-                  <TableCell>
-                    {esc.status === 'pending' || esc.status === 'claimed' ? (
-                      <SlaCountdown timeoutAt={esc.timeoutAt} />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {new Date(esc.createdAt).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </TableCell>
-                </TableRow>
+                  esc={esc}
+                  isSelected={selectedIds.has(esc.id)}
+                  onToggle={toggleOne}
+                />
               ))
             )}
           </TableBody>
