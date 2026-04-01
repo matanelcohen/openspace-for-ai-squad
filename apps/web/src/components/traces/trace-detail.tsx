@@ -210,11 +210,21 @@ export function SpanSubtitle({ span }: { span: Span }) {
 
 // --- JSON Syntax Highlighting ---
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function SyntaxHighlightedJson({ data }: { data: unknown }) {
   const json = JSON.stringify(data, null, 2) ?? 'null';
-  const highlighted = json
-    .replace(/("(?:\\.|[^"\\])*")\s*:/g, '<span class="text-blue-400">$1</span>:')
-    .replace(/:\s*("(?:\\.|[^"\\])*")/g, ': <span class="text-green-400">$1</span>')
+  const escaped = escapeHtml(json);
+  const highlighted = escaped
+    .replace(/(&quot;(?:\\.|[^&])*?&quot;)\s*:/g, '<span class="text-blue-400">$1</span>:')
+    .replace(/:\s*(&quot;(?:\\.|[^&])*?&quot;)/g, ': <span class="text-green-400">$1</span>')
     .replace(/:\s*(\d+\.?\d*)/g, ': <span class="text-amber-400">$1</span>')
     .replace(/:\s*(true|false)/g, ': <span class="text-purple-400">$1</span>')
     .replace(/:\s*(null)/g, ': <span class="text-red-400">$1</span>');
