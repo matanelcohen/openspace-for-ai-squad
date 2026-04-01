@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { api } from '@/lib/api-client';
 
-interface YoloStatus {
+interface AutoPilotStatus {
   enabled: boolean;
   lastScanAt: string | null;
   results: { assigned: number; skipped: number };
@@ -23,44 +23,44 @@ interface ScanResult {
   timestamp: string;
 }
 
-export function useYoloStatus() {
-  return useQuery<YoloStatus>({
-    queryKey: ['yolo'],
-    queryFn: () => api.get<YoloStatus>('/api/yolo/status'),
+export function useAutoPilotStatus() {
+  return useQuery<AutoPilotStatus>({
+    queryKey: ['autopilot'],
+    queryFn: () => api.get<AutoPilotStatus>('/api/autopilot/status'),
     refetchInterval: 5000,
   });
 }
 
-export function useStartYolo() {
+export function useStartAutoPilot() {
   const queryClient = useQueryClient();
 
   return useMutation({
     mutationFn: (opts?: { scanIntervalMs?: number; maxTasksPerScan?: number }) =>
-      api.post<YoloStatus>('/api/yolo/start', opts ?? {}),
+      api.post<AutoPilotStatus>('/api/autopilot/start', opts ?? {}),
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['yolo'] });
+      queryClient.invalidateQueries({ queryKey: ['autopilot'] });
     },
   });
 }
 
-export function useStopYolo() {
+export function useStopAutoPilot() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => api.post<YoloStatus>('/api/yolo/stop', {}),
+    mutationFn: () => api.post<AutoPilotStatus>('/api/autopilot/stop', {}),
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['yolo'] });
+      queryClient.invalidateQueries({ queryKey: ['autopilot'] });
     },
   });
 }
 
-export function useScanYolo() {
+export function useScanAutoPilot() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: () => api.post<ScanResult>('/api/yolo/scan', {}),
+    mutationFn: () => api.post<ScanResult>('/api/autopilot/scan', {}),
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['yolo'] });
+      queryClient.invalidateQueries({ queryKey: ['autopilot'] });
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
     },
   });

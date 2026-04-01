@@ -1,6 +1,6 @@
 'use client';
 
-import { Rocket, Square, Zap } from 'lucide-react';
+import { Lightbulb, Rocket, Square, Zap } from 'lucide-react';
 import { useState } from 'react';
 
 import { DashboardActivitySidebar } from '@/components/dashboard/activity-sidebar';
@@ -12,17 +12,23 @@ import { Button } from '@/components/ui/button';
 import { LoadingSpinner } from '@/components/ui/loading-spinner';
 import { SquadInitWizard } from '@/components/workspace/squad-init-wizard';
 import { useActiveWorkspace, useWorkspaceStatus } from '@/hooks/use-workspaces';
-import { useScanYolo,useStartYolo, useStopYolo, useYoloStatus } from '@/hooks/use-yolo';
+import { useInnovationStatus, useStartInnovation, useStopInnovation, useScanInnovation } from '@/hooks/use-innovation';
+import { useScanAutoPilot,useStartAutoPilot, useStopAutoPilot, useAutoPilotStatus } from '@/hooks/use-autopilot';
 
 export default function DashboardPage() {
   const { data: workspace, isLoading: wsLoading } = useActiveWorkspace();
   const { data: status, isLoading: statusLoading } = useWorkspaceStatus(workspace?.id);
   const [wizardOpen, setWizardOpen] = useState(false);
 
-  const { data: yolo } = useYoloStatus();
-  const startYolo = useStartYolo();
-  const stopYolo = useStopYolo();
-  const scanYolo = useScanYolo();
+  const { data: autopilot } = useAutoPilotStatus();
+  const startAutoPilot = useStartAutoPilot();
+  const stopAutoPilot = useStopAutoPilot();
+  const scanAutoPilot = useScanAutoPilot();
+
+  const { data: innovation } = useInnovationStatus();
+  const startInnovation = useStartInnovation();
+  const stopInnovation = useStopInnovation();
+  const scanInnovation = useScanInnovation();
 
   if (wsLoading || statusLoading) {
     return (
@@ -65,20 +71,20 @@ export default function DashboardPage() {
   return (
     <div className="flex gap-6">
       <div className="min-w-0 flex-1 space-y-6">
-        {/* YOLO Mode */}
-        {yolo && !yolo.enabled && (
+        {/* Auto Pilot */}
+        {autopilot && !autopilot.enabled && (
           <button
             type="button"
-            onClick={() => startYolo.mutate({})}
-            disabled={startYolo.isPending}
+            onClick={() => startAutoPilot.mutate({})}
+            disabled={startAutoPilot.isPending}
             className="w-full rounded-lg border-2 border-dashed border-purple-300 bg-purple-50/50 p-4 text-center transition-colors hover:border-purple-400 hover:bg-purple-100/50 dark:border-purple-700 dark:bg-purple-950/30 dark:hover:border-purple-600 dark:hover:bg-purple-950/50"
           >
             <span className="text-lg font-semibold text-purple-700 dark:text-purple-300">
-              🚀 YOLO Mode — Let the lead agent run the board
+              🚀 Auto Pilot — Let the lead agent run the board
             </span>
           </button>
         )}
-        {yolo?.enabled && (
+        {autopilot?.enabled && (
           <div className="rounded-lg border border-green-300 bg-green-50/50 p-4 dark:border-green-700 dark:bg-green-950/30">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -87,15 +93,15 @@ export default function DashboardPage() {
                   style={{ animation: 'pulse 2s ease-in-out infinite' }}
                 />
                 <span className="text-lg font-semibold text-green-700 dark:text-green-300">
-                  🚀 YOLO Mode Active
+                  🚀 Auto Pilot Active
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => scanYolo.mutate()}
-                  disabled={scanYolo.isPending}
+                  onClick={() => scanAutoPilot.mutate()}
+                  disabled={scanAutoPilot.isPending}
                   className="gap-1"
                 >
                   <Zap className="h-3.5 w-3.5" />
@@ -104,8 +110,8 @@ export default function DashboardPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => stopYolo.mutate()}
-                  disabled={stopYolo.isPending}
+                  onClick={() => stopAutoPilot.mutate()}
+                  disabled={stopAutoPilot.isPending}
                   className="gap-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
                 >
                   <Square className="h-3.5 w-3.5" />
@@ -114,15 +120,73 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
-              <span>Assigned: {yolo.results.assigned}</span>
+              <span>Assigned: {autopilot.results.assigned}</span>
               <span className="text-muted-foreground/40">|</span>
-              <span>Skipped: {yolo.results.skipped}</span>
+              <span>Skipped: {autopilot.results.skipped}</span>
               <span className="text-muted-foreground/40">|</span>
               <span>
-                Last scan: {yolo.lastScanAt ? `${Math.round((Date.now() - new Date(yolo.lastScanAt).getTime()) / 1000)}s ago` : 'never'}
+                Last scan: {autopilot.lastScanAt ? `${Math.round((Date.now() - new Date(autopilot.lastScanAt).getTime()) / 1000)}s ago` : 'never'}
               </span>
               <span className="text-muted-foreground/40">|</span>
-              <span>Next in: {Math.round(yolo.nextScanIn / 1000)}s</span>
+              <span>Next in: {Math.round(autopilot.nextScanIn / 1000)}s</span>
+            </div>
+          </div>
+        )}
+
+        {/* Innovation Mode */}
+        {innovation && !innovation.enabled && (
+          <button
+            type="button"
+            onClick={() => startInnovation.mutate()}
+            disabled={startInnovation.isPending}
+            className="w-full rounded-lg border-2 border-dashed border-amber-300 bg-amber-50/50 p-4 text-center transition-colors hover:border-amber-400 hover:bg-amber-100/50 dark:border-amber-700 dark:bg-amber-950/30 dark:hover:border-amber-600 dark:hover:bg-amber-950/50"
+          >
+            <span className="text-lg font-semibold text-amber-700 dark:text-amber-300">
+              💡 Innovation Mode — Let the lead agent suggest improvements
+            </span>
+          </button>
+        )}
+        {innovation?.enabled && (
+          <div className="rounded-lg border border-amber-300 bg-amber-50/50 p-4 dark:border-amber-700 dark:bg-amber-950/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span
+                  className="inline-block h-3 w-3 rounded-full bg-amber-500"
+                  style={{ animation: 'pulse 2s ease-in-out infinite' }}
+                />
+                <span className="text-lg font-semibold text-amber-700 dark:text-amber-300">
+                  💡 Innovation Mode Active
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => scanInnovation.mutate()}
+                  disabled={scanInnovation.isPending}
+                  className="gap-1"
+                >
+                  <Lightbulb className="h-3.5 w-3.5" />
+                  Scan Now
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => stopInnovation.mutate()}
+                  disabled={stopInnovation.isPending}
+                  className="gap-1 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-950"
+                >
+                  <Square className="h-3.5 w-3.5" />
+                  Stop
+                </Button>
+              </div>
+            </div>
+            <div className="mt-2 flex items-center gap-4 text-sm text-muted-foreground">
+              <span>Suggestions created: {innovation.suggestionsCreated}</span>
+              <span className="text-muted-foreground/40">|</span>
+              <span>
+                Last scan: {innovation.lastScan ? `${Math.round((Date.now() - new Date(innovation.lastScan).getTime()) / 1000)}s ago` : 'never'}
+              </span>
             </div>
           </div>
         )}

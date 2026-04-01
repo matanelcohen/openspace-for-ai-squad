@@ -1,5 +1,5 @@
 /**
- * YOLO Mode Service — autonomous task triage and assignment.
+ * Auto Pilot Service — autonomous task triage and assignment.
  *
  * When enabled, the lead agent periodically scans pending tasks,
  * decides which agent should handle each one, and enqueues them
@@ -30,14 +30,14 @@ export interface ScanResult {
   timestamp: string;
 }
 
-export interface YoloStatus {
+export interface AutoPilotStatus {
   enabled: boolean;
   lastScanAt: string | null;
   results: { assigned: number; skipped: number };
   nextScanIn: number;
 }
 
-interface YoloConfig {
+interface AutoPilotConfig {
   aiProvider: AIProvider | null;
   agentWorker: AgentWorkerService | null;
   squadParser: SquadParser;
@@ -49,7 +49,7 @@ interface YoloConfig {
 
 // ── Service ──────────────────────────────────────────────────────
 
-export class YoloService {
+export class AutoPilotService {
   private enabled = false;
   private interval: NodeJS.Timeout | null = null;
   private lastScanAt: string | null = null;
@@ -58,9 +58,9 @@ export class YoloService {
   private maxTasksPerScan: number;
   private lastIntervalStart = 0;
 
-  private config: YoloConfig;
+  private config: AutoPilotConfig;
 
-  constructor(config: YoloConfig) {
+  constructor(config: AutoPilotConfig) {
     this.config = config;
     this.scanIntervalMs = config.scanIntervalMs ?? 60_000;
     this.maxTasksPerScan = config.maxTasksPerScan ?? 5;
@@ -103,9 +103,9 @@ export class YoloService {
       if (state.enabled) {
         // Auto-start after a short delay (let services initialize)
         setTimeout(() => {
-          this.start().catch((err) => console.warn(`[YOLO] Auto-restart failed: ${err.message}`));
+          this.start().catch((err) => console.warn(`[Auto Pilot] Auto-restart failed: ${err.message}`));
         }, 5000);
-        console.log('[YOLO] Restoring previous state — will auto-start in 5s');
+        console.log('[Auto Pilot] Restoring previous state — will auto-start in 5s');
       }
     } catch { /* best effort */ }
   }
@@ -116,10 +116,10 @@ export class YoloService {
     if (this.enabled) return;
 
     if (!this.config.aiProvider) {
-      throw new Error('AI provider not available — cannot start YOLO mode');
+      throw new Error('AI provider not available — cannot start Auto Pilot');
     }
     if (!this.config.agentWorker) {
-      throw new Error('Agent worker not available — cannot start YOLO mode');
+      throw new Error('Agent worker not available — cannot start Auto Pilot');
     }
 
     if (opts?.scanIntervalMs) this.scanIntervalMs = opts.scanIntervalMs;
@@ -134,7 +134,7 @@ export class YoloService {
 
     this.interval = setInterval(() => {
       if (!this.enabled) {
-        console.warn('[YOLO] Interval fired but YOLO is disabled — clearing');
+        console.warn('[Auto Pilot] Interval fired but Auto Pilot is disabled — clearing');
         if (this.interval) clearInterval(this.interval);
         return;
       }
@@ -142,13 +142,13 @@ export class YoloService {
       this.runScanSafe();
     }, this.scanIntervalMs);
 
-    console.log(`[YOLO] Started — scanning every ${this.scanIntervalMs / 1000}s`);
+    console.log(`[Auto Pilot] Started — scanning every ${this.scanIntervalMs / 1000}s`);
   }
 
   stop(): void {
     if (!this.enabled) return;
 
-    console.log('[YOLO] Stopping...', new Error('stop() called from').stack?.split('\n').slice(1, 4).join(' → '));
+    console.log('[Auto Pilot] Stopping...', new Error('stop() called from').stack?.split('\n').slice(1, 4).join(' → '));
 
     if (this.interval) {
       clearInterval(this.interval);
@@ -156,10 +156,10 @@ export class YoloService {
     }
     this.enabled = false;
     this.persistState();
-    console.log('[YOLO] Stopped');
+    console.log('[Auto Pilot] Stopped');
   }
 
-  getStatus(): YoloStatus {
+  getStatus(): AutoPilotStatus {
     const elapsed = this.lastIntervalStart ? Date.now() - this.lastIntervalStart : 0;
     const nextScanIn = this.enabled ? Math.max(0, this.scanIntervalMs - elapsed) : 0;
 
@@ -178,10 +178,10 @@ export class YoloService {
   // ── Internal ─────────────────────────────────────────────────
 
   private runScanSafe(): void {
-    console.log('[YOLO] Starting scan...');
+    console.log('[Auto Pilot] Starting scan...');
     this.runScan().catch((err) => {
-      console.error('[YOLO] Scan failed:', err.message ?? err);
-      // Don't stop YOLO on scan failure — try again next interval
+      console.error('[Auto Pilot] Scan failed:', err.message ?? err);
+      // Don't stop Auto Pilot on scan failure — try again next interval
     });
   }
 
@@ -189,21 +189,21 @@ export class YoloService {
     const { aiProvider, agentWorker, squadParser, tasksDir } = this.config;
 
     if (!aiProvider) {
-      console.warn('[YOLO] Scan skipped — AI provider not available');
+      console.warn('[Auto Pilot] Scan skipped — AI provider not available');
       return { decisions: [], assigned: 0, skipped: 0, timestamp: new Date().toISOString() };
     }
     if (!agentWorker) {
-      console.warn('[YOLO] Scan skipped — Agent worker not available');
+      console.warn('[Auto Pilot] Scan skipped — Agent worker not available');
       return { decisions: [], assigned: 0, skipped: 0, timestamp: new Date().toISOString() };
     }
 
     // 1. Get pending tasks
     const allTasks = await squadParser.getTasks();
     const pendingTasks = allTasks.filter((t) => t.status === 'pending');
-    console.log(`[YOLO] Found ${pendingTasks.length} pending tasks (${allTasks.length} total)`);
+    console.log(`[Auto Pilot] Found ${pendingTasks.length} pending tasks (${allTasks.length} total)`);
 
     if (pendingTasks.length === 0) {
-      console.log('[YOLO] No pending tasks — scan complete');
+      console.log('[Auto Pilot] No pending tasks — scan complete');
       const result: ScanResult = {
         decisions: [],
         assigned: 0,
@@ -271,7 +271,7 @@ Rules:
           { role: 'user', content: 'Triage the pending tasks and assign them to available agents.' },
         ],
         systemPrompt,
-        taskTitle: 'YOLO Mode — auto-triage',
+        taskTitle: 'Auto Pilot — auto-triage',
         agentId: leadAgent?.id ?? 'lead',
       });
 
@@ -280,7 +280,7 @@ Rules:
       const parsed = JSON.parse(raw) as { decisions: ScanDecision[] };
       decisions = parsed.decisions ?? [];
     } catch (err) {
-      console.error('[YOLO] LLM parse error:', err);
+      console.error('[Auto Pilot] LLM parse error:', err);
       return {
         decisions: [],
         assigned: 0,
@@ -305,8 +305,8 @@ Rules:
           // Re-read the updated task to enqueue it
           const updatedTask = await getTask(tasksDir, decision.taskId);
 
-          // Append YOLO marker to description
-          const marker = `\n\n---\n🤖 Auto-assigned by YOLO to ${decision.agentId}: ${decision.reason}`;
+          // Append Auto Pilot marker to description
+          const marker = `\n\n---\n🤖 Auto-assigned by Auto Pilot to ${decision.agentId}: ${decision.reason}`;
           await updateTask(tasksDir, decision.taskId, {
             description: updatedTask.description + marker,
           });
@@ -318,14 +318,14 @@ Rules:
         } else if (decision.action === 'skip') {
           // Add a skip note to the task
           const task = await getTask(tasksDir, decision.taskId);
-          const note = `\n\n---\n⏭️ YOLO skipped: ${decision.reason}`;
+          const note = `\n\n---\n⏭️ Auto Pilot skipped: ${decision.reason}`;
           await updateTask(tasksDir, decision.taskId, {
             description: task.description + note,
           });
           skipped++;
         }
       } catch (err) {
-        console.error(`[YOLO] Failed to process decision for ${decision.taskId}:`, err);
+        console.error(`[Auto Pilot] Failed to process decision for ${decision.taskId}:`, err);
       }
     }
 
@@ -340,7 +340,7 @@ Rules:
       this.config.wsManager.broadcast({
         type: 'activity:new',
         payload: {
-          yoloEvent: 'yolo:decision',
+          autopilotEvent: 'autopilot:decision',
           decisions,
           assigned,
           skipped,
@@ -349,7 +349,7 @@ Rules:
       } as WsEnvelope);
     }
 
-    console.log(`[YOLO] Scan complete — assigned: ${assigned}, skipped: ${skipped}`);
+    console.log(`[Auto Pilot] Scan complete — assigned: ${assigned}, skipped: ${skipped}`);
 
     const scanResult: ScanResult = { decisions, assigned, skipped, timestamp };
     return scanResult;

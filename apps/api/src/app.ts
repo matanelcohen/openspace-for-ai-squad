@@ -32,7 +32,8 @@ import tracesRoute from './routes/traces.js';
 import voiceRoute from './routes/voice.js';
 import workspacesRoute from './routes/workspaces.js';
 import worktreesRoute from './routes/worktrees.js';
-import yoloRoute from './routes/yolo.js';
+import autopilotRoute from './routes/autopilot.js';
+import innovationRoute from './routes/innovation.js';
 import escalationsRoute from './routes/escalations.js';
 import type { A2AService } from './services/a2a/index.js';
 import { createA2AService } from './services/a2a/index.js';
@@ -67,7 +68,8 @@ import { wsPlugin } from './services/websocket/index.js';
 import { WorkspaceService } from './services/workspace/index.js';
 import { WorktreeService } from './services/sandbox-worktree/index.js';
 import { CodeReviewService } from './services/code-review/index.js';
-import { YoloService } from './services/yolo/index.js';
+import { AutoPilotService } from './services/autopilot/index.js';
+import { InnovationService } from './services/innovation/index.js';
 
 /** Voice service bundle exposed on the Fastify instance. */
 export interface VoiceServices {
@@ -404,19 +406,28 @@ export async function buildApp(opts: AppOptions = {}) {
       });
       app.decorate('a2aService', a2aService);
 
-      // YOLO Mode service — autonomous task triage
-      const yoloService = new YoloService({
+      // Auto Pilot service — autonomous task triage
+      const autopilotService = new AutoPilotService({
         aiProvider: provider,
         agentWorker: workerService,
         squadParser: parser,
         tasksDir: resolve(squadDir, 'tasks'),
         wsManager: app.wsManager ?? null,
       });
-      app.decorate('yoloService', yoloService);
+      app.decorate('autopilotService', autopilotService);
 
-      // Shut down worker + YOLO on close
+      // Innovation Mode service — autonomous codebase analysis
+      const innovationService = new InnovationService({
+        aiProvider: provider,
+        tasksDir: resolve(squadDir, 'tasks'),
+        squadDir,
+      });
+      app.decorate('innovationService', innovationService);
+
+      // Shut down worker + Auto Pilot + Innovation on close
       app.addHook('onClose', async () => {
-        yoloService.stop();
+        autopilotService.stop();
+        innovationService.stop();
         workerService.stop();
       });
     }
@@ -527,7 +538,8 @@ export async function buildApp(opts: AppOptions = {}) {
   app.register(cronRoute, { prefix: '/api' });
   app.register(workspacesRoute, { prefix: '/api' });
   app.register(worktreesRoute);
-  app.register(yoloRoute, { prefix: '/api' });
+  app.register(autopilotRoute, { prefix: '/api' });
+  app.register(innovationRoute, { prefix: '/api' });
   app.register(githubRoute, { prefix: '/api' });
   app.register(escalationsRoute, { prefix: '/api' });
   // Terminal route
@@ -552,7 +564,8 @@ declare module 'fastify' {
     knowledgeSearch: KnowledgeSearchService;
     agentWorker?: AgentWorkerService;
     a2aService?: A2AService;
-    yoloService?: YoloService;
+    autopilotService?: AutoPilotService;
+    innovationService?: InnovationService;
     sandboxService: SandboxService;
     hookPipeline?: HookPipeline;
     agentRegistry: AgentRegistry;

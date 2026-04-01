@@ -23,7 +23,7 @@ export type WsEventType =
   | 'escalation:created'
   | 'escalation:updated'
   | 'task:suggestion'
-  | 'yolo:decision'
+  | 'autopilot:decision'
   | 'knowledge:progress'
   | 'knowledge:complete'
   | 'knowledge:error'

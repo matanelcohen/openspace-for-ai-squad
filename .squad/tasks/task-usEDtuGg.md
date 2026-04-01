@@ -1,12 +1,12 @@
 ---
 id: task-usEDtuGg
 title: Improve traces
-status: delegated
+status: done
 priority: P0
 assignee: leela
 labels: []
 created: '2026-04-01T17:05:46.354Z'
-updated: '2026-04-01T17:08:40.009Z'
+updated: '2026-04-01T22:17:25.682Z'
 sortIndex: 368
 ---
 imrpove visability in the traces. i want to see input/output tool name and so on currently i just see tool no input/out... think what else we can add so the value will be amaizing!! with alot of impact.
