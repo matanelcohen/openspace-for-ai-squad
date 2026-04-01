@@ -173,6 +173,19 @@ This task is already done. Nothing to implement.
 1. **`apps/api/src/routes/traces.ts`** — Fixed `buildSpanTree()` to extract `tool.input`, `tool.output`, `tool.name` with fallback keys (`arguments`, `args`, `result`). Also extracts token counts and cost from span attributes. Added `GET /traces/tools`, `GET /traces/spans/search` endpoints and extended `/traces/stats` with tool breakdowns.
 
 2. **`apps/api/src/services/traces/index.ts`**
+- The trace API route (`apps/api/src/routes/traces.ts`) uses `buildSpanTree` to structure spans and supports aggregate stats (tool/LLM call counts, cost, tokens, duration) on single-trace responses.
+- Tool calls in the copilot provider (`apps/api/src/services/ai/copilot-provider.ts`) have both agentic and chat completion paths that need separate instrumentation for tool_start/tool_result events.
+- Preview attributes use 200-character truncation as the standard for human-readable summaries in trace spans (input_preview, output_preview, system_prompt_preview, etc.).
+- Tracing instrumentation lives in `packages/tracing/src/` with separate files per span kind: `instrument-tool.ts`, `instrument-llm.ts`, `instrument-agent.ts`. Types are in `types.ts` and re-exported from `index.ts`.
+- Completed "Enrich backend trace attributes": All 122 tests pass. Done.
+
+## Summary
+
+Implemented all 5 items across 7 files:
+
+1. **Tool span enrichment** (`instrument-tool.ts`): Added `tool.input_preview`, `tool.output_preview` (200 char truncated), `tool.input_size_bytes`/`tool.output_size_bytes`, `tool.status` (success/error/timeout), `tool.retry_count`, and timeout support via `timeoutMs` option.
+
+2. **LLM span enrichment** (`instrument-llm.ts`): Added `llm.system_prompt_preview`, `llm.user_prompt_preview`, `llm.response_preview` (200 ch
 
 ## Review Summary
 

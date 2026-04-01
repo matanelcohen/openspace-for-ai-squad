@@ -8,8 +8,9 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, mkdirSync, symlinkSync, readdirSync, lstatSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, symlinkSync, readdirSync, lstatSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -285,21 +286,27 @@ export class WorktreeService {
     const info = this.mustGet(taskId);
     const base = opts.baseBranch ?? info.baseBranch;
 
-    const truncatedBody = opts.body.length > 2000
-      ? opts.body.substring(0, 2000) + '\n\n_(truncated)_'
-      : opts.body;
-    const baseFlag = `--base ${this.shellEscape(base)}`;
-    const url = this.execInDir(
-      info.path,
-      `gh pr create --title ${this.shellEscape(opts.title)} --body ${this.shellEscape(truncatedBody)} --head ${this.shellEscape(info.branch)} ${baseFlag}`,
-    ).trim();
+    const bodyFile = join(tmpdir(), `pr-body-${taskId}-${Date.now()}.md`);
+    try {
+      writeFileSync(bodyFile, opts.body, 'utf-8');
+      // Push branch first
+      try { this.gitInDir(info.path, `push -u origin ${this.shellEscape(info.branch)}`); } catch { /* may already be pushed */ }
 
-    const match = url.match(/\/pull\/(\d+)/);
-    const number = match ? parseInt(match[1], 10) : 0;
-    const pr = { number, url };
-    info.pr = pr;
-    console.log(`[WorktreeService] PR #${pr.number} created for ${taskId}: ${pr.url}`);
-    return pr;
+      const baseFlag = `--base ${this.shellEscape(base)}`;
+      const url = this.execInDir(
+        info.path,
+        `gh pr create --title ${this.shellEscape(opts.title)} --body-file ${this.shellEscape(bodyFile)} --head ${this.shellEscape(info.branch)} ${baseFlag}`,
+      ).trim();
+
+      const match = url.match(/\/pull\/(\d+)/);
+      const number = match ? parseInt(match[1], 10) : 0;
+      const pr = { number, url };
+      info.pr = pr;
+      console.log(`[WorktreeService] PR #${pr.number} created for ${taskId}: ${pr.url}`);
+      return pr;
+    } finally {
+      try { unlinkSync(bodyFile); } catch { /* ignore */ }
+    }
   }
 
   // ── Cleanup ────────────────────────────────────────────────────
@@ -369,17 +376,23 @@ export class WorktreeService {
     }
 
     try {
-      const truncatedBody = opts.body.length > 2000
-        ? opts.body.substring(0, 2000) + '\n\n_(truncated)_'
-        : opts.body;
-      const url = this.exec(
-        `gh pr create --title ${this.shellEscape(opts.title)} --body ${this.shellEscape(truncatedBody)} --head ${this.shellEscape(branchName)} --base ${this.shellEscape(this.baseBranch)}`,
-      ).trim();
-      const match = url.match(/\/pull\/(\d+)/);
-      const number = match ? parseInt(match[1], 10) : 0;
-      const pr = { number, url };
-      console.log(`[WorktreeService] Feature PR #${pr.number} for ${parentTaskId}: ${pr.url}`);
-      return pr;
+      const bodyFile = join(tmpdir(), `pr-body-feature-${parentTaskId}-${Date.now()}.md`);
+      try {
+        writeFileSync(bodyFile, opts.body, 'utf-8');
+        // Push feature branch
+        try { this.git(`push -u origin ${this.shellEscape(branchName)}`); } catch { /* may already exist */ }
+
+        const url = this.exec(
+          `gh pr create --title ${this.shellEscape(opts.title)} --body-file ${this.shellEscape(bodyFile)} --head ${this.shellEscape(branchName)} --base ${this.shellEscape(this.baseBranch)}`,
+        ).trim();
+        const match = url.match(/\/pull\/(\d+)/);
+        const number = match ? parseInt(match[1], 10) : 0;
+        const pr = { number, url };
+        console.log(`[WorktreeService] Feature PR #${pr.number} for ${parentTaskId}: ${pr.url}`);
+        return pr;
+      } finally {
+        try { unlinkSync(bodyFile); } catch { /* ignore */ }
+      }
     } catch (err) {
       console.error(`[WorktreeService] Failed to create feature PR:`, err);
       return null;
