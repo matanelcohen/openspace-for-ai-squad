@@ -40,6 +40,14 @@ interface TraceSummaryResponse {
   errorCount: number;
 }
 
+interface TraceAggregateStats {
+  totalToolCalls: number;
+  totalLLMCalls: number;
+  totalCost: number;
+  totalTokens: number;
+  totalDurationMs: number | null;
+}
+
 function toTraceSummary(row: TraceRecord): TraceSummaryResponse {
   return {
     id: row.id,
@@ -101,7 +109,7 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
     let cost: number | null = null;
 
     if (s.kind === 'tool') {
-      // Tool spans: extract tool.* attributes
+      // Tool spans: extract tool.* attributes with fallback chain
       const toolInput = attrs['tool.input'] ?? attrs['arguments'] ?? attrs['input'];
       const toolOutput = attrs['tool.output'] ?? attrs['output'] ?? attrs['result'];
       const toolError = attrs['tool.error'] as string | undefined;
@@ -147,8 +155,20 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
 
       // Error from exception events
       error = (attrs['ai.error'] as string | undefined) ?? null;
+    } else if (s.kind === 'agent') {
+      // Agent spans: extract agent.* attributes
+      const agentGoal = attrs['agent.goal'] as string | undefined;
+      const agentName = attrs['agent.name'] as string | undefined;
+      const agentOutcome = attrs['agent.outcome'] as string | undefined;
+
+      if (agentGoal || agentName) {
+        input = { agent: agentName, goal: agentGoal };
+      }
+      output = agentOutcome ? { outcome: agentOutcome, steps: attrs['agent.step_count'] } : null;
+      error = agentOutcome === 'error' ? ((attrs['ai.error'] as string) ?? null) : null;
+      model = (attrs['ai.model'] as string) ?? null;
     } else {
-      // Other kinds (internal, agent, reasoning): fallback to ai.* attributes
+      // Other kinds (internal, reasoning): fallback to ai.* attributes
       const prompt = attrs['ai.prompt'] as string | undefined;
       const systemPrompt = attrs['ai.system_prompt'] as string | undefined;
       const response = attrs['ai.response'] as string | undefined;
@@ -190,6 +210,16 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
         ? ((attrs['llm.provider'] as string) ?? (attrs['ai.provider'] as string) ?? null)
         : null;
 
+    // Use tool/llm preview attributes if available, otherwise generate
+    const inputPreview =
+      (attrs['tool.input_preview'] as string) ??
+      (attrs['llm.user_prompt_preview'] as string) ??
+      makePreview(input);
+    const outputPreview =
+      (attrs['tool.output_preview'] as string) ??
+      (attrs['llm.response_preview'] as string) ??
+      makePreview(output);
+
     const node: SpanResponse = {
       id: s.id,
       traceId: s.trace_id,
@@ -208,8 +238,8 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
       model,
       toolName,
       provider,
-      inputPreview: makePreview(input),
-      outputPreview: makePreview(output),
+      inputPreview,
+      outputPreview,
       metadata: attrs,
       children: [],
     };
@@ -227,6 +257,46 @@ export function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanRe
   }
 
   return roots;
+}
+
+// ── Aggregate stats helper ────────────────────────────────────────
+
+export function computeAggregateStats(spans: SpanRecord[]): TraceAggregateStats {
+  let totalToolCalls = 0;
+  let totalLLMCalls = 0;
+  let totalCost = 0;
+  let totalTokens = 0;
+  let minStart = Infinity;
+  let maxEnd = -Infinity;
+
+  for (const s of spans) {
+    if (s.kind === 'tool') totalToolCalls++;
+    if (s.kind === 'llm') totalLLMCalls++;
+
+    if (s.start_time < minStart) minStart = s.start_time;
+    if (s.end_time != null && s.end_time > maxEnd) maxEnd = s.end_time;
+
+    try {
+      const attrs = JSON.parse(s.attributes) as Record<string, unknown>;
+      const llmCost = attrs['llm.cost_usd'];
+      if (typeof llmCost === 'number') totalCost += llmCost;
+
+      const pt = attrs['llm.prompt_tokens'];
+      const ct = attrs['llm.completion_tokens'];
+      if (typeof pt === 'number') totalTokens += pt;
+      if (typeof ct === 'number') totalTokens += ct;
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return {
+    totalToolCalls,
+    totalLLMCalls,
+    totalCost: Math.round(totalCost * 1_000_000) / 1_000_000,
+    totalTokens,
+    totalDurationMs: maxEnd > minStart ? maxEnd - minStart : null,
+  };
 }
 
 // ── Route ─────────────────────────────────────────────────────────
@@ -268,6 +338,7 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
 
     const { trace, spans } = result;
     const spanTree = buildSpanTree(spans, trace.status);
+    const aggregateStats = computeAggregateStats(spans);
     const rootSpan = spanTree[0] ?? {
       id: trace.id,
       traceId: trace.id,
@@ -304,6 +375,7 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
       totalCost: trace.cost_usd,
       spanCount: trace.span_count,
       errorCount: trace.status === 'error' ? 1 : 0,
+      aggregateStats,
       rootSpan,
     });
   });

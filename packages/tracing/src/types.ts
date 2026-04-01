@@ -128,6 +128,12 @@ export interface ToolSpanAttributes {
   readonly 'tool.output'?: unknown;
   readonly 'tool.error'?: string;
   readonly 'tool.duration_ms'?: number;
+  readonly 'tool.input_preview'?: string;
+  readonly 'tool.output_preview'?: string;
+  readonly 'tool.input_size_bytes'?: number;
+  readonly 'tool.output_size_bytes'?: number;
+  readonly 'tool.status'?: 'success' | 'error' | 'timeout';
+  readonly 'tool.retry_count'?: number;
 }
 
 // ── LLM Span Attributes ──────────────────────────────────────────
@@ -142,6 +148,12 @@ export interface LLMSpanAttributes {
   readonly 'llm.streaming'?: boolean;
   readonly 'llm.time_to_first_token_ms'?: number;
   readonly 'llm.total_duration_ms'?: number;
+  readonly 'llm.system_prompt_preview'?: string;
+  readonly 'llm.user_prompt_preview'?: string;
+  readonly 'llm.response_preview'?: string;
+  readonly 'llm.stop_reason'?: string;
+  readonly 'llm.temperature'?: number;
+  readonly 'llm.max_tokens'?: number;
 }
 
 // ── Model Pricing ─────────────────────────────────────────────────
@@ -234,6 +246,10 @@ export interface ToolCallOptions<TInput, TOutput> {
   readonly toolId: string;
   readonly toolName: string;
   readonly fn: (input: TInput) => Promise<TOutput>;
+  /** Timeout in ms — if exceeded, span is marked with tool.status='timeout'. */
+  readonly timeoutMs?: number;
+  /** Number of retries already attempted (0 = first try). */
+  readonly retryCount?: number;
 }
 
 export interface LLMCallOptions<TInput, TOutput> {
@@ -247,4 +263,31 @@ export interface LLMCallOptions<TInput, TOutput> {
   };
   /** Whether the call uses streaming */
   readonly streaming?: boolean;
+  /** Extract the stop/finish reason from the LLM response */
+  readonly extractStopReason?: (output: TOutput) => string | undefined;
+  /** Extract the response text for preview */
+  readonly extractResponse?: (output: TOutput) => string | undefined;
+  /** Temperature used for the call */
+  readonly temperature?: number;
+  /** Max tokens parameter */
+  readonly maxTokens?: number;
+  /** System prompt (for preview capture) */
+  readonly systemPrompt?: string;
+  /** Callback invoked on first token for streaming TTFT measurement */
+  readonly onFirstToken?: (callback: () => void) => void;
+}
+
+// ── Agent Span Attributes ──────────────────────────────────────────
+
+export interface AgentSpanAttributes {
+  readonly 'agent.name': string;
+  readonly 'agent.goal'?: string;
+  readonly 'agent.step_count'?: number;
+  readonly 'agent.outcome'?: 'success' | 'error' | 'cancelled' | 'timeout';
+  readonly 'agent.duration_ms'?: number;
+}
+
+export interface AgentSpanOptions {
+  readonly agentName: string;
+  readonly goal?: string;
 }

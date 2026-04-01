@@ -8,6 +8,8 @@
 
 // ── Types ──────────────────────────────────────────────────────────
 export type {
+  AgentSpanAttributes,
+  AgentSpanOptions,
   LLMCallOptions,
   LLMSpanAttributes,
   ModelPriceEntry,
@@ -51,6 +53,7 @@ export { Tracer } from './tracer.js';
 export { TraceCollector } from './trace-collector.js';
 
 // ── Instrumentation ────────────────────────────────────────────────
+export { instrumentAgentSpan } from './instrument-agent.js';
 export { instrumentLLMCall } from './instrument-llm.js';
 export { instrumentToolCall } from './instrument-tool.js';
 

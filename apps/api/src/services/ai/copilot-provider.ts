@@ -26,6 +26,20 @@ import type { AgentRoutingProfile, LLMRouter } from '../voice/router.js';
 
 // -- Trace service interface (avoids circular dep) -------------------------
 
+/** Truncated preview of data for trace attributes. */
+function tracePreview(data: unknown, maxLen = 200): string | undefined {
+  if (data == null) return undefined;
+  const str = typeof data === 'string' ? data : JSON.stringify(data);
+  return str.length > maxLen ? str.slice(0, maxLen) + '…' : str;
+}
+
+/** Estimate byte size of a value. */
+function traceByteSize(data: unknown): number {
+  if (data == null) return 0;
+  const str = typeof data === 'string' ? data : JSON.stringify(data);
+  return new TextEncoder().encode(str).byteLength;
+}
+
 /** Minimal interface matching TraceService — avoids importing from ../traces. */
 export interface TraceServiceLike {
   startTrace(input: {
@@ -352,7 +366,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
           metadata: { ...options.metadata, agentic: true },
         });
       }
-    } catch { /* best effort */ }
+    } catch {
+      /* best effort */
+    }
 
     span.setAttribute('ai.model', model);
     span.setAttribute('ai.agent_id', options.agentId ?? 'unknown');
@@ -365,7 +381,10 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
 
     if (options.metadata) {
       for (const [key, value] of Object.entries(options.metadata)) {
-        span.setAttribute(`ai.metadata.${key}`, typeof value === 'string' ? value : JSON.stringify(value));
+        span.setAttribute(
+          `ai.metadata.${key}`,
+          typeof value === 'string' ? value : JSON.stringify(value),
+        );
       }
     }
 
@@ -427,6 +446,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
               case 'tool_start': {
                 const toolName = (event.data?.name as string) ?? 'tool';
                 const toolInput = event.data?.arguments ?? event.data?.input;
+                const inputPreview = tracePreview(toolInput);
+                const inputSizeBytes = traceByteSize(toolInput);
                 const spanId = addSub(tId, sId, {
                   name: `🔧 ${toolName}`,
                   kind: 'tool',
@@ -435,6 +456,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                   attributes: {
                     'tool.name': toolName,
                     'tool.input': toolInput,
+                    ...(inputPreview && { 'tool.input_preview': inputPreview }),
+                    ...(inputSizeBytes > 0 && { 'tool.input_size_bytes': inputSizeBytes }),
                     ...event.data,
                   },
                 });
@@ -445,6 +468,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                 const toolName = (event.data?.name as string) ?? '';
                 const toolOutput = event.data?.output ?? event.data?.result;
                 const toolError = event.data?.error as string | undefined;
+                const outputPreview = tracePreview(toolOutput);
+                const outputSizeBytes = traceByteSize(toolOutput);
                 // Find matching active span — try exact name, then most recent
                 let match = activeToolSpans.get(toolName);
                 if (!match && activeToolSpans.size > 0) {
@@ -459,6 +484,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                     attributes: {
                       'tool.output': toolOutput,
                       'tool.duration_ms': durationMs,
+                      'tool.status': toolError ? 'error' : 'success',
+                      ...(outputPreview && { 'tool.output_preview': outputPreview }),
+                      ...(outputSizeBytes > 0 && { 'tool.output_size_bytes': outputSizeBytes }),
                       ...(toolError && { 'tool.error': toolError }),
                     },
                   });
@@ -474,6 +502,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                     attributes: {
                       'tool.name': toolName,
                       'tool.output': toolOutput,
+                      'tool.status': toolError ? 'error' : 'success',
+                      ...(outputPreview && { 'tool.output_preview': outputPreview }),
+                      ...(outputSizeBytes > 0 && { 'tool.output_size_bytes': outputSizeBytes }),
                       ...(toolError && { 'tool.error': toolError }),
                     },
                   });
@@ -492,7 +523,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                 addSub(tId, sId, { name: '📝 Generating response', kind: 'llm', startTime: now });
                 break;
             }
-          } catch { /* best effort */ }
+          } catch {
+            /* best effort */
+          }
         };
 
         session.on('assistant.intent', (e: unknown) =>
@@ -557,7 +590,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                 completionTokens: completionTokensEstimate,
               });
             }
-          } catch { /* best effort */ }
+          } catch {
+            /* best effort */
+          }
           return {
             content,
             model,
@@ -584,7 +619,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
               if (this.traceService && traceIds) {
                 this.traceService.failTrace(traceIds.traceId, traceIds.spanId, msg);
               }
-            } catch { /* best effort */ }
+            } catch {
+              /* best effort */
+            }
             throw lastError;
           }
         }
@@ -597,11 +634,15 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
             lastError?.message ?? 'agentic sendAndWait failed after retries',
           );
         }
-      } catch { /* best effort */ }
+      } catch {
+        /* best effort */
+      }
       throw lastError ?? new Error('agentic sendAndWait failed after retries');
     } finally {
       if (session) {
-        await session.disconnect().catch(() => { /* ok */ });
+        await session.disconnect().catch(() => {
+          /* ok */
+        });
       }
       this.releaseSlot();
     }
@@ -672,7 +713,10 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     // Store extra metadata (skills, etc.) in trace
     if (options.metadata) {
       for (const [key, value] of Object.entries(options.metadata)) {
-        span.setAttribute(`ai.metadata.${key}`, typeof value === 'string' ? value : JSON.stringify(value));
+        span.setAttribute(
+          `ai.metadata.${key}`,
+          typeof value === 'string' ? value : JSON.stringify(value),
+        );
       }
     }
 
@@ -733,6 +777,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
               case 'tool_start': {
                 const toolName = (event.data?.name as string) ?? 'tool';
                 const toolInput = event.data?.arguments ?? event.data?.input;
+                const inputPreview = tracePreview(toolInput);
+                const inputSizeBytes = traceByteSize(toolInput);
                 const spanId = addSub(tId, sId, {
                   name: `🔧 ${toolName}`,
                   kind: 'tool',
@@ -741,6 +787,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                   attributes: {
                     'tool.name': toolName,
                     'tool.input': toolInput,
+                    ...(inputPreview && { 'tool.input_preview': inputPreview }),
+                    ...(inputSizeBytes > 0 && { 'tool.input_size_bytes': inputSizeBytes }),
                     ...event.data,
                   },
                 });
@@ -751,6 +799,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                 const toolName = (event.data?.name as string) ?? '';
                 const toolOutput = event.data?.output ?? event.data?.result;
                 const toolError = event.data?.error as string | undefined;
+                const outputPreview = tracePreview(toolOutput);
+                const outputSizeBytes = traceByteSize(toolOutput);
                 let match = activeToolSpans.get(toolName);
                 if (!match && activeToolSpans.size > 0) {
                   const last = [...activeToolSpans.entries()].pop();
@@ -764,6 +814,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                     attributes: {
                       'tool.output': toolOutput,
                       'tool.duration_ms': durationMs,
+                      'tool.status': toolError ? 'error' : 'success',
+                      ...(outputPreview && { 'tool.output_preview': outputPreview }),
+                      ...(outputSizeBytes > 0 && { 'tool.output_size_bytes': outputSizeBytes }),
                       ...(toolError && { 'tool.error': toolError }),
                     },
                   });
@@ -778,6 +831,9 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
                     attributes: {
                       'tool.name': toolName,
                       'tool.output': toolOutput,
+                      'tool.status': toolError ? 'error' : 'success',
+                      ...(outputPreview && { 'tool.output_preview': outputPreview }),
+                      ...(outputSizeBytes > 0 && { 'tool.output_size_bytes': outputSizeBytes }),
                       ...(toolError && { 'tool.error': toolError }),
                     },
                   });
@@ -1009,7 +1065,10 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       // Debug: log raw event keys to find correct tool name field
       const keys = Object.keys(data);
       if (!data.name && !data.toolName && !data.tool_name) {
-        console.log(`[CopilotProvider] tool.execution_start keys: [${keys.join(', ')}]`, JSON.stringify(data).substring(0, 300));
+        console.log(
+          `[CopilotProvider] tool.execution_start keys: [${keys.join(', ')}]`,
+          JSON.stringify(data).substring(0, 300),
+        );
       }
       const toolName =
         (data.name as string) ??
@@ -1411,5 +1470,7 @@ export async function createAIProvider(
     return provider;
   }
 
-  throw new Error('[AI] No AI provider configured. Start the Copilot CLI server or set AI_PROVIDER.');
+  throw new Error(
+    '[AI] No AI provider configured. Start the Copilot CLI server or set AI_PROVIDER.',
+  );
 }
