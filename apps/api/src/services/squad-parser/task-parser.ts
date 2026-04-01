@@ -96,6 +96,8 @@ export function parseTaskFile(content: string, filePath: string): ParseTaskResul
     sortIndex: typeof fm.sortIndex === 'number' ? fm.sortIndex : 0,
     parent: typeof fm.parent === 'string' && fm.parent !== 'null' ? fm.parent : null,
     dependsOn: toStringArray(fm.dependsOn).length > 0 ? toStringArray(fm.dependsOn) : undefined,
+    dueDate: fm.dueDate != null ? toISOString(fm.dueDate) : null,
+    expiresAt: typeof fm.expiresAt === 'string' && fm.expiresAt !== 'null' ? fm.expiresAt : null,
   };
 
   return { task, filePath };

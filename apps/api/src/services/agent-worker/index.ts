@@ -98,6 +98,8 @@ export class AgentWorkerService {
   private readonly CB_PAUSE_MS = 5 * 60 * 1000; // 5 minutes
   private metrics = new MetricsCollector();
 
+  private deadLetterQueue: Array<{ taskId: string; agentId: string; error: string; failedAt: string }> = [];
+
   constructor(config: AgentWorkerConfig) {
     this.config = config;
     this.queueFilePath =
@@ -178,6 +180,24 @@ export class AgentWorkerService {
         }
       }
     }, this.config.pollIntervalMs ?? 5000);
+
+    // Hourly TTL cleanup
+    setInterval(async () => {
+      try {
+        const { readdir } = await import('node:fs/promises');
+        const files = await readdir(this.config.tasksDir);
+        for (const file of files) {
+          if (!file.endsWith('.md')) continue;
+          try {
+            const t = await getTask(this.config.tasksDir, file.replace('.md', ''));
+            if (t.expiresAt && new Date(t.expiresAt) < new Date() && t.status === 'pending') {
+              await updateTask(this.config.tasksDir, t.id, { status: 'blocked' });
+              console.log(`[AgentWorker] TTL expired: ${t.id}`);
+            }
+          } catch { /* skip */ }
+        }
+      } catch { /* ignore */ }
+    }, 60 * 60 * 1000);
   }
 
   stop(): void {
@@ -291,6 +311,30 @@ export class AgentWorkerService {
     return this.taskAttempts.get(taskId)?.count ?? 0;
   }
 
+  /** Return a snapshot of the dead-letter queue. */
+  getDLQ() { return [...this.deadLetterQueue]; }
+
+  /** Retry a task from the dead-letter queue: reset attempts, set pending, re-enqueue. */
+  async retryFromDLQ(taskId: string): Promise<boolean> {
+    const idx = this.deadLetterQueue.findIndex(d => d.taskId === taskId);
+    if (idx < 0) return false;
+    this.deadLetterQueue.splice(idx, 1);
+    this.clearAttempts(taskId);
+    const task = await getTask(this.config.tasksDir, taskId).catch(() => null);
+    if (!task) return false;
+    await updateTask(this.config.tasksDir, taskId, { status: 'pending' });
+    if (task.assignee) this.enqueue({ ...task, status: 'pending' });
+    return true;
+  }
+
+  /** Remove a task from the dead-letter queue without retrying. */
+  dismissFromDLQ(taskId: string): boolean {
+    const idx = this.deadLetterQueue.findIndex(d => d.taskId === taskId);
+    if (idx < 0) return false;
+    this.deadLetterQueue.splice(idx, 1);
+    return true;
+  }
+
   /**
    * Exponential backoff with jitter.
    * delay = min(base * 2^attempt, maxDelay) ± 20% jitter
@@ -335,6 +379,7 @@ export class AgentWorkerService {
                   task.description +
                   `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Blocked after ${attempts} failed execution attempts.\n\n**Last error:** ${lastError}`,
               });
+              this.deadLetterQueue.push({ taskId, agentId: task.assignee, error: lastError, failedAt: new Date().toISOString() });
               if (queue) {
                 const idx = queue.indexOf(task.id);
                 if (idx >= 0) queue.splice(idx, 1);
@@ -526,6 +571,16 @@ export class AgentWorkerService {
     try {
       const task = await getTask(this.config.tasksDir, taskId);
 
+      // TTL check — skip expired tasks
+      if (task.expiresAt && new Date(task.expiresAt) < new Date()) {
+        console.log(`[AgentWorker] Task ${taskId} expired — skipping`);
+        await updateTask(this.config.tasksDir, taskId, { status: 'blocked' });
+        this.activeTask.delete(agentId);
+        this.persistQueue();
+        setTimeout(() => this.processNext(agentId), 1000);
+        return;
+      }
+
       // Skip tasks that are already blocked (shouldn't be in queue but safety check)
       if (task.status === 'blocked') {
         console.log(`[AgentWorker] Skipping blocked task ${taskId}`);
@@ -547,6 +602,7 @@ export class AgentWorkerService {
             task.description +
             `\n\n---\n**[${new Date().toISOString().replace('T', ' ').substring(0, 19)}]** 🛑 Blocked after ${attempts} execution attempts.\n\n**Last error:** ${lastError}`,
         });
+        this.deadLetterQueue.push({ taskId, agentId, error: lastError, failedAt: new Date().toISOString() });
         this.activeTask.delete(agentId);
         this.persistQueue();
         setTimeout(() => this.processNext(agentId), 1000);

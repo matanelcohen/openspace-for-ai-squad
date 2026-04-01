@@ -27,6 +27,7 @@ export interface CreateTaskInput {
   labels?: string[];
   parent?: string | null;
   dependsOn?: string[];
+  dueDate?: string | null;
 }
 
 export type UpdateTaskInput = Partial<Omit<Task, 'id' | 'createdAt'>>;
@@ -52,6 +53,12 @@ function taskToFrontmatter(task: Task): Record<string, unknown> {
   }
   if (task.dependsOn?.length) {
     fm.dependsOn = task.dependsOn;
+  }
+  if (task.dueDate) {
+    fm.dueDate = task.dueDate;
+  }
+  if (task.expiresAt) {
+    fm.expiresAt = task.expiresAt;
   }
   return fm;
 }
@@ -104,6 +111,7 @@ export async function createTask(tasksDir: string, input: CreateTaskInput): Prom
     sortIndex: maxSortIndex + 1,
     parent: input.parent ?? null,
     dependsOn: input.dependsOn?.length ? input.dependsOn : undefined,
+    dueDate: input.dueDate ?? null,
   };
 
   const filePath = taskFilePath(tasksDir, task.id);

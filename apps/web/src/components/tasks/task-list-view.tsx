@@ -22,7 +22,7 @@ import {
 import { useTasks } from '@/hooks/use-tasks';
 import { applyFilters } from '@/lib/task-filters';
 
-type SortField = 'title' | 'status' | 'assignee' | 'priority' | 'updatedAt';
+type SortField = 'title' | 'status' | 'assignee' | 'priority' | 'dueDate' | 'updatedAt';
 type SortDir = 'asc' | 'desc';
 
 const priorityOrder: Record<TaskPriority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
@@ -50,6 +50,12 @@ function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
       case 'priority':
         cmp = priorityOrder[a.priority] - priorityOrder[b.priority];
         break;
+      case 'dueDate': {
+        const aTime = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+        const bTime = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+        cmp = aTime - bTime;
+        break;
+      }
       case 'updatedAt':
         cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime();
         break;
@@ -171,6 +177,12 @@ export function TaskListView() {
                 Priority <SortIcon field="priority" sortField={sortField} sortDir={sortDir} />
               </TableHead>
               <TableHead className="w-40">Labels</TableHead>
+              <TableHead
+                className="cursor-pointer select-none w-32"
+                onClick={() => handleSort('dueDate')}
+              >
+                Due <SortIcon field="dueDate" sortField={sortField} sortDir={sortDir} />
+              </TableHead>
               <TableHead className="w-32">Subtasks</TableHead>
               <TableHead
                 className="cursor-pointer select-none w-36"
@@ -183,7 +195,7 @@ export function TaskListView() {
           <TableBody>
             {filteredAndSorted.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   No tasks match your filters.
                 </TableCell>
               </TableRow>
@@ -225,6 +237,13 @@ export function TaskListView() {
                         </Badge>
                       ))}
                     </div>
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    {task.dueDate
+                      ? new Date(task.dueDate) < new Date() && task.status !== 'done'
+                        ? <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Overdue</Badge>
+                        : new Date(task.dueDate).toLocaleDateString()
+                      : '—'}
                   </TableCell>
                   <TableCell>
                     {(() => {

@@ -21,13 +21,26 @@ function formatTimeAgo(dateStr: string): string {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function formatDueDate(dateStr: string): string {
+  const seconds = Math.floor((new Date(dateStr).getTime() - Date.now()) / 1000);
+  if (seconds < 0) return formatTimeAgo(dateStr);
+  if (seconds < 60) return 'in <1m';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  return `in ${Math.floor(hours / 24)}d`;
+}
+
 interface TaskCardProps {
   task: Task;
   isDragging?: boolean;
   subtaskProgress?: { total: number; done: number };
+  isSelected?: boolean;
+  onToggleSelect?: (taskId: string) => void;
 }
 
-export function TaskCard({ task, isDragging, subtaskProgress }: TaskCardProps) {
+export function TaskCard({ task, isDragging, subtaskProgress, isSelected, onToggleSelect }: TaskCardProps) {
   const approveTask = useApproveTask();
   const rejectTask = useRejectTask();
   const isPending = task.status === 'pending';
@@ -39,6 +52,15 @@ export function TaskCard({ task, isDragging, subtaskProgress }: TaskCardProps) {
       data-testid={`task-card-${task.id}`}
     >
       <CardHeader className="space-y-1 p-3 pb-1">
+        <div className="flex items-start gap-1.5">
+          {onToggleSelect && (
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={(e) => { e.stopPropagation(); onToggleSelect(task.id); }}
+              className="mt-0.5 h-3 w-3 shrink-0 rounded border-muted-foreground/30 accent-primary"
+            />
+          )}
         <Link
           href={`/tasks/${task.id}`}
           className="text-sm font-medium leading-tight hover:underline"
@@ -46,6 +68,7 @@ export function TaskCard({ task, isDragging, subtaskProgress }: TaskCardProps) {
         >
           {task.title}
         </Link>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0">
         <div className="flex items-center justify-between gap-2">
@@ -96,6 +119,12 @@ export function TaskCard({ task, isDragging, subtaskProgress }: TaskCardProps) {
           )}
           {task.status === 'delegated' && (
             <Badge variant="secondary" className="text-[10px] px-1 py-0">delegated</Badge>
+          )}
+          {task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'done' && (
+            <Badge variant="destructive" className="text-[10px] px-1 py-0">Overdue</Badge>
+          )}
+          {task.dueDate && new Date(task.dueDate) >= new Date() && task.status !== 'done' && (
+            <span className="text-[10px] text-muted-foreground">Due {formatDueDate(task.dueDate)}</span>
           )}
           <span className="text-xs text-muted-foreground">
             {formatTimeAgo(task.updatedAt)}

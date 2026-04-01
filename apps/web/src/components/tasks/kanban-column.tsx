@@ -1,5 +1,7 @@
 'use client';
 
+import React, { useMemo } from 'react';
+
 import { useDroppable } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import type { Task, TaskStatus } from '@matanelcohen/openspace-shared';
@@ -13,6 +15,8 @@ interface KanbanColumnProps {
   tasks: Task[];
   subtaskCounts?: Map<string, { total: number; done: number }>;
   wipLimit?: number;
+  selectedTasks?: Set<string>;
+  onToggleSelect?: (taskId: string) => void;
 }
 
 const columnColors: Record<TaskStatus, string> = {
@@ -23,9 +27,15 @@ const columnColors: Record<TaskStatus, string> = {
   delegated: 'border-t-purple-500',
 };
 
-export function KanbanColumn({ status, tasks, subtaskCounts, wipLimit }: KanbanColumnProps) {
+export function KanbanColumn({ status, tasks, subtaskCounts, wipLimit, selectedTasks, onToggleSelect }: KanbanColumnProps) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
-  const taskIds = tasks.map((t) => t.id);
+
+  const sortedTasks = useMemo(() => {
+    const PRIORITY_ORDER: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
+    return [...tasks].sort((a, b) => (PRIORITY_ORDER[a.priority] ?? 3) - (PRIORITY_ORDER[b.priority] ?? 3));
+  }, [tasks]);
+
+  const taskIds = sortedTasks.map((t) => t.id);
   const isOverLimit = wipLimit !== undefined && tasks.length >= wipLimit;
 
   return (
@@ -47,10 +57,23 @@ export function KanbanColumn({ status, tasks, subtaskCounts, wipLimit }: KanbanC
       </div>
       <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
         <div className="flex-1 space-y-2 p-2 pt-0">
-          {tasks.map((task) => (
-            <SortableTaskCard key={task.id} task={task} subtaskProgress={subtaskCounts?.get(task.id)} />
-          ))}
-          {tasks.length === 0 && (
+          {sortedTasks.map((task, i) => {
+            const prevPriority = i > 0 ? sortedTasks[i - 1]!.priority : null;
+            const showDivider = prevPriority !== null && prevPriority !== task.priority;
+            return (
+              <React.Fragment key={task.id}>
+                {showDivider && (
+                  <div className="flex items-center gap-2 py-1 px-2">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[10px] text-muted-foreground font-medium">{task.priority}</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+                )}
+                <SortableTaskCard task={task} subtaskProgress={subtaskCounts?.get(task.id)} isSelected={selectedTasks?.has(task.id)} onToggleSelect={onToggleSelect} />
+              </React.Fragment>
+            );
+          })}
+          {sortedTasks.length === 0 && (
             <div className="flex h-20 items-center justify-center rounded-md border border-dashed text-xs text-muted-foreground">
               Drop tasks here
             </div>

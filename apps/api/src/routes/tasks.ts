@@ -336,6 +336,63 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
     if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
     return app.agentWorker.getMetrics();
   });
+
+  // GET /api/queue/dlq
+  app.get('/queue/dlq', async (_req, reply) => {
+    if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
+    return (app.agentWorker as any).getDLQ();
+  });
+
+  // POST /api/queue/dlq/:taskId/retry
+  app.post<{ Params: { taskId: string } }>('/queue/dlq/:taskId/retry', async (req, reply) => {
+    if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
+    const ok = await (app.agentWorker as any).retryFromDLQ(req.params.taskId);
+    return ok ? { success: true } : reply.code(404).send({ error: 'Task not in DLQ' });
+  });
+
+  // DELETE /api/queue/dlq/:taskId
+  app.delete<{ Params: { taskId: string } }>('/queue/dlq/:taskId', async (req, reply) => {
+    if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
+    const ok = (app.agentWorker as any).dismissFromDLQ(req.params.taskId);
+    return ok ? { success: true } : reply.code(404).send({ error: 'Task not in DLQ' });
+  });
+
+  // GET /api/queue/peek/:agentId — see next task without dequeuing
+  app.get<{ Params: { agentId: string } }>('/queue/peek/:agentId', async (req, reply) => {
+    if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
+    const status = app.agentWorker.getStatus();
+    const agentStatus = status[req.params.agentId];
+    if (!agentStatus) return reply.code(404).send({ error: 'Agent not found' });
+
+    const queuedIds = app.agentWorker.getQueuedTaskIds()[req.params.agentId] ?? [];
+    if (queuedIds.length === 0) return { nextTask: null, queueDepth: 0 };
+
+    try {
+      const { getTask } = await import('../services/squad-writer/task-writer.js');
+      const tasksDirPath = app.squadParser.getTasksDir();
+      const nextTask = await getTask(tasksDirPath, queuedIds[0]);
+      return { nextTask, queueDepth: queuedIds.length };
+    } catch {
+      return { nextTask: { id: queuedIds[0] }, queueDepth: queuedIds.length };
+    }
+  });
+
+  // GET /api/queue/depth — queue depth per agent
+  app.get('/queue/depth', async (_req, reply) => {
+    if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
+    const status = app.agentWorker.getStatus();
+    const depth: Record<string, { queueLength: number; hasActiveTask: boolean }> = {};
+    for (const [agentId, info] of Object.entries(status)) {
+      depth[agentId] = { queueLength: info.queueLength, hasActiveTask: !!info.activeTask };
+    }
+    return depth;
+  });
+
+  // GET /api/queue/history — recent completions from metrics
+  app.get('/queue/history', async (_req, reply) => {
+    if (!app.agentWorker) return reply.code(503).send({ error: 'Agent worker not available' });
+    return (app.agentWorker as any).getMetrics?.() ?? { error: 'Metrics not available' };
+  });
 };
 
 export default tasksRoute;

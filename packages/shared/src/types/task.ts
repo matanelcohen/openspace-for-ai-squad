@@ -44,4 +44,8 @@ export interface Task {
   parent?: string | null;
   /** Task IDs that must be completed before this task can start. */
   dependsOn?: string[];
+  /** ISO-8601 due date, or null if no deadline. */
+  dueDate?: string | null;
+  /** ISO-8601 expiration timestamp. Tasks past this time are auto-expired. */
+  expiresAt?: string | null;
 }

@@ -13,12 +13,20 @@ import {
 } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import type { TaskStatus } from '@matanelcohen/openspace-shared';
-import { TASK_STATUSES } from '@matanelcohen/openspace-shared';
+import { TASK_STATUSES, TASK_STATUS_LABELS } from '@matanelcohen/openspace-shared';
 import { useMemo, useState } from 'react';
 
 import { KanbanColumn } from '@/components/tasks/kanban-column';
 import { TaskCard } from '@/components/tasks/task-card';
 import { type TaskFilters, TaskFiltersToolbar } from '@/components/tasks/task-filters-toolbar';
+import { Button } from '@/components/ui/button';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useTasks, useUpdateTaskPriority, useUpdateTaskStatus } from '@/hooks/use-tasks';
 import { applyFilters } from '@/lib/task-filters';
@@ -42,6 +50,7 @@ export function KanbanBoard({ wipLimits = DEFAULT_WIP_LIMITS }: KanbanBoardProps
   const updatePriority = useUpdateTaskPriority();
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
   const [filters, setFilters] = useState<TaskFilters>(DEFAULT_FILTERS);
+  const [selectedTasks, setSelectedTasks] = useState<Set<string>>(new Set());
 
   const filteredTasks = useMemo(() => {
     if (!tasks) return [];
@@ -116,6 +125,22 @@ export function KanbanBoard({ wipLimits = DEFAULT_WIP_LIMITS }: KanbanBoardProps
     setActiveTaskId(event.active.id as string);
   }
 
+  function handleToggleSelect(taskId: string) {
+    setSelectedTasks((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }
+
+  function handleBulkStatusChange(status: TaskStatus) {
+    for (const taskId of selectedTasks) {
+      updateStatus.mutate({ taskId, status });
+    }
+    setSelectedTasks(new Set());
+  }
+
   function handleDragEnd(event: DragEndEvent) {
     setActiveTaskId(null);
     const { active, over } = event;
@@ -182,11 +207,24 @@ export function KanbanBoard({ wipLimits = DEFAULT_WIP_LIMITS }: KanbanBoardProps
       >
         <div className="flex gap-4 overflow-x-auto pb-4">
           {TASK_STATUSES.map((status) => (
-            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} subtaskCounts={subtaskCounts} wipLimit={wipLimits[status]} />
+            <KanbanColumn key={status} status={status} tasks={tasksByStatus[status] ?? []} subtaskCounts={subtaskCounts} wipLimit={wipLimits[status]} selectedTasks={selectedTasks} onToggleSelect={handleToggleSelect} />
           ))}
         </div>
         <DragOverlay>{activeTask ? <TaskCard task={activeTask} isDragging subtaskProgress={subtaskCounts.get(activeTask.id)} /> : null}</DragOverlay>
       </DndContext>
+
+      {selectedTasks.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-lg bg-card border shadow-lg px-4 py-2">
+          <span className="text-sm font-medium">{selectedTasks.size} selected</span>
+          <Select onValueChange={(status) => handleBulkStatusChange(status as TaskStatus)}>
+            <SelectTrigger className="w-36 h-8 text-xs"><SelectValue placeholder="Move to…" /></SelectTrigger>
+            <SelectContent>
+              {TASK_STATUSES.map(s => <SelectItem key={s} value={s}>{TASK_STATUS_LABELS[s]}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={() => setSelectedTasks(new Set())}>Clear</Button>
+        </div>
+      )}
     </div>
   );
 }
