@@ -24,6 +24,14 @@ const CHAIN_NAMES = [
   'Response Synthesis',
   'Memory Retrieval',
 ];
+const HTTP_ROUTES = [
+  { method: 'GET', route: '/api/users', status: 200 },
+  { method: 'POST', route: '/api/messages', status: 201 },
+  { method: 'GET', route: '/api/search', status: 200 },
+  { method: 'PUT', route: '/api/settings', status: 200 },
+  { method: 'DELETE', route: '/api/cache', status: 204 },
+  { method: 'GET', route: '/api/health', status: 500 },
+];
 
 function randomChoice<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)]!;
@@ -44,6 +52,8 @@ function makeSpan(
   children: Span[] = [],
 ): Span {
   const isLlm = kind === 'llm';
+  const isTool = kind === 'tool';
+  const isHttp = kind === 'http';
   const promptTokens = isLlm ? randomInt(200, 4000) : 0;
   const completionTokens = isLlm ? randomInt(50, 2000) : 0;
   const totalTokens = promptTokens + completionTokens;
@@ -53,6 +63,31 @@ function makeSpan(
     : model?.includes('haiku')
       ? 0.00000025
       : 0.0000025;
+
+  // Build enriched metadata based on span kind
+  let metadata: Record<string, unknown> = {};
+  if (isTool) {
+    metadata = {
+      'tool.name': name,
+      'tool.input': { query: `Input for ${name}`, parameters: { limit: 10 } },
+      'tool.output':
+        status === 'error' ? null : { result: `Output from ${name}`, count: randomInt(1, 50) },
+      toolVersion: '1.2.0',
+    };
+  } else if (isLlm) {
+    metadata = {
+      'llm.model': model,
+      'llm.cost_usd': totalTokens * costPerToken,
+      'llm.time_to_first_token': randomInt(50, 500),
+    };
+  } else if (isHttp) {
+    const httpInfo = randomChoice(HTTP_ROUTES);
+    metadata = {
+      'http.method': httpInfo.method,
+      'http.route': httpInfo.route,
+      'http.status_code': status === 'error' ? 500 : httpInfo.status,
+    };
+  }
 
   return {
     id: id(),
@@ -66,13 +101,28 @@ function makeSpan(
     duration,
     input:
       kind === 'llm'
-        ? { messages: [{ role: 'user', content: 'Sample prompt...' }] }
-        : { query: `Input for ${name}` },
+        ? {
+            messages: [
+              {
+                role: 'user',
+                content:
+                  'Analyze the following data and provide insights on user engagement patterns. Focus on retention metrics and identify any anomalies in the last 30 days of activity logs.',
+              },
+            ],
+          }
+        : isTool
+          ? { query: `Input for ${name}`, parameters: { limit: 10, offset: 0 } }
+          : isHttp
+            ? { headers: { 'Content-Type': 'application/json' }, body: null }
+            : { query: `Input for ${name}` },
     output:
       status === 'error'
         ? null
         : kind === 'llm'
-          ? { content: 'Generated response text...' }
+          ? {
+              content:
+                'Based on the analysis, user engagement has shown a 15% increase in daily active users over the past month. Key findings include: 1) Retention rate improved from 42% to 48%, 2) Average session duration increased by 3 minutes, 3) An anomaly was detected on March 15th with a sudden 30% drop in API calls.',
+            }
           : { result: `Output from ${name}` },
     error: status === 'error' ? `${name} failed: timeout after ${duration}ms` : null,
     tokens: isLlm
@@ -80,7 +130,7 @@ function makeSpan(
       : null,
     cost: isLlm ? totalTokens * costPerToken : null,
     model,
-    metadata: kind === 'tool' ? { toolVersion: '1.2.0' } : {},
+    metadata,
     children,
   };
 }
@@ -144,7 +194,27 @@ function generateTrace(index: number): Trace {
       }
 
       chainChildren.push(llmSpan);
-      stepCursor = (llmSpan.endTime ?? llmSpan.startTime + llmDuration) + randomInt(5, 30);
+
+      // Some steps also make HTTP requests
+      if (Math.random() > 0.6) {
+        const httpRoute = randomChoice(HTTP_ROUTES);
+        const httpDuration = randomInt(10, 300);
+        const httpStart = (llmSpan.endTime ?? stepCursor) + randomInt(1, 5);
+        const httpStatus: TraceStatus = httpRoute.status >= 400 ? 'error' : 'success';
+        const httpSpan = makeSpan(
+          traceId,
+          '',
+          `${httpRoute.method} ${httpRoute.route}`,
+          'http',
+          httpStart,
+          httpDuration,
+          httpStatus,
+        );
+        chainChildren.push(httpSpan);
+        stepCursor = (httpSpan.endTime ?? httpStart + httpDuration) + randomInt(5, 30);
+      } else {
+        stepCursor = (llmSpan.endTime ?? llmSpan.startTime + llmDuration) + randomInt(5, 30);
+      }
     }
 
     const chainEnd = stepCursor;
