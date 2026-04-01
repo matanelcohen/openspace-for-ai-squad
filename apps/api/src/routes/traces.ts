@@ -55,6 +55,26 @@ function toTraceSummary(row: TraceRecord): TraceSummaryResponse {
   };
 }
 
+interface SpanEventResponse {
+  name: string;
+  timestamp: number;
+  attributes?: Record<string, unknown>;
+}
+
+interface ToolInfoResponse {
+  durationMs: number | null;
+  parameterCount: number | null;
+  inputBytes: number | null;
+  outputBytes: number | null;
+  customAttributes: Record<string, unknown>;
+}
+
+interface LlmInfoResponse {
+  messageCount: number | null;
+  responseLength: number | null;
+  tokensPerSecond: number | null;
+}
+
 interface SpanResponse {
   id: string;
   traceId: string;
@@ -73,6 +93,11 @@ interface SpanResponse {
   model: string | null;
   metadata: Record<string, unknown>;
   children: SpanResponse[];
+  toolName: string | null;
+  toolId: string | null;
+  events: SpanEventResponse[];
+  toolInfo: ToolInfoResponse | null;
+  llmInfo: LlmInfoResponse | null;
 }
 
 function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[] {
@@ -87,11 +112,145 @@ function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[
     const errorMsg = attrs['ai.error'] as string | undefined;
     const model = attrs['ai.model'] as string | undefined;
 
+    // Tool attributes
+    const toolName = (attrs['tool.name'] as string) ?? null;
+    const toolId = (attrs['tool.id'] as string) ?? null;
+    const toolInput = attrs['tool.input'];
+    const toolOutput = attrs['tool.output'];
+
+    // Build input — fallback to tool attributes when ai.prompt is missing
     const input: Record<string, unknown> = {};
     if (prompt) input.prompt = prompt;
     if (systemPrompt) input.systemPrompt = systemPrompt;
+    if (toolInput !== undefined) input.toolInput = toolInput;
 
-    const output = response ? { response } : null;
+    let resolvedInput: unknown;
+    if (Object.keys(input).length > 0) {
+      resolvedInput = input;
+    } else if (s.kind === 'tool' && (toolName || toolId)) {
+      // Structured fallback for tool spans with no explicit input
+      const fallback: Record<string, unknown> = {};
+      if (toolName) fallback.toolName = toolName;
+      if (toolId) fallback.toolId = toolId;
+      for (const [key, val] of Object.entries(attrs)) {
+        if (
+          key.startsWith('tool.') &&
+          ![
+            'tool.name',
+            'tool.id',
+            'tool.input',
+            'tool.output',
+            'tool.error',
+            'tool.duration_ms',
+          ].includes(key)
+        ) {
+          fallback[key] = val;
+        }
+      }
+      resolvedInput = fallback;
+    } else {
+      resolvedInput = null;
+    }
+
+    // Build output — fallback for tool spans
+    let resolvedOutput: unknown;
+    if (response) {
+      resolvedOutput = { response };
+    } else if (toolOutput !== undefined) {
+      resolvedOutput = { toolOutput };
+    } else {
+      resolvedOutput = null;
+    }
+
+    // Parse ALL span events
+    const events: SpanEventResponse[] = [];
+    if (s.events) {
+      try {
+        const rawEvents = JSON.parse(s.events) as Array<{
+          name?: string;
+          timestamp?: number;
+          attributes?: Record<string, unknown>;
+        }>;
+        for (const evt of rawEvents) {
+          if (evt && typeof evt === 'object' && evt.name) {
+            events.push({
+              name: evt.name,
+              timestamp: evt.timestamp ?? 0,
+              ...(evt.attributes && Object.keys(evt.attributes).length > 0
+                ? { attributes: evt.attributes }
+                : {}),
+            });
+          }
+        }
+      } catch {
+        // Malformed events JSON — skip
+      }
+    }
+
+    // Build toolInfo for tool spans
+    let toolInfo: ToolInfoResponse | null = null;
+    if (s.kind === 'tool') {
+      const customAttributes: Record<string, unknown> = {};
+      for (const [key, val] of Object.entries(attrs)) {
+        if (
+          key.startsWith('tool.') &&
+          ![
+            'tool.name',
+            'tool.id',
+            'tool.input',
+            'tool.output',
+            'tool.error',
+            'tool.duration_ms',
+          ].includes(key)
+        ) {
+          customAttributes[key] = val;
+        }
+      }
+      const inputStr = toolInput !== undefined ? JSON.stringify(toolInput) : null;
+      const outputStr = toolOutput !== undefined ? JSON.stringify(toolOutput) : null;
+      const paramCount =
+        toolInput && typeof toolInput === 'object' && !Array.isArray(toolInput)
+          ? Object.keys(toolInput as Record<string, unknown>).length
+          : null;
+
+      toolInfo = {
+        durationMs: (attrs['tool.duration_ms'] as number) ?? null,
+        parameterCount: paramCount,
+        inputBytes: inputStr ? new TextEncoder().encode(inputStr).length : null,
+        outputBytes: outputStr ? new TextEncoder().encode(outputStr).length : null,
+        customAttributes,
+      };
+    }
+
+    // Build llmInfo for LLM spans
+    let llmInfo: LlmInfoResponse | null = null;
+    if (s.kind === 'llm') {
+      let messageCount: number | null = null;
+      if (prompt) {
+        try {
+          const parsed = JSON.parse(prompt);
+          if (Array.isArray(parsed)) {
+            messageCount = parsed.length;
+          }
+        } catch {
+          messageCount = 1;
+        }
+      }
+
+      const responseLength = response ? response.length : null;
+
+      let tokensPerSecond: number | null = null;
+      const completionTokens =
+        (attrs['llm.completion_tokens'] as number) ??
+        (attrs['ai.completion_tokens'] as number) ??
+        null;
+      const durationMs = s.duration_ms;
+      if (completionTokens && durationMs && durationMs > 0) {
+        tokensPerSecond = Math.round((completionTokens / (durationMs / 1000)) * 100) / 100;
+      }
+
+      llmInfo = { messageCount, responseLength, tokensPerSecond };
+    }
 
     const node: SpanResponse = {
       id: s.id,
@@ -103,14 +262,19 @@ function buildSpanTree(spans: SpanRecord[], _traceStatus: string): SpanResponse[
       startTime: s.start_time,
       endTime: s.end_time,
       duration: s.duration_ms,
-      input: Object.keys(input).length > 0 ? input : null,
-      output,
-      error: errorMsg ?? null,
+      input: resolvedInput,
+      output: resolvedOutput,
+      error: errorMsg ?? (attrs['tool.error'] as string) ?? null,
       tokens: null,
       cost: null,
       model: model ?? null,
       metadata: attrs,
       children: [],
+      toolName,
+      toolId,
+      events,
+      toolInfo,
+      llmInfo,
     };
 
     spanMap.set(s.id, node);
@@ -185,6 +349,11 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
       model: null,
       metadata: {},
       children: [],
+      toolName: null,
+      toolId: null,
+      events: [],
+      toolInfo: null,
+      llmInfo: null,
     };
 
     return reply.send({
@@ -217,6 +386,16 @@ const tracesRoute: FastifyPluginAsync = async (app) => {
 };
 
 export default tracesRoute;
+
+// ── Exported for testing ─────────────────────────────────────────
+export { buildSpanTree, mapStatus, toTraceSummary };
+export type {
+  LlmInfoResponse,
+  SpanEventResponse,
+  SpanResponse,
+  ToolInfoResponse,
+  TraceSummaryResponse,
+};
 
 // ── Fastify type augmentation ────────────────────────────────────
 

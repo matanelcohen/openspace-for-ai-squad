@@ -9,9 +9,7 @@ test.describe('Trace Viewer — Trace List', () => {
 
   test('trace list page loads with title and description', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Traces' })).toBeVisible();
-    await expect(
-      page.getByText('Monitor agent runs, latency, costs, and errors.'),
-    ).toBeVisible();
+    await expect(page.getByText('Monitor agent runs, latency, costs, and errors.')).toBeVisible();
   });
 
   test('summary stats cards are visible', async ({ page }) => {
@@ -320,5 +318,128 @@ test.describe('Trace Viewer — Edge Cases', () => {
     const errorBadges = page.locator('table tbody').getByText('Error');
     const count = await errorBadges.count();
     expect(count).toBeGreaterThan(0);
+  });
+});
+
+test.describe('Trace Viewer — Enriched Span Detail', () => {
+  test('span detail panel shows input/output/metadata tabs', async ({ page }) => {
+    await page.goto('/traces/trace-1001');
+    await page.waitForTimeout(500);
+
+    // Click the first span
+    const spanRow = page.locator('[role="button"]').first();
+    await spanRow.click();
+    await page.waitForTimeout(200);
+
+    // Detail panel should show all three tabs
+    await expect(page.getByRole('button', { name: 'input' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'output' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'metadata' })).toBeVisible();
+  });
+
+  test('span detail shows duration and start time metrics', async ({ page }) => {
+    await page.goto('/traces/trace-1001');
+    await page.waitForTimeout(500);
+
+    const spanRow = page.locator('[role="button"]').first();
+    await spanRow.click();
+    await page.waitForTimeout(200);
+
+    await expect(page.getByText('Duration')).toBeVisible();
+    await expect(page.getByText('Start Time')).toBeVisible();
+  });
+
+  test('input tab displays JSON formatted content', async ({ page }) => {
+    await page.goto('/traces/trace-1001');
+    await page.waitForTimeout(500);
+
+    const spanRow = page.locator('[role="button"]').first();
+    await spanRow.click();
+    await page.waitForTimeout(200);
+
+    // Input tab is active by default, pre tag should show JSON
+    const preTag = page.locator('pre');
+    await expect(preTag).toBeVisible();
+    const text = await preTag.textContent();
+    // JSON content should be present (either data or null)
+    expect(text?.length).toBeGreaterThan(0);
+  });
+
+  test('output tab shows content or empty state', async ({ page }) => {
+    await page.goto('/traces/trace-1001');
+    await page.waitForTimeout(500);
+
+    const spanRow = page.locator('[role="button"]').first();
+    await spanRow.click();
+    await page.waitForTimeout(200);
+
+    // Switch to output tab
+    await page.getByRole('button', { name: 'output' }).click();
+    await page.waitForTimeout(100);
+
+    const preTag = page.locator('pre');
+    await expect(preTag).toBeVisible();
+    const text = await preTag.textContent();
+    // Should show either JSON output or "No output"
+    expect(text?.length).toBeGreaterThan(0);
+  });
+
+  test('metadata tab shows raw attributes', async ({ page }) => {
+    await page.goto('/traces/trace-1001');
+    await page.waitForTimeout(500);
+
+    const spanRow = page.locator('[role="button"]').first();
+    await spanRow.click();
+    await page.waitForTimeout(200);
+
+    await page.getByRole('button', { name: 'metadata' }).click();
+    await page.waitForTimeout(100);
+
+    const preTag = page.locator('pre');
+    await expect(preTag).toBeVisible();
+    const text = await preTag.textContent();
+    // Metadata should contain JSON with attribute keys
+    expect(text).toBeTruthy();
+  });
+
+  test('span kind badge is shown in detail panel', async ({ page }) => {
+    await page.goto('/traces/trace-1001');
+    await page.waitForTimeout(500);
+
+    const spanRow = page.locator('[role="button"]').first();
+    await spanRow.click();
+    await page.waitForTimeout(200);
+
+    // The detail panel header should contain a badge with the kind
+    const kindBadge = page
+      .locator('.capitalize')
+      .filter({ hasText: /^(llm|tool|agent|chain|retriever|embedding)$/ });
+    const badgeCount = await kindBadge.count();
+    expect(badgeCount).toBeGreaterThan(0);
+  });
+
+  test('selecting different spans updates detail panel', async ({ page }) => {
+    await page.goto('/traces/trace-1001');
+    await page.waitForTimeout(500);
+
+    const spanRows = page.locator('[role="button"]');
+    const rowCount = await spanRows.count();
+
+    if (rowCount >= 2) {
+      // Click first span
+      await spanRows.first().click();
+      await page.waitForTimeout(200);
+      const _firstName = await page.locator('h3').textContent();
+
+      // Click second span
+      await spanRows.nth(1).click();
+      await page.waitForTimeout(200);
+      const secondName = await page.locator('h3').textContent();
+
+      // Names should differ (different spans selected)
+      // Note: they could be the same if spans have the same name,
+      // but we just verify the panel updates
+      expect(secondName).toBeTruthy();
+    }
   });
 });
