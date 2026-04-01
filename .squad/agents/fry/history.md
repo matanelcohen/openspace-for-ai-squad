@@ -183,6 +183,20 @@ Here's what I did:
 - The repo uses git worktrees at .git-worktrees/task-<id> for task branches, keeping the main working directory clean.
 - Pre-existing build errors exist in apps/web (e.g., chat/page.tsx) and many tests fail (layout, chat, voice) — stash-and-compare is needed to confirm new changes don't introduce regressions.
 - Completed "Enhance frontend trace viewer to display tool details and rich span data": Commit passed lint-staged (eslint + prettier). All done! Here's a summary:
+- Uses react-syntax-highlighter for JSON syntax highlighting in the trace detail panel.
+- The project uses git worktrees (under .git-worktrees/) for parallel task branches, with lint-staged running eslint + prettier on commit.
+- Commit messages follow conventional commits format with scope (e.g. 'feat(traces):') and detailed body sections grouped by component.
+- Trace viewer components live in apps/web/src/components/traces/ with trace-detail.tsx (waterfall), trace-list.tsx (list), and trace-stats.tsx (analytics dashboard). Types are in apps/web/src/lib/trace-types.ts, mock data in apps/web/src/lib/mock-traces.ts.
+- Completed "Overhaul trace viewer UI for tool visibility": Committed successfully. Lint-staged (eslint + prettier) passed automatically. Here's what I did:
+
+## Summary
+
+🎨 **Overhauled the trace viewer UI** across 5 files (+996 lines):
+
+### Waterfall View (`trace-detail.tsx`)
+- **Inline I/O previews** — expandable cards on tool/LLM rows showing first 3 lines of input and output
+- **Error banners** — red banners with error messages right in the waterfall, collapsible stack traces
+- **LLM span info** — model name, token breakdown (prompt↑/completion↓), co
 
 ## ✅ Task Complete
 
