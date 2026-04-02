@@ -3,9 +3,8 @@
 import type { EscalationItem } from '@matanelcohen/openspace-shared';
 import { ArrowLeft, CheckCircle, MessageSquare, Shield, XCircle } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 
-import { useAgents } from '@/hooks/use-agents';
 import { AuditTrailTimeline } from '@/components/escalations/audit-trail-timeline';
 import { ConfidenceBadge } from '@/components/escalations/confidence-badge';
 import { EscalationStatusBadge } from '@/components/escalations/escalation-status-badge';
@@ -15,6 +14,7 @@ import { SlaCountdown } from '@/components/escalations/sla-countdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
+import { useAgents } from '@/hooks/use-agents';
 import {
   useApproveEscalation,
   useClaimEscalation,
@@ -26,7 +26,9 @@ interface EscalationDetailPanelProps {
   escalation: EscalationItem;
 }
 
-export function EscalationDetailPanel({ escalation }: EscalationDetailPanelProps) {
+export const EscalationDetailPanel = memo(function EscalationDetailPanel({
+  escalation,
+}: EscalationDetailPanelProps) {
   const [comment, setComment] = useState('');
   const claim = useClaimEscalation();
   const approve = useApproveEscalation();
@@ -34,12 +36,15 @@ export function EscalationDetailPanel({ escalation }: EscalationDetailPanelProps
   const requestChanges = useRequestChangesEscalation();
   const { data: agents } = useAgents();
 
-  const resolveName = (id: string) => {
-    if (!id) return 'Unknown';
-    const agent = agents?.find((a) => a.id === id || a.name.toLowerCase() === id);
-    if (agent) return agent.name;
-    return id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-  };
+  const resolveName = useCallback(
+    (id: string) => {
+      if (!id) return 'Unknown';
+      const agent = agents?.find((a) => a.id === id || a.name.toLowerCase() === id);
+      if (agent) return agent.name;
+      return id.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    },
+    [agents],
+  );
 
   const isPending =
     claim.isPending || approve.isPending || reject.isPending || requestChanges.isPending;
@@ -47,19 +52,19 @@ export function EscalationDetailPanel({ escalation }: EscalationDetailPanelProps
   const canAct = escalation.status === 'pending' || escalation.status === 'claimed';
   const needsClaim = escalation.status === 'pending';
 
-  const handleClaim = () => claim.mutate(escalation.id);
-  const handleApprove = () => {
+  const handleClaim = useCallback(() => claim.mutate(escalation.id), [claim, escalation.id]);
+  const handleApprove = useCallback(() => {
     approve.mutate({ id: escalation.id, comment });
     setComment('');
-  };
-  const handleReject = () => {
+  }, [approve, escalation.id, comment]);
+  const handleReject = useCallback(() => {
     reject.mutate({ id: escalation.id, comment });
     setComment('');
-  };
-  const handleRequestChanges = () => {
+  }, [reject, escalation.id, comment]);
+  const handleRequestChanges = useCallback(() => {
     requestChanges.mutate({ id: escalation.id, comment });
     setComment('');
-  };
+  }, [requestChanges, escalation.id, comment]);
 
   return (
     <div className="space-y-6" data-testid="escalation-detail-panel">
@@ -210,11 +215,7 @@ export function EscalationDetailPanel({ escalation }: EscalationDetailPanelProps
               />
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button
-                onClick={handleApprove}
-                disabled={isPending}
-                data-testid="approve-btn"
-              >
+              <Button onClick={handleApprove} disabled={isPending} data-testid="approve-btn">
                 <CheckCircle className="mr-1.5 h-4 w-4" />
                 {approve.isPending ? 'Approving…' : 'Approve'}
               </Button>
@@ -252,4 +253,4 @@ export function EscalationDetailPanel({ escalation }: EscalationDetailPanelProps
       </Card>
     </div>
   );
-}
+});

@@ -1,7 +1,8 @@
 'use client';
 
-import { AlertTriangle, Bell } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { memo } from 'react';
 
 import { EscalationStatusBadge } from '@/components/escalations/escalation-status-badge';
 import { PriorityIndicator } from '@/components/escalations/priority-indicator';
@@ -19,7 +20,7 @@ import { useEscalations, usePendingEscalationCount } from '@/hooks/use-escalatio
 
 const MAX_DISPLAYED = 8;
 
-export function ReviewerNotificationBell() {
+export const ReviewerNotificationBell = memo(function ReviewerNotificationBell() {
   const pendingCount = usePendingEscalationCount();
   const { data: escalations } = useEscalations();
   const router = useRouter();
@@ -77,9 +78,7 @@ export function ReviewerNotificationBell() {
               data-testid={`escalation-notification-${esc.id}`}
             >
               <div className="flex w-full items-center justify-between gap-2">
-                <span className="text-sm font-medium truncate">
-                  {esc.context.agentId}
-                </span>
+                <span className="text-sm font-medium truncate">{esc.context.agentId}</span>
                 <PriorityIndicator priority={esc.priority} />
               </div>
               <p className="text-xs text-muted-foreground line-clamp-1">
@@ -96,4 +95,4 @@ export function ReviewerNotificationBell() {
       </DropdownMenuContent>
     </DropdownMenu>
   );
-}
+});

@@ -1,7 +1,7 @@
 'use client';
 
 import { CheckCircle, MessageSquare, XCircle } from 'lucide-react';
-import { useState } from 'react';
+import { memo, useState } from 'react';
 
 import {
   AlertDialog,
@@ -15,7 +15,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { useBulkApproveEscalations, useBulkRejectEscalations } from '@/hooks/use-escalation-actions';
+import {
+  useBulkApproveEscalations,
+  useBulkRejectEscalations,
+} from '@/hooks/use-escalation-actions';
 
 type BulkAction = 'approve' | 'reject' | null;
 
@@ -24,7 +27,10 @@ interface BulkActionToolbarProps {
   onClearSelection: () => void;
 }
 
-export function BulkActionToolbar({ selectedIds, onClearSelection }: BulkActionToolbarProps) {
+export const BulkActionToolbar = memo(function BulkActionToolbar({
+  selectedIds,
+  onClearSelection,
+}: BulkActionToolbarProps) {
   const [action, setAction] = useState<BulkAction>(null);
   const [comment, setComment] = useState('');
 
@@ -54,9 +60,7 @@ export function BulkActionToolbar({ selectedIds, onClearSelection }: BulkActionT
         className="flex items-center gap-3 rounded-lg border bg-muted/50 p-3"
         data-testid="bulk-action-toolbar"
       >
-        <span className="text-sm font-medium">
-          {count} selected
-        </span>
+        <span className="text-sm font-medium">{count} selected</span>
         <Button
           size="sm"
           variant="outline"
@@ -91,7 +95,8 @@ export function BulkActionToolbar({ selectedIds, onClearSelection }: BulkActionT
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {action === 'approve' ? 'Bulk Approve' : 'Bulk Reject'} {count} Escalation{count !== 1 ? 's' : ''}
+              {action === 'approve' ? 'Bulk Approve' : 'Bulk Reject'} {count} Escalation
+              {count !== 1 ? 's' : ''}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {action === 'approve'
@@ -133,4 +138,4 @@ export function BulkActionToolbar({ selectedIds, onClearSelection }: BulkActionT
       </AlertDialog>
     </>
   );
-}
+});

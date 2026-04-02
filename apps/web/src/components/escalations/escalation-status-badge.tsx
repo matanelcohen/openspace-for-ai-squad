@@ -1,6 +1,7 @@
 import type { EscalationStatus } from '@matanelcohen/openspace-shared';
-import type { Circle} from 'lucide-react';
+import type { Circle } from 'lucide-react';
 import { CheckCircle, Clock, Eye, RotateCcw, XCircle } from 'lucide-react';
+import { memo } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -18,8 +19,7 @@ const statusConfig: Record<
   claimed: {
     label: 'In Review',
     icon: Eye,
-    className:
-      'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200',
+    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200',
   },
   approved: {
     label: 'Approved',
@@ -35,8 +35,7 @@ const statusConfig: Record<
   timed_out: {
     label: 'Timed Out',
     icon: RotateCcw,
-    className:
-      'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400 border-gray-200',
+    className: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400 border-gray-200',
   },
   auto_escalated: {
     label: 'Auto-Escalated',
@@ -51,14 +50,21 @@ interface EscalationStatusBadgeProps {
   className?: string;
 }
 
-export function EscalationStatusBadge({ status, className }: EscalationStatusBadgeProps) {
+export const EscalationStatusBadge = memo(function EscalationStatusBadge({
+  status,
+  className,
+}: EscalationStatusBadgeProps) {
   const config = statusConfig[status];
   const Icon = config.icon;
 
   return (
-    <Badge variant="outline" className={cn(config.className, className)} data-testid="escalation-status-badge">
+    <Badge
+      variant="outline"
+      className={cn(config.className, className)}
+      data-testid="escalation-status-badge"
+    >
       <Icon className="mr-1 h-3 w-3" />
       {config.label}
     </Badge>
   );
-}
+});
