@@ -55,7 +55,8 @@ describe('ErrorBoundary', () => {
 
   it('displays error message in development mode', () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.env as any).NODE_ENV = 'development';
 
     render(
       <ErrorBoundary>
@@ -64,12 +65,14 @@ describe('ErrorBoundary', () => {
     );
 
     expect(screen.getByText('💣 Boom!')).toBeInTheDocument();
-    process.env.NODE_ENV = originalEnv;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.env as any).NODE_ENV = originalEnv;
   });
 
   it('hides error message in production mode', () => {
     const originalEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.env as any).NODE_ENV = 'production';
 
     render(
       <ErrorBoundary>
@@ -79,7 +82,8 @@ describe('ErrorBoundary', () => {
 
     expect(screen.queryByText('💣 Boom!')).not.toBeInTheDocument();
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-    process.env.NODE_ENV = originalEnv;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (process.env as any).NODE_ENV = originalEnv;
   });
 
   it('resets error state when "Try Again" is clicked', () => {
@@ -151,10 +155,10 @@ describe('ErrorBoundary', () => {
     );
 
     expect(onError).toHaveBeenCalledOnce();
-    expect(onError.mock.calls[0][0]).toBeInstanceOf(Error);
-    expect(onError.mock.calls[0][0].message).toBe('💣 Boom!');
+    expect(onError.mock.calls[0]![0]).toBeInstanceOf(Error);
+    expect(onError.mock.calls[0]![0].message).toBe('💣 Boom!');
     // Second argument is ErrorInfo with componentStack
-    expect(onError.mock.calls[0][1]).toHaveProperty('componentStack');
+    expect(onError.mock.calls[0]![1]).toHaveProperty('componentStack');
   });
 
   it('does not call onError when no error occurs', () => {

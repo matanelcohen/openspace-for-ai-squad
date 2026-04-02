@@ -16,27 +16,10 @@ function TerminalLoadingFallback() {
   );
 }
 
-function TerminalErrorFallback() {
-  return (
-    <div className="flex h-full items-center justify-center bg-[#0a0a0f]">
-      <div className="flex flex-col items-center gap-3 text-red-400">
-        <p className="text-sm">Failed to load terminal component.</p>
-        <button
-          onClick={() => window.location.reload()}
-          className="rounded border border-zinc-700 px-3 py-1 text-xs text-zinc-300 transition-colors hover:bg-zinc-800"
-        >
-          Reload Page
-        </button>
-      </div>
-    </div>
-  );
-}
-
 // xterm.js requires DOM APIs — load client-side only
 const Terminal = dynamic(() => import('@/components/terminal/terminal').then((m) => m.Terminal), {
   ssr: false,
   loading: () => <TerminalLoadingFallback />,
-  error: () => <TerminalErrorFallback />,
 });
 
 export default function TerminalPage() {
