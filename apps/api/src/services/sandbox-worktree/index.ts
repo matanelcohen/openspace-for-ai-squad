@@ -296,6 +296,12 @@ export class WorktreeService {
   }
 
   private gitMain(args: string): string {
+    // Ensure we're on the base branch before any git operations on the main repo
+    const currentBranch = execSync('git rev-parse --abbrev-ref HEAD', { cwd: this.projectDir, encoding: 'utf-8', timeout: 5_000 }).trim();
+    if (currentBranch !== this.baseBranch) {
+      console.warn(`[Sandbox] Main repo on '${currentBranch}', switching to '${this.baseBranch}'`);
+      execSync(`git checkout ${this.baseBranch}`, { cwd: this.projectDir, encoding: 'utf-8', timeout: 10_000, stdio: ['pipe', 'pipe', 'pipe'] });
+    }
     return execSync(`git ${args}`, { cwd: this.projectDir, encoding: 'utf-8', timeout: 60_000, stdio: ['pipe', 'pipe', 'pipe'] });
   }
 
