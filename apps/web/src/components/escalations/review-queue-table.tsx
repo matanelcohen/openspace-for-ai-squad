@@ -1,15 +1,14 @@
 'use client';
 
-import type { EscalationItem, EscalationPriority, EscalationStatus } from '@matanelcohen/openspace-shared';
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  CheckSquare,
-  Square,
-} from 'lucide-react';
+import type {
+  EscalationItem,
+  EscalationPriority,
+  EscalationStatus,
+} from '@matanelcohen/openspace-shared';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Square } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { List, type ListImperativeAPI } from 'react-window';
 
 import { ConfidenceBadge } from '@/components/escalations/confidence-badge';
 import { EscalationStatusBadge } from '@/components/escalations/escalation-status-badge';
@@ -24,14 +23,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
 type SortField = 'priority' | 'createdAt' | 'timeoutAt' | 'confidence';
 type SortDirection = 'asc' | 'desc';
@@ -49,6 +40,94 @@ const priorityOrder: Record<EscalationPriority, number> = {
   low: 3,
 };
 
+const ROW_HEIGHT = 52;
+const MAX_TABLE_HEIGHT = 600;
+
+const COL_GRID = 'grid grid-cols-[40px_1fr_1fr_100px_120px_100px_100px_140px] items-center';
+
+interface VirtualRowProps {
+  items: EscalationItem[];
+  selectedIds: Set<string>;
+  toggleOne: (id: string) => void;
+}
+
+const VirtualRow = function VirtualRow({
+  index,
+  style,
+  items,
+  selectedIds,
+  toggleOne,
+}: {
+  index: number;
+  style: CSSProperties;
+} & VirtualRowProps) {
+  const esc = items[index];
+  if (!esc) return null;
+
+  return (
+    <div
+      style={style}
+      className={`${COL_GRID} border-b transition-colors hover:bg-muted/50 cursor-pointer`}
+      data-testid={`escalation-row-${esc.id}`}
+      role="row"
+    >
+      <div className="px-4 flex items-center" role="cell">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-6 w-6"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleOne(esc.id);
+          }}
+          aria-label={selectedIds.has(esc.id) ? `Deselect ${esc.id}` : `Select ${esc.id}`}
+        >
+          {selectedIds.has(esc.id) ? (
+            <CheckSquare className="h-4 w-4" />
+          ) : (
+            <Square className="h-4 w-4" />
+          )}
+        </Button>
+      </div>
+      <div className="px-4 truncate" role="cell">
+        <Link
+          href={`/escalations/${esc.id}`}
+          className="font-medium text-foreground hover:underline"
+        >
+          {esc.context.agentId}
+        </Link>
+      </div>
+      <div className="px-4 capitalize text-sm text-muted-foreground truncate" role="cell">
+        {esc.reason.replace(/_/g, ' ')}
+      </div>
+      <div className="px-4" role="cell">
+        <PriorityIndicator priority={esc.priority} />
+      </div>
+      <div className="px-4" role="cell">
+        <EscalationStatusBadge status={esc.status} />
+      </div>
+      <div className="px-4" role="cell">
+        <ConfidenceBadge score={esc.context.confidenceScore} />
+      </div>
+      <div className="px-4" role="cell">
+        {esc.status === 'pending' || esc.status === 'claimed' ? (
+          <SlaCountdown timeoutAt={esc.timeoutAt} />
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </div>
+      <div className="px-4 text-sm text-muted-foreground whitespace-nowrap" role="cell">
+        {new Date(esc.createdAt).toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </div>
+    </div>
+  );
+};
+
 export function ReviewQueueTable({
   escalations,
   selectedIds,
@@ -59,6 +138,7 @@ export function ReviewQueueTable({
   const [priorityFilter, setPriorityFilter] = useState<EscalationPriority | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('createdAt');
   const [sortDir, setSortDir] = useState<SortDirection>('desc');
+  const listRef = useRef<ListImperativeAPI>(null);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -106,6 +186,13 @@ export function ReviewQueueTable({
     });
   }, [escalations, statusFilter, priorityFilter, searchQuery, sortField, sortDir]);
 
+  // Reset scroll position when filters or sort change
+  useEffect(() => {
+    if (filtered.length > 0) {
+      listRef.current?.scrollToRow({ index: 0 });
+    }
+  }, [searchQuery, statusFilter, priorityFilter, sortField, sortDir, filtered.length, listRef]);
+
   const allSelected = filtered.length > 0 && filtered.every((e) => selectedIds.has(e.id));
 
   const toggleAll = () => {
@@ -116,15 +203,23 @@ export function ReviewQueueTable({
     }
   };
 
-  const toggleOne = (id: string) => {
-    const next = new Set(selectedIds);
-    if (next.has(id)) {
-      next.delete(id);
-    } else {
-      next.add(id);
-    }
-    onSelectionChange(next);
-  };
+  const toggleOne = useCallback(
+    (id: string) => {
+      const next = new Set(selectedIds);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      onSelectionChange(next);
+    },
+    [selectedIds, onSelectionChange],
+  );
+
+  const rowProps = useMemo<VirtualRowProps>(
+    () => ({ items: filtered, selectedIds, toggleOne }),
+    [filtered, selectedIds, toggleOne],
+  );
 
   const SortIcon = ({ field }: { field: SortField }) => {
     if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-50" />;
@@ -134,6 +229,8 @@ export function ReviewQueueTable({
       <ArrowDown className="h-3 w-3 ml-1" />
     );
   };
+
+  const listHeight = Math.min(MAX_TABLE_HEIGHT, filtered.length * ROW_HEIGHT);
 
   return (
     <div className="space-y-4">
@@ -181,147 +278,91 @@ export function ReviewQueueTable({
       </div>
 
       {/* Table */}
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-10">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6"
-                  onClick={toggleAll}
-                  aria-label={allSelected ? 'Deselect all' : 'Select all'}
-                  data-testid="select-all"
-                >
-                  {allSelected ? (
-                    <CheckSquare className="h-4 w-4" />
-                  ) : (
-                    <Square className="h-4 w-4" />
-                  )}
-                </Button>
-              </TableHead>
-              <TableHead>Agent</TableHead>
-              <TableHead>Reason</TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium"
-                  onClick={() => handleSort('priority')}
-                >
-                  Priority
-                  <SortIcon field="priority" />
-                </Button>
-              </TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium"
-                  onClick={() => handleSort('confidence')}
-                >
-                  Confidence
-                  <SortIcon field="confidence" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium"
-                  onClick={() => handleSort('timeoutAt')}
-                >
-                  SLA
-                  <SortIcon field="timeoutAt" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-auto p-0 font-medium"
-                  onClick={() => handleSort('createdAt')}
-                >
-                  Created
-                  <SortIcon field="createdAt" />
-                </Button>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={8} className="py-10 text-center text-muted-foreground">
-                  No escalations found.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((esc) => (
-                <TableRow
-                  key={esc.id}
-                  className="cursor-pointer"
-                  data-testid={`escalation-row-${esc.id}`}
-                >
-                  <TableCell>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-6 w-6"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleOne(esc.id);
-                      }}
-                      aria-label={selectedIds.has(esc.id) ? `Deselect ${esc.id}` : `Select ${esc.id}`}
-                    >
-                      {selectedIds.has(esc.id) ? (
-                        <CheckSquare className="h-4 w-4" />
-                      ) : (
-                        <Square className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Link
-                      href={`/escalations/${esc.id}`}
-                      className="font-medium text-foreground hover:underline"
-                    >
-                      {esc.context.agentId}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="capitalize text-sm text-muted-foreground">
-                    {esc.reason.replace(/_/g, ' ')}
-                  </TableCell>
-                  <TableCell>
-                    <PriorityIndicator priority={esc.priority} />
-                  </TableCell>
-                  <TableCell>
-                    <EscalationStatusBadge status={esc.status} />
-                  </TableCell>
-                  <TableCell>
-                    <ConfidenceBadge score={esc.context.confidenceScore} />
-                  </TableCell>
-                  <TableCell>
-                    {esc.status === 'pending' || esc.status === 'claimed' ? (
-                      <SlaCountdown timeoutAt={esc.timeoutAt} />
-                    ) : (
-                      <span className="text-sm text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {new Date(esc.createdAt).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
+      <div className="rounded-md border text-sm" role="table">
+        {/* Sticky Header */}
+        <div className={`${COL_GRID} h-12 border-b bg-background sticky top-0 z-10`} role="row">
+          <div className="px-4 flex items-center" role="columnheader">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6"
+              onClick={toggleAll}
+              aria-label={allSelected ? 'Deselect all' : 'Select all'}
+              data-testid="select-all"
+            >
+              {allSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
+            </Button>
+          </div>
+          <div className="px-4 font-medium text-muted-foreground" role="columnheader">
+            Agent
+          </div>
+          <div className="px-4 font-medium text-muted-foreground" role="columnheader">
+            Reason
+          </div>
+          <div className="px-4" role="columnheader">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto p-0 font-medium"
+              onClick={() => handleSort('priority')}
+            >
+              Priority
+              <SortIcon field="priority" />
+            </Button>
+          </div>
+          <div className="px-4 font-medium text-muted-foreground" role="columnheader">
+            Status
+          </div>
+          <div className="px-4" role="columnheader">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto p-0 font-medium"
+              onClick={() => handleSort('confidence')}
+            >
+              Confidence
+              <SortIcon field="confidence" />
+            </Button>
+          </div>
+          <div className="px-4" role="columnheader">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto p-0 font-medium"
+              onClick={() => handleSort('timeoutAt')}
+            >
+              SLA
+              <SortIcon field="timeoutAt" />
+            </Button>
+          </div>
+          <div className="px-4" role="columnheader">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-auto p-0 font-medium"
+              onClick={() => handleSort('createdAt')}
+            >
+              Created
+              <SortIcon field="createdAt" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Virtualized Body */}
+        {filtered.length === 0 ? (
+          <div className="py-10 text-center text-muted-foreground">No escalations found.</div>
+        ) : (
+          <List<VirtualRowProps>
+            listRef={listRef}
+            rowComponent={VirtualRow}
+            rowCount={filtered.length}
+            rowHeight={ROW_HEIGHT}
+            rowProps={rowProps}
+            defaultHeight={MAX_TABLE_HEIGHT}
+            style={{ height: listHeight, overflow: 'auto' }}
+            overscanCount={5}
+          />
+        )}
       </div>
     </div>
   );

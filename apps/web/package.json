@@ -46,6 +46,7 @@
     "react-speech-recognition": "^4.0.1",
     "react-syntax-highlighter": "^16.1.1",
     "react-text-to-speech": "^5.1.9",
+    "react-window": "^2.2.7",
     "remark-gfm": "^4.0.1",
     "tailwind-merge": "^2.6.0",
     "zustand": "^5.0.12"
@@ -57,6 +58,7 @@
     "@types/node": "^20.14.0",
     "@types/react": "^18.3.0",
     "@types/react-dom": "^18.3.0",
+    "@types/react-window": "^2.0.0",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
     "jsdom": "^25.0.1",
