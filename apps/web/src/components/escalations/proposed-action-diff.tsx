@@ -1,9 +1,14 @@
+import { memo } from 'react';
+
 interface ProposedActionDiffProps {
   proposedAction: string;
   reasoning: string;
 }
 
-export function ProposedActionDiff({ proposedAction, reasoning }: ProposedActionDiffProps) {
+export const ProposedActionDiff = memo(function ProposedActionDiff({
+  proposedAction,
+  reasoning,
+}: ProposedActionDiffProps) {
   return (
     <div className="space-y-4" data-testid="proposed-action-diff">
       <div>
@@ -20,4 +25,4 @@ export function ProposedActionDiff({ proposedAction, reasoning }: ProposedAction
       </div>
     </div>
   );
-}
+});

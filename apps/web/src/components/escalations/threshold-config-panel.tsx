@@ -2,7 +2,7 @@
 
 import type { ConfidenceThreshold } from '@matanelcohen/openspace-shared';
 import { AlertTriangle, Plus, Save, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +37,7 @@ function getThresholdColor(value: number): string {
   return 'border-red-300 dark:border-red-700';
 }
 
-export function ThresholdConfigPanel({
+export const ThresholdConfigPanel = memo(function ThresholdConfigPanel({
   thresholds,
   onSave,
   isSaving = false,
@@ -218,4 +218,4 @@ export function ThresholdConfigPanel({
       </CardContent>
     </Card>
   );
-}
+});

@@ -1,5 +1,6 @@
 import type { EscalationPriority } from '@matanelcohen/openspace-shared';
 import { AlertTriangle, ArrowDown, ArrowUp, Flame } from 'lucide-react';
+import { memo } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -28,8 +29,7 @@ const priorityConfig: Record<
   low: {
     label: 'Low',
     icon: ArrowDown,
-    className:
-      'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200',
+    className: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 border-blue-200',
   },
 };
 
@@ -38,14 +38,21 @@ interface PriorityIndicatorProps {
   className?: string;
 }
 
-export function PriorityIndicator({ priority, className }: PriorityIndicatorProps) {
+export const PriorityIndicator = memo(function PriorityIndicator({
+  priority,
+  className,
+}: PriorityIndicatorProps) {
   const config = priorityConfig[priority];
   const Icon = config.icon;
 
   return (
-    <Badge variant="outline" className={cn(config.className, className)} data-testid="priority-indicator">
+    <Badge
+      variant="outline"
+      className={cn(config.className, className)}
+      data-testid="priority-indicator"
+    >
       <Icon className="mr-1 h-3 w-3" />
       {config.label}
     </Badge>
   );
-}
+});

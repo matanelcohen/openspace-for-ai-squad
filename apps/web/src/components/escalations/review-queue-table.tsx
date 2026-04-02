@@ -1,15 +1,13 @@
 'use client';
 
-import type { EscalationItem, EscalationPriority, EscalationStatus } from '@matanelcohen/openspace-shared';
-import {
-  ArrowDown,
-  ArrowUp,
-  ArrowUpDown,
-  CheckSquare,
-  Square,
-} from 'lucide-react';
+import type {
+  EscalationItem,
+  EscalationPriority,
+  EscalationStatus,
+} from '@matanelcohen/openspace-shared';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, Square } from 'lucide-react';
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
 import { ConfidenceBadge } from '@/components/escalations/confidence-badge';
 import { EscalationStatusBadge } from '@/components/escalations/escalation-status-badge';
@@ -49,7 +47,7 @@ const priorityOrder: Record<EscalationPriority, number> = {
   low: 3,
 };
 
-export function ReviewQueueTable({
+export const ReviewQueueTable = memo(function ReviewQueueTable({
   escalations,
   selectedIds,
   onSelectionChange,
@@ -273,7 +271,9 @@ export function ReviewQueueTable({
                         e.stopPropagation();
                         toggleOne(esc.id);
                       }}
-                      aria-label={selectedIds.has(esc.id) ? `Deselect ${esc.id}` : `Select ${esc.id}`}
+                      aria-label={
+                        selectedIds.has(esc.id) ? `Deselect ${esc.id}` : `Select ${esc.id}`
+                      }
                     >
                       {selectedIds.has(esc.id) ? (
                         <CheckSquare className="h-4 w-4" />
@@ -325,4 +325,4 @@ export function ReviewQueueTable({
       </div>
     </div>
   );
-}
+});

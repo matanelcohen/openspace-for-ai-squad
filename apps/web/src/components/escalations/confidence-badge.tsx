@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 import { cn } from '@/lib/utils';
 
 interface ConfidenceBadgeProps {
@@ -7,11 +9,15 @@ interface ConfidenceBadgeProps {
 
 function getConfidenceColor(score: number): string {
   if (score >= 0.8) return 'text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30';
-  if (score >= 0.5) return 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30';
+  if (score >= 0.5)
+    return 'text-yellow-600 dark:text-yellow-400 bg-yellow-100 dark:bg-yellow-900/30';
   return 'text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30';
 }
 
-export function ConfidenceBadge({ score, className }: ConfidenceBadgeProps) {
+export const ConfidenceBadge = memo(function ConfidenceBadge({
+  score,
+  className,
+}: ConfidenceBadgeProps) {
   const percentage = Math.round(score * 100);
   const colorClass = getConfidenceColor(score);
 
@@ -40,4 +46,4 @@ export function ConfidenceBadge({ score, className }: ConfidenceBadgeProps) {
       {percentage}%
     </div>
   );
-}
+});

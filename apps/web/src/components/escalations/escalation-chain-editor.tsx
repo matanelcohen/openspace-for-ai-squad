@@ -2,7 +2,7 @@
 
 import type { EscalationChain } from '@matanelcohen/openspace-shared';
 import { ChevronDown, ChevronRight, Link2, Plus, Save, Trash2, X } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -44,7 +44,7 @@ function validateChain(chain: EscalationChain): string | null {
   return null;
 }
 
-export function EscalationChainEditor({
+export const EscalationChainEditor = memo(function EscalationChainEditor({
   chains,
   onSave,
   isSaving = false,
@@ -356,4 +356,4 @@ export function EscalationChainEditor({
       </CardContent>
     </Card>
   );
-}
+});

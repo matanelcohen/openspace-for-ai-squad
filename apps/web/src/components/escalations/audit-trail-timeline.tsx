@@ -2,6 +2,7 @@
 
 import type { AuditEntry } from '@matanelcohen/openspace-shared';
 import { CheckCircle, Clock, Eye, RotateCcw, XCircle } from 'lucide-react';
+import { memo } from 'react';
 
 import { useAgents } from '@/hooks/use-agents';
 import { cn } from '@/lib/utils';
@@ -66,7 +67,9 @@ function formatAction(action: AuditEntry['action']): string {
   }
 }
 
-export function AuditTrailTimeline({ entries }: AuditTrailTimelineProps) {
+export const AuditTrailTimeline = memo(function AuditTrailTimeline({
+  entries,
+}: AuditTrailTimelineProps) {
   const resolveName = useResolveActorName();
 
   if (entries.length === 0) {
@@ -106,12 +109,10 @@ export function AuditTrailTimeline({ entries }: AuditTrailTimelineProps) {
                 minute: '2-digit',
               })}
             </p>
-            {entry.details && (
-              <p className="mt-1 text-sm text-muted-foreground">{entry.details}</p>
-            )}
+            {entry.details && <p className="mt-1 text-sm text-muted-foreground">{entry.details}</p>}
           </div>
         </div>
       ))}
     </div>
   );
-}
+});
