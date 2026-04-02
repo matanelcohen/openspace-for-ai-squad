@@ -66,7 +66,7 @@ describe('parseTaskFile', () => {
     expect(result.filePath).toBe('task-001.md');
   });
 
-  it('defaults status to backlog when missing', () => {
+  it('defaults status to pending when missing', () => {
     const content = `---
 id: task-x
 title: No status
@@ -75,7 +75,7 @@ title: No status
 Some description.
 `;
     const { task } = parseTaskFile(content, 'test.md');
-    expect(task.status).toBe('backlog');
+    expect(task.status).toBe('pending');
   });
 
   it('defaults priority to P2 when missing', () => {
@@ -205,7 +205,7 @@ Body.
     expect(() => parseTaskFile(content, 'bad.md')).toThrow('Missing required field "id"');
   });
 
-  it('handles invalid status gracefully (defaults to backlog)', () => {
+  it('handles invalid status gracefully (defaults to pending)', () => {
     const content = `---
 id: task-x
 title: Bad status
@@ -215,7 +215,7 @@ status: invalid-status
 Body.
 `;
     const { task } = parseTaskFile(content, 'test.md');
-    expect(task.status).toBe('backlog');
+    expect(task.status).toBe('pending');
   });
 
   it('handles invalid priority gracefully (defaults to P2)', () => {

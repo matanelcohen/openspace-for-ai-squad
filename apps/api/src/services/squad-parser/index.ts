@@ -129,6 +129,7 @@ export class SquadParser {
 
     const byStatus: Record<TaskStatus, number> = {
       pending: 0,
+      backlog: 0,
       'in-progress': 0,
       'in-review': 0,
       done: 0,

@@ -442,7 +442,7 @@ export class AgentWorkerService {
         try {
           const taskId = file.replace('.md', '');
           const task = await getTask(this.config.tasksDir, taskId);
-          if (task.status === 'in-progress' && task.assignee) {
+          if ((task.status === 'in-progress' || task.status === 'backlog') && task.assignee) {
             const queue = this.queues.get(task.assignee);
             const isAlreadyQueued = queue?.includes(task.id);
             const isActive = this.activeTask.get(task.assignee) === task.id;
@@ -470,7 +470,7 @@ export class AgentWorkerService {
             }
 
             if (!isAlreadyQueued && !isActive) {
-              await updateTask(this.config.tasksDir, taskId, { status: 'pending' });
+              await updateTask(this.config.tasksDir, taskId, { status: 'backlog' });
               queue?.push(task.id);
               console.log(
                 `[AgentWorker] Recovered orphaned task ${taskId} for ${task.assignee} (attempt ${attempts + 1}/${MAX_ATTEMPTS})`,
@@ -1454,7 +1454,7 @@ export class AgentWorkerService {
           description: sub.description,
           priority: task.priority,
           assignee: sub.assignee,
-          status: 'in-progress',
+          status: 'pending',
           labels: [`parent:${taskId}`],
           parent: taskId,
         });

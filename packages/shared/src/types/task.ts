@@ -5,6 +5,7 @@
 /** Kanban column statuses matching the PRD task board. */
 export type TaskStatus =
   | 'pending'
+  | 'backlog'
   | 'in-progress'
   | 'in-review'
   | 'done'

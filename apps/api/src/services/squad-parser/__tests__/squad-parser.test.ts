@@ -128,11 +128,14 @@ describe('SquadParser', () => {
 
       expect(overview.taskCounts).toEqual({
         byStatus: {
+          'pending': 0,
           'backlog': 0,
           'in-progress': 0,
           'in-review': 0,
           'done': 0,
+          'merged': 0,
           'blocked': 0,
+          'delegated': 0,
         },
         total: 0,
       });

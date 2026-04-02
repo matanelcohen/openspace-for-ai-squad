@@ -132,7 +132,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       if (lead) {
         const updated = await updateTask(tasksDir(), task.id, {
           assignee: lead.id,
-          status: 'in-progress',
+          status: 'backlog',
         });
         app.agentWorker.enqueue(updated);
         console.log(`[Tasks] Auto-routed "${task.title}" to lead: ${lead.name}`);
@@ -160,7 +160,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       try {
         const task = await updateTask(tasksDir(), request.params.id, body);
 
-        if (task.status === 'pending' && task.assignee && app.agentWorker) {
+        if ((task.status === 'pending' || task.status === 'backlog') && task.assignee && app.agentWorker) {
           app.agentWorker.enqueue(task, { skipDelegation: true });
         }
 
@@ -201,7 +201,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
 
         // If has an assignee and moving to actionable status, enqueue
         if (
-          (status === 'pending' || status === 'in-progress') &&
+          (status === 'pending' || status === 'backlog' || status === 'in-progress') &&
           task.assignee &&
           app.agentWorker
         ) {
@@ -246,7 +246,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       if (existing.status !== 'pending') {
         return reply.status(400).send({ error: 'Task is not pending' });
       }
-      const task = await updateTask(tasksDir(), request.params.id, { status: 'in-progress' });
+      const task = await updateTask(tasksDir(), request.params.id, { status: 'backlog' });
 
       // Enqueue for the assigned agent to pick up
       if (app.agentWorker && task.assignee) {
@@ -285,7 +285,7 @@ const tasksRoute: FastifyPluginAsync = async (app) => {
       try {
         const task = await updateTask(tasksDir(), request.params.id, {
           assignee: agentId,
-          status: 'in-progress' as TaskStatus,
+          status: 'backlog' as TaskStatus,
         });
 
         if (app.agentWorker) {

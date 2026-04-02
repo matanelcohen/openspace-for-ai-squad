@@ -21,6 +21,7 @@ interface KanbanColumnProps {
 
 const columnColors: Record<TaskStatus, string> = {
   pending: 'border-t-gray-400',
+  backlog: 'border-t-indigo-500',
   'in-progress': 'border-t-blue-500',
   'in-review': 'border-t-violet-500',
   done: 'border-t-green-500',

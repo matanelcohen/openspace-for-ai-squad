@@ -298,7 +298,7 @@ Rules:
         if (decision.action === 'assign' && decision.agentId) {
           await updateTask(tasksDir, decision.taskId, {
             assignee: decision.agentId,
-            status: 'in-progress' as Task['status'],
+            status: 'backlog' as Task['status'],
             description: undefined, // preserve existing
           });
 

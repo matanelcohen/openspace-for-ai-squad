@@ -29,6 +29,7 @@ import type {
 
 export const TASK_STATUSES = [
   'pending',
+  'backlog',
   'in-progress',
   'in-review',
   'done',
@@ -39,6 +40,7 @@ export const TASK_STATUSES = [
 
 export const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   pending: 'Pending',
+  backlog: 'Backlog',
   'in-progress': 'In Progress',
   'in-review': 'In Review',
   done: 'Done',

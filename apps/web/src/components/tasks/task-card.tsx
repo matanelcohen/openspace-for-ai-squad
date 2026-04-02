@@ -44,6 +44,7 @@ export function TaskCard({ task, isDragging, subtaskProgress, isSelected, onTogg
   const approveTask = useApproveTask();
   const rejectTask = useRejectTask();
   const isPending = task.status === 'pending';
+  const isBacklog = task.status === 'backlog';
   const isAutoPilot = task.description?.includes('🤖 Auto-assigned by Auto Pilot');
 
   return (
@@ -77,6 +78,11 @@ export function TaskCard({ task, isDragging, subtaskProgress, isSelected, onTogg
             {isAutoPilot && (
               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300">
                 🤖 Auto Pilot
+              </Badge>
+            )}
+            {isBacklog && (
+              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-indigo-100 text-indigo-700 dark:bg-indigo-900 dark:text-indigo-300">
+                📋 Queued
               </Badge>
             )}
           </div>

@@ -31,7 +31,7 @@ import type {
 
 describe('TASK_STATUSES', () => {
   it('contains exactly seven statuses in kanban order', () => {
-    expect(TASK_STATUSES).toEqual(['pending', 'in-progress', 'in-review', 'done', 'merged', 'blocked', 'delegated']);
+    expect(TASK_STATUSES).toEqual(['pending', 'backlog', 'in-progress', 'in-review', 'done', 'merged', 'blocked', 'delegated']);
   });
 
   it('has a label for every status', () => {

@@ -65,7 +65,7 @@ export function createServer(): SquadMcpServer {
       status: z
         .string()
         .optional()
-        .describe('Filter by status (backlog, in-progress, done, blocked)'),
+        .describe('Filter by status (pending, backlog, in-progress, in-review, done, merged, blocked, delegated)'),
       assignee: z.string().optional().describe('Filter by assigned agent'),
     },
     async ({ status, assignee }) => {
@@ -119,7 +119,7 @@ export function createServer(): SquadMcpServer {
       assignee: z.string().optional().describe('Agent to reassign the task to'),
       priority: z.enum(['P0', 'P1', 'P2', 'P3']).optional().describe('New priority level'),
       status: z
-        .enum(['pending', 'in-progress', 'in-review', 'done', 'merged', 'blocked', 'delegated'])
+        .enum(['pending', 'backlog', 'in-progress', 'in-review', 'done', 'merged', 'blocked', 'delegated'])
         .optional()
         .describe('New task status'),
       labels: z.array(z.string()).optional().describe('Labels to set on the task'),
@@ -145,7 +145,7 @@ export function createServer(): SquadMcpServer {
     'Update only the status of a task (shortcut for status-only changes)',
     {
       taskId: z.string().describe('Task identifier'),
-      status: z.string().describe('New status: backlog, in-progress, done, blocked'),
+      status: z.string().describe('New status: pending, backlog, in-progress, in-review, done, merged, blocked, delegated'),
     },
     async ({ taskId, status }) => {
       const res = await fetch(`${getApiBase()}/api/tasks/${taskId}/status`, {

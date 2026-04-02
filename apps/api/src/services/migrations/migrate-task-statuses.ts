@@ -1,8 +1,6 @@
 /**
  * One-time migration: normalise legacy task statuses in `.squad/tasks/*.md`.
  *
- * - `backlog`          → `pending`
- * - `in-review`        → `done`
  * - `pending-approval` → `pending`
  */
 
@@ -12,8 +10,6 @@ import path from 'node:path';
 import matter from 'gray-matter';
 
 const STATUS_MAP: Record<string, string> = {
-  backlog: 'pending',
-  'in-review': 'done',
   'pending-approval': 'pending',
 };
 

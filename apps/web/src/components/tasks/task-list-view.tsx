@@ -28,12 +28,13 @@ type SortDir = 'asc' | 'desc';
 const priorityOrder: Record<TaskPriority, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
 const statusOrder: Record<TaskStatus, number> = {
   pending: 0,
-  'in-progress': 1,
-  'in-review': 2,
-  done: 3,
-  merged: 4,
-  blocked: 5,
-  delegated: 6,
+  backlog: 1,
+  'in-progress': 2,
+  'in-review': 3,
+  done: 4,
+  merged: 5,
+  blocked: 6,
+  delegated: 7,
 };
 
 function sortTasks(tasks: Task[], field: SortField, dir: SortDir): Task[] {
