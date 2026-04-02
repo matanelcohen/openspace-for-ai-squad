@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { getAuthToken } from '@/lib/auth';
+
 export type WsEventType =
   | 'agent:status'
   | 'agent:working'
@@ -90,7 +92,17 @@ export function useWebSocket(url?: string) {
   const connect = useCallback(() => {
     if (!mountedRef.current) return;
 
-    const ws = new WebSocket(wsUrl);
+    // Attach current auth token as query parameter for the handshake
+    let connectUrl = wsUrl;
+    if (typeof window !== 'undefined') {
+      const token = getAuthToken();
+      if (token) {
+        const separator = connectUrl.includes('?') ? '&' : '?';
+        connectUrl = `${connectUrl}${separator}token=${encodeURIComponent(token)}`;
+      }
+    }
+
+    const ws = new WebSocket(connectUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

@@ -1,9 +1,14 @@
+import { getAuthToken, handleUnauthorized } from './auth';
+
 // Detect API URL: env var (build-time) → auto-detect from browser hostname
 const API_BASE_URL = (() => {
   if (typeof window === 'undefined') return 'http://localhost:3001';
   const envUrl = process.env.NEXT_PUBLIC_API_URL;
   // If accessing from the same machine, use the env URL
-  if (envUrl && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+  if (
+    envUrl &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+  ) {
     return envUrl;
   }
   // LAN access: use the same hostname but API port
@@ -22,7 +27,9 @@ export class ApiError extends Error {
 
 export async function apiClient<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE_URL}${path}`;
+  const token = getAuthToken();
   const headers: HeadersInit = {
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options?.body != null ? { 'Content-Type': 'application/json' } : {}),
     ...options?.headers,
   };
@@ -33,6 +40,9 @@ export async function apiClient<T>(path: string, options?: RequestInit): Promise
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      handleUnauthorized();
+    }
     const body = await res.text().catch(() => 'Unknown error');
     throw new ApiError(res.status, `API error ${res.status}: ${body}`);
   }
