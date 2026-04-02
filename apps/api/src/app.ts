@@ -1,6 +1,8 @@
 import { resolve } from 'node:path';
 
 import cors from '@fastify/cors';
+
+import { buildAllowlist, createOriginValidator } from './lib/cors.js';
 import { mcpPlugin } from '@matanelcohen/openspace-mcp-server';
 import type { AgentCapability } from '@matanelcohen/openspace-shared';
 import type Database from 'better-sqlite3';
@@ -233,9 +235,10 @@ export async function buildApp(opts: AppOptions = {}) {
   app.decorate('voiceServices', voiceServices);
 
   // Plugins
+  const corsAllowlist = buildAllowlist(process.env.CORS_ORIGIN, process.env.NODE_ENV);
   app.register(cors, {
-    origin:
-      process.env.CORS_ORIGIN === '*' ? true : (process.env.CORS_ORIGIN ?? 'http://localhost:3000'),
+    origin: createOriginValidator(corsAllowlist),
+    credentials: true,
   });
 
   // WebSocket plugin
