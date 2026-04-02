@@ -249,6 +249,29 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+
+      // Fallback: if external CLI server failed, try spawning a local subprocess
+      if (cliUrl) {
+        console.warn(`[AI] External CLI server at ${cliUrl} failed: ${message}`);
+        console.log('[AI] Fallback: spawning Copilot CLI subprocess...');
+        try {
+          const fallbackOpts: Record<string, unknown> = {
+            autoStart: true,
+            otlpEndpoint: clientOpts.otlpEndpoint,
+          };
+          if (token) fallbackOpts.githubToken = token;
+          if (this.config.cliPath) fallbackOpts.cliPath = this.config.cliPath;
+          this.client = new CopilotClient(fallbackOpts) as unknown as CopilotClientLike;
+          await this.client.start();
+          this.initialized = true;
+          console.log('[AI] Copilot SDK initialized via subprocess fallback');
+          return;
+        } catch (fallbackErr) {
+          const fbMsg = fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr);
+          console.error(`[AI] Subprocess fallback also failed: ${fbMsg}`);
+        }
+      }
+
       throw new Error(
         `Failed to initialize Copilot SDK: ${message}. ` +
           'Ensure @github/copilot-sdk is installed and the Copilot CLI is available.',
