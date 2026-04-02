@@ -7,6 +7,8 @@ import {
   ArrowUp,
   ArrowUpDown,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Coins,
   Loader2,
@@ -17,6 +19,7 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import {
@@ -41,6 +44,8 @@ import { cn } from '@/lib/utils';
 
 type SortField = 'agentName' | 'status' | 'duration' | 'totalTokens' | 'totalCost' | 'startTime';
 type SortDir = 'asc' | 'desc';
+
+const PAGE_SIZE = 50;
 
 const STATUS_CONFIG: Record<
   TraceStatus,
@@ -121,59 +126,53 @@ function SortIcon({ field, current, dir }: { field: SortField; current: SortFiel
 }
 
 export function TraceList() {
-  const { data: traces, isLoading, isError } = useTraces();
+  const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
   const [sortField, setSortField] = useState<SortField>('startTime');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
+  const {
+    data: response,
+    isLoading,
+    isError,
+    isFetching,
+  } = useTraces({
+    page,
+    limit: PAGE_SIZE,
+    status: statusFilter,
+    agent: agentFilter,
+    search,
+    sort: sortField,
+    sortDir,
+  });
+
+  const traces = response?.data ?? [];
+  const total = response?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   const agents = useMemo(() => {
-    if (!traces) return [];
+    if (!traces.length) return [];
     return [...new Set(traces.map((t) => t.agentName))].sort();
   }, [traces]);
 
-  const filtered = useMemo(() => {
-    if (!traces) return [];
-    return traces
-      .filter((t) => {
-        if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-        if (agentFilter !== 'all' && t.agentName !== agentFilter) return false;
-        if (search) {
-          const q = search.toLowerCase();
-          return (
-            t.name.toLowerCase().includes(q) ||
-            t.agentName.toLowerCase().includes(q) ||
-            t.id.toLowerCase().includes(q)
-          );
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        let cmp = 0;
-        switch (sortField) {
-          case 'agentName':
-            cmp = a.agentName.localeCompare(b.agentName);
-            break;
-          case 'status':
-            cmp = a.status.localeCompare(b.status);
-            break;
-          case 'duration':
-            cmp = (a.duration ?? Infinity) - (b.duration ?? Infinity);
-            break;
-          case 'totalTokens':
-            cmp = a.totalTokens - b.totalTokens;
-            break;
-          case 'totalCost':
-            cmp = a.totalCost - b.totalCost;
-            break;
-          case 'startTime':
-            cmp = a.startTime - b.startTime;
-            break;
-        }
-        return sortDir === 'asc' ? cmp : -cmp;
-      });
-  }, [traces, search, statusFilter, agentFilter, sortField, sortDir]);
+  const resetPage = () => setPage(0);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(e.target.value);
+    resetPage();
+  };
+
+  const handleStatusChange = (value: string) => {
+    setStatusFilter(value);
+    resetPage();
+  };
+
+  const handleAgentChange = (value: string) => {
+    setAgentFilter(value);
+    resetPage();
+  };
 
   const toggleSort = (field: SortField) => {
     if (sortField === field) {
@@ -182,18 +181,17 @@ export function TraceList() {
       setSortField(field);
       setSortDir('desc');
     }
+    resetPage();
   };
 
   const summaryStats = useMemo(() => {
-    if (!traces) return null;
-    const total = traces.length;
-    const errors = traces.filter((t) => t.status === 'error').length;
     const running = traces.filter((t) => t.status === 'running').length;
+    const errors = traces.filter((t) => t.status === 'error').length;
+    const withDuration = traces.filter((t) => t.duration != null);
     const avgDuration =
-      traces.filter((t) => t.duration != null).reduce((s, t) => s + (t.duration ?? 0), 0) /
-      (traces.filter((t) => t.duration != null).length || 1);
+      withDuration.reduce((s, t) => s + (t.duration ?? 0), 0) / (withDuration.length || 1);
     return { total, errors, running, avgDuration };
-  }, [traces]);
+  }, [traces, total]);
 
   if (isLoading) {
     return (
@@ -229,7 +227,7 @@ export function TraceList() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{summaryStats?.total ?? 0}</div>
+            <div className="text-2xl font-bold">{summaryStats.total}</div>
           </CardContent>
         </Card>
         <Card>
@@ -238,7 +236,7 @@ export function TraceList() {
             <Loader2 className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{summaryStats?.running ?? 0}</div>
+            <div className="text-2xl font-bold text-blue-600">{summaryStats.running}</div>
           </CardContent>
         </Card>
         <Card>
@@ -247,7 +245,7 @@ export function TraceList() {
             <AlertTriangle className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-red-600">{summaryStats?.errors ?? 0}</div>
+            <div className="text-2xl font-bold text-red-600">{summaryStats.errors}</div>
           </CardContent>
         </Card>
         <Card>
@@ -256,9 +254,7 @@ export function TraceList() {
             <Zap className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
-              {formatDuration(summaryStats?.avgDuration ?? 0)}
-            </div>
+            <div className="text-2xl font-bold">{formatDuration(summaryStats.avgDuration)}</div>
           </CardContent>
         </Card>
       </div>
@@ -270,11 +266,11 @@ export function TraceList() {
           <Input
             placeholder="Search traces..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={handleSearchChange}
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={statusFilter} onValueChange={handleStatusChange}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
@@ -285,7 +281,7 @@ export function TraceList() {
             <SelectItem value="running">Running</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={agentFilter} onValueChange={setAgentFilter}>
+        <Select value={agentFilter} onValueChange={handleAgentChange}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="Agent" />
           </SelectTrigger>
@@ -301,7 +297,7 @@ export function TraceList() {
       </div>
 
       {/* Table */}
-      <Card>
+      <Card className={cn(isFetching && !isLoading && 'opacity-75 transition-opacity')}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -344,14 +340,14 @@ export function TraceList() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filtered.length === 0 ? (
+            {traces.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                   No traces found.
                 </TableCell>
               </TableRow>
             ) : (
-              filtered.map((trace) => (
+              traces.map((trace) => (
                 <TableRow key={trace.id} className="cursor-pointer">
                   <TableCell>
                     <Link
@@ -384,6 +380,38 @@ export function TraceList() {
           </TableBody>
         </Table>
       </Card>
+
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground">
+            {total} trace{total !== 1 ? 's' : ''} total
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={page === 0}
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              Previous
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              Page {page + 1} of {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => p + 1)}
+              disabled={(page + 1) * PAGE_SIZE >= total}
+            >
+              Next
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
