@@ -205,6 +205,81 @@ Here's what I did:
 - Trace viewer UI lives in apps/web/src/components/traces/trace-detail.tsx with types in apps/web/src/lib/trace-types.ts and mock data in apps/web/src/lib/mock-traces.ts.
 - When adding new fields to the Span interface, mock-traces.ts must also be updated so dev previews render the new data.
 - Project uses pnpm workspaces monorepo with apps/web as the frontend app; build verification is done via `pnpm build` in apps/web.
+- Escalation UI components live in apps/web/src/components/escalations/ and include 12 pure/stateful display components plus a main EscalationDetailPanel.
+- The project uses pnpm workspaces with filter syntax (e.g., pnpm --filter @openspace/web) and the web app package is named @openspace/web under apps/web/.
+- ESLint lint-staged runs on the whole file during commit, so pre-existing lint issues (like unused imports) in touched files must be fixed before committing.
+- The apps/web package has ~143 pre-existing TypeScript errors in files other than the ones being actively worked on. Don't treat these as blockers for new work.
+- Tests in apps/web are run with vitest: `npx vitest run <path> --reporter=verbose` from the apps/web directory.
+- The web app package is scoped as @matanelcohen/openspace-web and tests run via pnpm --filter @matanelcohen/openspace-web test.
+- Pre-existing typecheck errors exist in use-voice-session.test.ts — these are not regressions from new changes.
+- Page components use Next.js app directory routing at apps/web/app/{page-name}/page.tsx for major pages like escalations, workflows, tasks, team-members, and terminal.
+- Frontend shared components live in apps/web/src/components/ with colocated tests in __tests__/ subdirectories.
+- ReviewQueueTable in apps/web/src/components/escalations/review-queue-table.tsx uses an extracted memoized EscalationRow component and useCallback-stabilized callbacks to prevent cascade re-renders.
+- The web app package is filtered as @matanelcohen/openspace-web for pnpm commands like typecheck and test.
+- SlaCountdown component in apps/web/src/components/escalations/sla-countdown.tsx uses React.memo with a custom comparator and useRef-based interval tracking for proper cleanup.
+- The ErrorBoundary component lives at apps/web/src/components/error-boundary.tsx with tests at apps/web/src/components/__tests__/error-boundary.test.tsx. It exports ErrorBoundary class component, useErrorBoundary hook, useRetryHandler hook, and withErrorBoundary HOC.
+- Added loading fallback with spinner for the dynamic import
+- Preserved all existing behavior (fallback, retry, withErrorBoundary HOC)
+- Added `resetKeys` prop — auto-resets error state when any key value changes (great for route transitions)
+- Added `onError` callback prop — fires with error + errorInfo when caught
+- Completed "Create reusable ErrorBoundary component with retry fallback UI": Committed successfully. Here's what I did:
+- Extracted an `EscalationRow` component wrapped in `React.memo` — each row only re-renders when its ow
+- Replaced bare `setInterval` with `useRef`-based interval tracking (`intervalRef`) with proper cleanup on unmount and when `timeoutAt` changes — prevents memory leaks
+- Wrapped with `React.memo` + custom comparator that only re-renders when `timeoutAt` or `className` changes
+- Completed "Optimize SlaCountdown and ReviewQueueTable rendering": All done! Here's what I did:
+- Completed "Memoize escalation components and useCallback handlers": Commit successful. All 12 files changed, ESLint + Prettier passed. Here's what I did:
+
+**React.memo** — Wrapped all 12 escalation components:
+- `ConfidenceBadge`, `PriorityIndicator`, `EscalationStatusBadge`, `ProposedActionDiff` (pure display)
+- `SlaCountdown`, `AuditTrailTimeline`, `ReviewerNotificationBell` (display with hooks)
+- `BulkActionToolbar`, `ReviewQueueTable`, `ThresholdConfigPanel`, `EscalationChainEditor` (stateful)
+- `EscalationDetailPanel` (main panel)
+
+**useCallback** — Wrapped
+- Completed "Create reusable ErrorBoundary component with retry fallback UI": No type errors in the ErrorBoundary file itself — the 143 errors are in other files (pre-existing). The ErrorBoundary component is already complete with:
+
+- ✅ **Class component** with `getDerivedStateFromError` + `componentDidCatch`
+- ✅ **Retry fallback UI** with "Try Again" button, retry count, and exhaustion state
+- ✅ **Configurable maxRetries** (default 3, 0 for unlimited)
+- ✅ **Custom fallback** support (ReactNode or render function with `FallbackProps`)
+- ✅ **`useErrorBoundary` hook** for a
+- Completed "Create reusable ErrorBoundary component with retry fallback UI": Committed successfully. Here's what I did:
+
+**ErrorBoundary component** (`error-boundary.tsx`):
+- Added `onError` callback prop — fires with error + errorInfo when caught
+- Added `resetKeys` prop — auto-resets error state when any key value changes (great for route transitions)
+- Preserved all existing behavior (fallback, retry, withErrorBoundary HOC)
+
+**Terminal page** (`terminal/page.tsx`):
+- Added loading fallback with spinner for the dynamic import
+- Added error fallback with reload button
+-
+- Completed "Optimize SlaCountdown and ReviewQueueTable rendering": All done! Here's what I did:
+
+**SlaCountdown** (`sla-countdown.tsx`):
+- Wrapped with `React.memo` + custom comparator that only re-renders when `timeoutAt` or `className` changes
+- Replaced bare `setInterval` with `useRef`-based interval tracking (`intervalRef`) with proper cleanup on unmount and when `timeoutAt` changes — prevents memory leaks
+
+**ReviewQueueTable** (`review-queue-table.tsx`):
+- Extracted an `EscalationRow` component wrapped in `React.memo` — each row only re-renders when its ow
+- Added error fallback with reload button -
+- react-window v2 was chosen over react-virtual for virtualizing fixed-height row lists due to its simpler API.
+- When virtualizing tables with react-window, HTML <table> elements must be converted to CSS Grid div layout since react-window requires div-based containers.
+- react-window's itemData/rowProps pattern is used to pass shared data (items, selectedIds, handlers) to extracted VirtualRow components, avoiding per-row closures.
+- When virtualizing filtered/sorted lists, a useEffect that resets scroll position to top on filter/sort changes prevents scroll position bugs.
+- Completed "Virtualize ReviewQueueTable with react-window": Done! Here's what I did:
+
+**Installed** `react-window` v2.2.7 (has built-in types, simpler API with fixed-height rows)
+
+**Refactored `ReviewQueueTable`** to use react-window's `List` component:
+- **Virtualized body** — only visible rows + 5 overscan rows are rendered in the DOM
+- **CSS Grid layout** — replaced `<table>` with div-based grid (`grid-cols-[40px_1fr_1fr_100px_120px_100px_100px_140px]`) for virtualization compatibility
+- **Sticky header** — stays visible above the scrollable list
+- **
+- Project uses sonner for toast notifications, with a <Toaster richColors /> component added to the root layout (apps/web/app/layout.tsx).
+- Next.js App Router error/loading patterns are used: error.tsx for error boundaries with retry buttons, loading.tsx for skeleton UI, placed alongside page.tsx in route directories.
+- The web app package is scoped as @matanelcohen/openspace-web and tests are run with `pnpm run test --filter @matanelcohen/openspace-web`.
+- Bulk escalation actions use mutateAsync from React Query; wrap in try-catch for toast feedback and only call onClearSelection on success, with cleanup in finally blocks.
 
 ## ✅ Trace Viewer UI Enhancements — Complete
 

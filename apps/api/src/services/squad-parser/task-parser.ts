@@ -67,13 +67,52 @@ export interface ParseAllResult {
  * Parse a single task file. Returns a Task or throws on invalid format.
  */
 export function parseTaskFile(content: string, filePath: string): ParseTaskResult {
-  const { data, content: body } = matter(content);
+  let data: Record<string, unknown>;
+  let body: string;
+
+  try {
+    const parsed = matter(content);
+    data = parsed.data as Record<string, unknown>;
+    body = parsed.content;
+  } catch (parseErr) {
+    // Fallback: extract frontmatter manually when gray-matter fails
+    // (e.g. YAML aliases, colons, asterisks in task descriptions)
+    console.warn(`[TaskParser] gray-matter failed for ${filePath}, using fallback parser`);
+    const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)/);
+    if (!match) throw parseErr;
+
+    data = {};
+    for (const line of match[1].split('\n')) {
+      const colonIdx = line.indexOf(':');
+      if (colonIdx > 0) {
+        const key = line.substring(0, colonIdx).trim();
+        let value: unknown = line.substring(colonIdx + 1).trim();
+        if (typeof value === 'string' && value.startsWith("'") && value.endsWith("'")) {
+          value = (value as string).slice(1, -1);
+        }
+        if (key === 'labels' || key === 'dependsOn') {
+          data[key] = [];
+        } else {
+          data[key] = value;
+        }
+      } else if (line.trim().startsWith('- ') && Object.keys(data).length > 0) {
+        const lastKey = Object.keys(data).pop()!;
+        const arr = data[lastKey];
+        if (Array.isArray(arr)) {
+          let val = line.trim().substring(2).trim();
+          if (val.startsWith("'") && val.endsWith("'")) val = val.slice(1, -1);
+          arr.push(val);
+        }
+      }
+    }
+    body = match[2] || '';
+  }
 
   if (!data || typeof data !== 'object') {
     throw new Error(`Missing or invalid frontmatter in ${filePath}`);
   }
 
-  const fm = data as Record<string, unknown>;
+  const fm = data;
 
   if (typeof fm.id !== 'string' || fm.id.trim() === '') {
     throw new Error(`Missing required field "id" in ${filePath}`);

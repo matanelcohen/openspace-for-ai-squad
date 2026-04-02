@@ -65,7 +65,11 @@ function taskToFrontmatter(task: Task): Record<string, unknown> {
 
 function taskToFileContent(task: Task): string {
   const fm = taskToFrontmatter(task);
-  const body = task.description || '';
+  let body = task.description || '';
+  // Ensure body doesn't start with frontmatter delimiter which confuses the parser
+  if (body.trim().startsWith('---')) {
+    body = '\n' + body;
+  }
   return matter.stringify(body.endsWith('\n') ? body : body + '\n', fm);
 }
 

@@ -155,6 +155,25 @@ interface CopilotSessionLike {
   disconnect(): Promise<void>;
 }
 
+// -- Retry helper ----------------------------------------------------------
+
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 3, delayMs = 5000): Promise<T> {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (attempt < maxRetries && (msg.includes('fetch failed') || msg.includes('ECONNREFUSED') || msg.includes('socket hang up') || msg.includes('EOF'))) {
+        console.warn(`[CopilotProvider] Attempt ${attempt + 1} failed: ${msg}. Retrying in ${delayMs / 1000}s...`);
+        await new Promise(r => setTimeout(r, delayMs * (attempt + 1)));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('withRetry: should not reach here');
+}
+
 // -- Copilot Provider ------------------------------------------------------
 
 export class CopilotProvider implements LLMRouter, LLMIntentParser {
@@ -249,6 +268,22 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
     return this.initialized;
   }
 
+  /** Quick ping to verify CLI server is reachable. */
+  async isConnected(): Promise<boolean> {
+    if (!this.initialized || !this.client) return false;
+    const cliUrl = this.config.cliUrl ?? process.env.COPILOT_CLI_URL;
+    if (!cliUrl) {
+      // Subprocess mode — trust initialization state
+      return this.initialized;
+    }
+    try {
+      const res = await fetch(`${cliUrl}/health`, { signal: AbortSignal.timeout(3000) });
+      return res.ok;
+    } catch {
+      return false;
+    }
+  }
+
   // -- Chat Completion -----------------------------------------------------
 
   /**
@@ -262,7 +297,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
 
     return tracer.startActiveSpan(spanName, async (span: Span) => {
       try {
-        const result = await this._chatCompletionImpl(options, span);
+        const result = await withRetry(() => this._chatCompletionImpl(options, span));
         span.setStatus({ code: SpanStatusCode.OK });
         return result;
       } catch (err) {
@@ -291,7 +326,7 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
 
     return tracer.startActiveSpan(spanName, async (span: Span) => {
       try {
-        const result = await this._agenticCompletionImpl(options, span);
+        const result = await withRetry(() => this._agenticCompletionImpl(options, span));
         span.setStatus({ code: SpanStatusCode.OK });
         return result;
       } catch (err) {
@@ -578,7 +613,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
             msg.includes('ECONNRE') ||
             msg.includes('ETIMEDOUT') ||
             msg.includes('socket') ||
-            msg.includes('Timeout');
+            msg.includes('Timeout') ||
+            msg.includes('EOF');
           if (!isTransient) {
             try {
               if (this.traceService && traceIds) {
@@ -911,7 +947,8 @@ export class CopilotProvider implements LLMRouter, LLMIntentParser {
             msg.includes('ECONNRE') ||
             msg.includes('ETIMEDOUT') ||
             msg.includes('socket') ||
-            msg.includes('Timeout');
+            msg.includes('Timeout') ||
+            msg.includes('EOF');
           if (!isTransient) {
             try {
               if (this.traceService && traceIds) {

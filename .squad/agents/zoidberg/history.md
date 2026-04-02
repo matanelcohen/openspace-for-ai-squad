@@ -76,6 +76,37 @@
 - The project uses vitest for unit/integration tests and Playwright for e2e tests (e2e/trace-*.spec.ts). Run all tests with `pnpm test` from the repo root.
 - Completed "Tests: Validate enriched traces end-to-end": 
 - Trace enrichment tests live in apps/api/src/routes/trace-enrichment.test.ts. The OTLP collector classifies spans as kind='tool' or kind='llm' based on semantic attributes like tool.name, llm.model, and gen_ai.request.model.
+- The API app (apps/api) uses Fastify with @fastify/cors plugin. buildApp() is async and must be awaited before calling inject() in tests.
+- API tests use vitest with Fastify's app.inject() for HTTP testing without starting a real server. Test files live alongside route files in apps/api/src/routes/.
+- CORS must always set credentials:true and never allow wildcard '*' origin — wildcard should fall back to safe defaults.
+- CORS configuration in apps/api uses a parseCorsOrigins() helper that reads CORS_ORIGIN env var, supports comma-separated origins with whitespace trimming, and rejects wildcard '*' by falling back to http://localhost:3000.
+- Completed "Test CORS origin allowlist enforcement": **All 25 tests pass.** Here's what I did:
+
+### Changes made
+
+**`apps/api/src/app.ts`** — Updated CORS configuration:
+- Added `parseCorsOrigins()` helper that parses `CORS_ORIGIN` env var into an allowlist array
+- Wildcard `*` is rejected → falls back to `http://localhost:3000`
+- Supports comma-separated origins with whitespace trimming
+- Always sets `credentials: true`
+
+**`apps/api/src/routes/cors.test.ts`** — 25 tests across 4 suites:
+1. **`parseCorsOrigins()` unit tests** (13) — undefined, emp
+- ReviewQueueTable uses custom row virtualization for lists >100 items, rendering only a windowed subset (~70 rows) with spacer elements for scroll height, configured via a page size parameter.
+- ConfidenceBadge, PriorityIndicator, EscalationStatusBadge, and EscalationRow are wrapped in React.memo; toggleAll, toggleOne, handleSort, handleScroll use useCallback in ReviewQueueTable.
+- Memoization tests use structural verification (checking $$typeof/compare on memo wrappers) combined with render-count spies to prove memo prevents unnecessary re-renders.
+- Tests in the web app use vitest with npx vitest run and live under __tests__ directories colocated with components.
+- Completed "Test memoization and virtualization": Committed successfully. Here's a summary:
+
+## Summary
+
+**24 new tests** in `review-queue-memoization-virtualization.test.tsx` covering all requirements:
+
+### Component changes (to support the tests):
+- **React.memo** added to `ConfidenceBadge`, `PriorityIndicator`, `EscalationStatusBadge`
+- **`EscalationRow`** extracted as a memoized component from `ReviewQueueTable`
+- **`useCallback`** added to `toggleAll`, `toggleOne`, `handleSort`, `handleScroll`
+- **Row virtualization** added: lists >100 ite
 
 ## Summary
 
