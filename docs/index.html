@@ -297,13 +297,13 @@
     <div class="hero-content">
       <div class="hero-badge">
         <span class="dot"></span>
-        v0.5 — Parallel Sandboxes, LLM Skills, AI-written PRs, HITL Escalation
+        v0.5.0 — Auto Pilot, Innovation Mode, Backlog Queue, SDK Auto-reconnect
       </div>
 
       <h1>Your <span class="gradient-text">AI team</span>,<br>one command away</h1>
 
       <p class="hero-sub">
-        Describe your project. Pick a theme. Toggle YOLO mode.<br>
+        Describe your project. Pick a theme. Toggle Auto Pilot.<br>
         Agents work in parallel sandboxes — each on its own branch, building, testing, and shipping PRs autonomously.
       </p>
 
@@ -511,7 +511,7 @@
       <div class="step-card">
         <div class="step-num"><div class="step-num-inner">&#x1F680;</div></div>
         <h3>Ship</h3>
-        <p>Create tasks or toggle YOLO. Lead triages &amp; delegates. Agents work in parallel sandboxes, each on its own branch. Build, test, PR &mdash; all automated.</p>
+        <p>Create tasks or toggle Auto Pilot. Lead triages &amp; delegates. Agents work in parallel sandboxes, each on its own branch. Build, test, PR &mdash; all automated.</p>
       </div>
     </div>
   </section>
@@ -528,13 +528,23 @@
     <div class="features-grid">
       <div class="feature-card" style="border-color:rgba(124,58,237,.3);background:rgba(124,58,237,.05)">
         <div class="feature-icon">&#x1F680;</div>
-        <h3>YOLO Mode <span style="font-size:.7rem;color:var(--accent-light);font-weight:400">NEW</span></h3>
+        <h3>Auto Pilot <span style="font-size:.7rem;color:var(--accent-light);font-weight:400">NEW</span></h3>
         <p>Toggle autonomous mode — the lead agent scans the board, triages tasks, assigns to specialists, and ships. You just watch.</p>
+      </div>
+      <div class="feature-card" style="border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.05)">
+        <div class="feature-icon">&#x1F4A1;</div>
+        <h3>Innovation Mode <span style="font-size:.7rem;color:var(--orange);font-weight:400">NEW</span></h3>
+        <p>Lead agent autonomously analyzes your codebase, identifies improvements, and creates tasks — bugs, performance, security, UX, refactoring. Continuous improvement on autopilot.</p>
       </div>
       <div class="feature-card" style="border-color:rgba(6,182,212,.3);background:rgba(6,182,212,.05)">
         <div class="feature-icon">&#x1F333;</div>
         <h3>Parallel sandboxes <span style="font-size:.7rem;color:var(--cyan);font-weight:400">NEW</span></h3>
-        <p>Each task runs in its own git worktree — isolated branch, parallel execution, auto-commit &amp; PR. Delegated tasks get a feature branch with subtask PRs merging into it.</p>
+        <p>Each task runs in an isolated tmp directory with its own branch. Parallel execution, auto-commit &amp; PR. Delegated tasks get a feature branch with subtask PRs auto-merging into it.</p>
+      </div>
+      <div class="feature-card" style="border-color:rgba(99,102,241,.3);background:rgba(99,102,241,.05)">
+        <div class="feature-icon">&#x1F4CB;</div>
+        <h3>Backlog queue <span style="font-size:.7rem;color:#6366f1;font-weight:400">NEW</span></h3>
+        <p>Proper task lifecycle: Pending → Backlog → In Progress → In Review → Merged. Only 1 task per agent in-progress — the rest queue in backlog. No more false statuses.</p>
       </div>
       <div class="feature-card" style="border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)">
         <div class="feature-icon">&#x1F9E0;</div>
@@ -549,7 +559,7 @@
       <div class="feature-card">
         <div class="feature-icon">&#x1F916;</div>
         <h3>Agentic execution</h3>
-        <p>Agents don't just generate text — they read files, write code, run tests, fix errors, and iterate. Full Copilot SDK sessions with tools.</p>
+        <p>Agents read files, write code, run tests, fix errors, and iterate. Full Copilot SDK sessions with auto-reconnect and subprocess fallback.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon">&#x1F4AC;</div>
